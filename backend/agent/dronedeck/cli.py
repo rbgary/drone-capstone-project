@@ -11,6 +11,7 @@ click in.
     dronedeck process --flight <flight id>   # the data pipeline
     dronedeck mission-report --flight <flight id> [--json]
     dronedeck serve                       # the local API for the desktop app
+    dronedeck thermal-test --minutes 10 --ambient 74F   # sensors only, no motors
 
 Every flight here goes through the same :class:`DroneLink` the app uses, so the
 checks and the in-flight guards are identical. Nothing prompts, and nothing has
@@ -156,6 +157,19 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--json", action="store_true", help="print the report as JSON")
 
     sub.add_parser("selftest", help="load every library the agent only loads on demand")
+
+    thermal = sub.add_parser(
+        "thermal-test",
+        help="the temperature correction on the bench: sensors only, motors never armed")
+    _add_common(thermal)
+    thermal.add_argument("--minutes", type=float, default=10.0, help="how long to record")
+    thermal.add_argument("--ambient", default="22C",
+                         help="room temperature to seed the correction, e.g. 74F or 22C")
+    thermal.add_argument("--reference", default=None,
+                         help="a reference thermometer's reading, e.g. 74.2F — "
+                              "the summary's error is measured against it")
+    thermal.add_argument("--out", type=Path, default=None, help="CSV path (default: "
+                         "the data folder's flights/thermal-bench/)")
     return parser
 
 
@@ -848,6 +862,71 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_thermal_test(args: argparse.Namespace) -> int:
+    """Matthew's ThermalEngine with the flight taken out (sprint 3, task 8).
+
+    Reads only: the link is opened as `stations` opens it, nothing arms and no
+    setpoint is sent. See telemetry/bench.py.
+    """
+    from datetime import datetime
+
+    from dronedeck.telemetry.bench import SAMPLE_PERIOD_S, BenchSample, ThermalBench, default_path
+    from dronedeck.telemetry.correction import ThermalEngine
+    from dronedeck.telemetry.row import TempUnit
+
+    ambient_c, _unit = parse_ambient(args.ambient)
+    reference_c: float | None = None
+    if args.reference:
+        reference_c, _ = parse_ambient(args.reference)
+    out = args.out or default_path(flights_dir(), datetime.now().strftime("%Y%m%d-%H%M%S"))
+    show = (lambda c: c * 9 / 5 + 32) if _unit is TempUnit.FAHRENHEIT else (lambda c: c)
+    u = "°F" if _unit is TempUnit.FAHRENHEIT else "°C"
+
+    with DroneLink(args.uri) as link, out.open("w", newline="", encoding="utf-8") as f:
+        deadline = time.monotonic() + 10.0
+        while link.snapshot().get("baro.temp") is None and time.monotonic() < deadline:
+            time.sleep(0.1)
+        seed = link.snapshot().get("baro.temp")
+        if seed is None:
+            print("\n  no barometer reading from the drone — is it powered?\n")
+            return 1
+        bench = ThermalBench(ThermalEngine(seed, ambient_c), f)
+        print(f"\n  Thermal bench test, {args.minutes:g} min. Motors stay off. Ctrl-C ends early.")
+        print(f"  writing {out}\n")
+        start = time.monotonic()
+        end = start + args.minutes * 60
+        last_print = 0.0
+        try:
+            while time.monotonic() < end:
+                snap = link.snapshot()
+                raw, press = snap.get("baro.temp"), snap.get("baro.pressure")
+                if raw is not None and press is not None:
+                    motors = [snap.get(f"motor.m{i}") or 0 for i in range(1, 5)]
+                    vbat = snap.get("pm.vbat")
+                    now = time.monotonic() - start
+                    r = bench.add(BenchSample(
+                        elapsed_s=now, raw_temp_c=raw, pressure_hpa=press,
+                        thrust=int(snap.get("stabilizer.thrust") or 0),
+                        motor_max=int(max(motors)), battery_v=vbat))
+                    if now - last_print >= 10.0:
+                        last_print = now
+                        print(f"  {now / 60:5.1f} min  raw {show(raw):6.2f}{u}  "
+                              f"corrected {show(r.corrected_temp_c):6.2f}{u}  "
+                              f"{r.mode}  {r.event}")
+                time.sleep(SAMPLE_PERIOD_S)
+        except KeyboardInterrupt:
+            print("\n  stopped early")
+    if not bench.rows:
+        print("\n  nothing recorded\n")
+        return 1
+    print()
+    for line in bench.summary(reference_c).lines():
+        print(f"  {line}")
+    print(f"\n  fit the CPU warm-up from it:\n"
+          f"    python -m dronedeck.telemetry.heat_bias fit {out}\n")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from dronedeck.api.rest import serve as run_server
 
@@ -916,6 +995,7 @@ def main(argv: list[str] | None = None) -> int:
         "calibrate": cmd_calibrate,
         "serve": cmd_serve,
         "selftest": cmd_selftest,
+        "thermal-test": cmd_thermal_test,
         "setup": _cmd_setup,
     }
     try:

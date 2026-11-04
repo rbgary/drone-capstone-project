@@ -3,7 +3,7 @@ TEMPERATURE CORRECTION — the barometer reads the room plus the drone's own hea
 SOURCE: backend/agent/dronedeck/telemetry/correction.py (ThermalEngine)
         backend/agent/dronedeck/telemetry/heat_bias.py  (CPU + thrust bias)
 Last verified: 2026-11-04 — tests only (tests/test_correction.py,
-tests/test_heat_bias.py). Nothing here has been measured on the drone.
+tests/test_heat_bias.py, tests/test_thermal_bench.py). Nothing here has been measured on the drone.
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS
@@ -52,6 +52,30 @@ NOT DONE
   - fitting G and τ_thrust from a flight
   - TRANSITION's re-based expected_raw ignores the bias (correction.py,
     _update_estimates) — harmless while the bias is zero, revisit when fitted
+
+--------------------------------------------------------------------------------
+3. THE BENCH TEST — SENSORS ONLY (SPRINT 3, TASK 8 — Yordanos) — STARTER
+--------------------------------------------------------------------------------
+Goal: "run the ThermalEngine test outside of flight missions, with the motors
+stationary".
+
+Matthew's flight_sensor_test_with_recovery_and_geofencing.py ran SensorLogger
+during a two-layer serpentine flight. telemetry/bench.py is the same engine
+with the flight removed; the CLI opens the link read-only (as `stations` does),
+never arms and sends no setpoint:
+
+    ./dronedeck thermal-test --minutes 10 --ambient 74F --reference 74.2F
+
+It samples at 2 Hz (Matthew's LOG_PERIOD_MS = 500), writes
+flights/thermal-bench/thermal-bench-<time>.csv in the data folder, prints a
+line every 10 s, and ends with a summary: corrected temperature at the start
+and end (one-minute means), the drift between them, and the mean absolute
+error against --reference. A sample with any motor turning is kept in the CSV
+(motors_on=1), left out of the summary, and warned about.
+
+The CSV is what section 2's fit reads.
+
+NOT DONE: run on the drone (no lab session yet); a desktop button for it.
 
 --------------------------------------------------------------------------------
 RELATED

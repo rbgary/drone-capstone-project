@@ -51,6 +51,11 @@ AGENT CLI — the `dronedeck` command (motors only where noted)
                                     strand an agent holding the radio).
   dronedeck stations              Watch which Lighthouse base stations the
                                     drone sees, live. --seconds N to auto-stop.
+  dronedeck thermal-test          The temperature correction on the bench:
+                                    sensors only, never arms. --minutes,
+                                    --ambient, --reference, --out. Writes a CSV
+                                    for `python -m dronedeck.telemetry.heat_bias
+                                    fit` (backend/temperature-correction.txt).
   dronedeck geometry              Measure where the base stations are; no
                                     motors. --quick (one sample, restore hold
                                     now), --distance, --countdown, --dry-run.
