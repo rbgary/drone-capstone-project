@@ -44,6 +44,8 @@ from pathlib import Path
 from typing import Any
 
 from dronedeck.audit import Action, AuditLog, Result
+from dronedeck.display import frames as display_frames
+from dronedeck.display.queue import DisplayJob, DisplayQueue
 from dronedeck.flight import supervisor as motor_supervisor
 from dronedeck.flight.checks import CheckResult, ChecksFailed, ReadyReport, collect
 from dronedeck.flight.control import GuardedFlight, PhaseEvent
@@ -61,6 +63,7 @@ from dronedeck.history import (
     SessionMeta,
     interrupted_flights,
     interrupted_sessions,
+    session_of_flight,
     sessions_dir,
     set_flight_processing,
     set_session_processing,
@@ -326,6 +329,7 @@ class Session:
         plans: PlanStore | None = None,
         mission_controller: Callable[..., Any] = MissionController,
         processing: ProcessingQueue | None = None,
+        display: DisplayQueue | None = None,
         controls: ControlsStore | None = None,
     ) -> None:
         self._cloud = cloud
@@ -335,6 +339,11 @@ class Session:
         self._controls_live: dict[str, Any] | None = None
         #: Flights waiting for the data pipeline, run in a process of their own.
         self.processing = processing or ProcessingQueue()
+        #: Sessions waiting for the display chain once their processing is
+        #: done (display/queue.py): one chunk at a time, never in flight.
+        self.display = display or DisplayQueue()
+        self.display.paused = lambda: self._flight_id is not None
+        self.display.on_change = self._display_changed
         #: The operator's DPP choice for this session, or None for the mode's
         #: default. Reset when a session ends: the choice is per session.
         self._processing_choice: bool | None = None
@@ -752,6 +761,51 @@ class Session:
         # The finished result was queued for the web (cli._queue_result_upload).
         if job.state == JobState.DONE and self._syncer is not None:
             self._syncer.trigger()
+        if job.state == JobState.DONE:
+            self._queue_display(job)
+
+    def _queue_display(self, job: Job) -> None:
+        """A flight's or a session's processing is done: its session's captured
+        frames go through the display chain. After processing, not after
+        landing, so the frames a finding rests on are known and go first."""
+        if job.kind == SESSION:
+            session_id: str | None = job.flight_id
+        else:
+            history = self.history
+            session_id = (history.meta.id if history is not None
+                          and history.has_flight(job.flight_id)
+                          else session_of_flight(job.flight_id))
+        if session_id is None:
+            return
+        try:
+            self.display.submit(session_id)
+        except (ValueError, RuntimeError) as e:
+            log.warning("could not queue session %s for the display chain: %s", session_id, e)
+
+    def _display_changed(self, job: DisplayJob) -> None:
+        """Kept on disk beside the session, for the resume (display/frames.py)."""
+        try:
+            display_frames.set_state(sessions_dir() / job.session_id, job.state, job.error)
+        except OSError:
+            log.exception("could not record the display state of session %s", job.session_id)
+
+    def resume_display(self) -> list[str]:
+        """Queue again every session whose display chain the last run of the
+        app left unfinished. Called once as the agent starts, after the
+        processing resume. Returns the sessions queued."""
+        try:
+            sessions = display_frames.interrupted(sessions_dir())
+        except OSError:
+            log.exception("could not look for an unfinished display chain")
+            return []
+        queued = []
+        for session_id in sessions:
+            try:
+                self.display.submit(session_id)
+                queued.append(session_id)
+            except (ValueError, RuntimeError) as e:
+                log.warning("could not resume the display chain of %s: %s", session_id, e)
+        return queued
 
     # ── worker ───────────────────────────────────────────────────────────
 

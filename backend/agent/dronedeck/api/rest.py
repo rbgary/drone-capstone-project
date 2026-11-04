@@ -457,6 +457,14 @@ def _restore_sign_in() -> None:
         log.exception("restoring the saved sign-in failed")
 
 
+def _resume_work() -> None:
+    """Processing is queued first, then the display chain. The two queues
+    run side by side; each chunk re-reads a session's findings, so the
+    frames one rests on move to the front once its flight's result exists."""
+    agent.session.resume_processing()
+    agent.session.resume_display()
+
+
 @asynccontextmanager
 async def lifespan(api: FastAPI):
     agent.hub.bind(asyncio.get_running_loop())
@@ -485,8 +493,7 @@ async def lifespan(api: FastAPI):
     # this module is imported, and a test importing it must never start
     # processing the laptop's real flights. DRONEDECK_RESUME=0 turns it off.
     if resume:
-        threading.Thread(target=agent.session.resume_processing, daemon=True,
-                         name="resume-processing").start()
+        threading.Thread(target=_resume_work, daemon=True, name="resume-processing").start()
     log.info("agent API on %s:%d", DEFAULT_HOST, DEFAULT_PORT)
     yield
     # A SIGTERM or Ctrl+C ends the session the same way closing the app does,
@@ -501,6 +508,7 @@ async def lifespan(api: FastAPI):
         log.exception("could not end the session cleanly")
     agent.syncer.stop()
     agent.session.processing.close()
+    agent.session.display.close()
     if finished is not None:
         finished.set()
 

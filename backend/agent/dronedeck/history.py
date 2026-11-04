@@ -376,6 +376,18 @@ def recorded_flights(*, root: Path | None = None) -> list[str]:
     return [flight_id for _, flight_id in sorted(found)]
 
 
+def session_of_flight(flight_id: str, *, root: Path | None = None) -> str | None:
+    """The session on this laptop that recorded a flight, or None."""
+    for meta_file in (root or sessions_dir()).glob("*/meta.json"):
+        try:
+            raw = json.loads(meta_file.read_text())
+        except (OSError, ValueError):
+            continue
+        if any(f.get("id") == flight_id for f in raw.get("flights") or []):
+            return str(raw.get("id") or meta_file.parent.name)
+    return None
+
+
 #: One writer at a time for closed sessions' meta.json. A processing job
 #: reports "queued" from the caller's thread and "running"/"done" from the
 #: queue's worker; two unguarded read-modify-writes through one temp file
