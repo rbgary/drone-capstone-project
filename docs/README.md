@@ -24,6 +24,7 @@ Feature docs are plain `.txt`, grouped by the surface they describe.
 | [features/backend/audit-trail.txt](features/backend/audit-trail.txt) | Every action and safety decision, against a person and a drone |
 | [features/backend/flight-tuning.txt](features/backend/flight-tuning.txt) | Why the drone bounced and spun, the tuning applied per flight, the 10 Hz trace |
 | [features/backend/session-history.txt](features/backend/session-history.txt) | Every session kept on the laptop; Auto/Manual filtered per reading |
+| [features/backend/temperature-correction.txt](features/backend/temperature-correction.txt) | The barometer's self-heating: Matthew's ThermalEngine, the CPU and thrust heat biases, the sensor-only bench test |
 | [features/backend/running-from-source.txt](features/backend/running-from-source.txt) | Running the agent from a terminal, for developers — not something operators set up |
 
 ## Desktop — the Tauri app (`desktop/`)

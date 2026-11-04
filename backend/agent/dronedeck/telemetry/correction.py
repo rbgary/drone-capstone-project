@@ -27,6 +27,8 @@ import time
 from dataclasses import dataclass
 from enum import StrEnum
 
+from dronedeck.telemetry.heat_bias import HeatBiasModel
+
 # Dry-air gas constant, J/(kg·K). Used for the air-density calculation.
 R_DRY_AIR = 287.05
 # ISA standard sea-level pressure, hPa.
@@ -99,6 +101,9 @@ class CorrectionResult:
     mode: Mode
     state: ThermalState
     event: str
+    #: CPU + thrust heat removed on top of the offset (heat_bias.py), °C.
+    #: 0.0 unless the engine was given a fitted HeatBiasModel.
+    heat_bias_c: float = 0.0
 
 
 class ThermalEngine:
@@ -114,8 +119,13 @@ class ThermalEngine:
         initial_raw_c: float,
         initial_ambient_c: float,
         tuning: CorrectionTuning | None = None,
+        heat_bias: HeatBiasModel | None = None,
     ) -> None:
         self.tuning = tuning or CorrectionTuning()
+        #: Optional CPU-warm-up and thrust-heat correction (sprint 3, task 7).
+        #: None keeps the validated behaviour exactly.
+        self.heat_bias = heat_bias
+        self._started = time.monotonic()
 
         self._ema_c = initial_raw_c
         self._prev_ema_c = initial_raw_c
@@ -181,11 +191,18 @@ class ThermalEngine:
 
         # Only re-estimate while the motors are off. In flight, airflow makes
         # the thermal model unreliable and the estimates would chase noise.
+        bias_c = 0.0
+        if self.heat_bias is not None:
+            bias_c = self.heat_bias.update(now - self._started, thrust)
+            expected_raw_c += bias_c
+            deviation_c -= bias_c
+            corrected_c -= bias_c
+
         if thrust == 0:
             expected_raw_c, deviation_c = self._update_estimates(
                 roc, deviation_c, corrected_c, expected_raw_c
             )
-            corrected_c = self._ema_c - self.idle_offset_c * scaling
+            corrected_c = self._ema_c - self.idle_offset_c * scaling - bias_c
 
         return CorrectionResult(
             raw_temp_c=raw_temp_c,
@@ -202,6 +219,7 @@ class ThermalEngine:
             mode=self.mode,
             state=self.state,
             event=self.event,
+            heat_bias_c=bias_c,
         )
 
     def _update_estimates(
