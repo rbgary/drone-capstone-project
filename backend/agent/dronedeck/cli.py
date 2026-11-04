@@ -890,10 +890,21 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
         if not has_crypto:
             failed.append("jwt crypto")
             print("  FAILED  PyJWT loaded without cryptography")
+    # The display chain's model is a data file, not an import: a bundle built
+    # without it would fail every session's upscale on the operator's laptop.
+    try:
+        import numpy as np
+
+        from dronedeck.display.steps import default_steps
+        default_steps()[0].run(np.zeros((8, 8), np.uint8))
+    except Exception as e:
+        failed.append("display model")
+        print(f"  FAILED  display model: {type(e).__name__}: {e}")
+    checked = len(SELFTEST_MODULES) + 2
     if failed:
-        print(f"\n  {len(failed)} of {len(SELFTEST_MODULES) + 1} did not load")
+        print(f"\n  {len(failed)} of {checked} did not load")
         return 1
-    print(f"  imports ok ({len(SELFTEST_MODULES) + 1} checked)")
+    print(f"  imports ok ({checked} checked)")
     return 0
 
 
