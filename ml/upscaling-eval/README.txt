@@ -33,6 +33,9 @@ RUN (per set of images)
   three with --src data/photos --name photos --protocol reference (no --mask).
   The camera-frames set stays as it is beside it.
 
+  prepare.py takes every image in --src, so keep one folder per set (the
+  2026-10-21 screenshots are camera-frames-1021, from their own folder).
+
 
 WHAT IS COMMITTED, AND WHAT IS NOT
 
