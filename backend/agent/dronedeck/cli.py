@@ -9,6 +9,7 @@ click in.
     dronedeck hover --height 0.3 --secs 10 --ambient 74F
     dronedeck mission --id <mission id> --dry-run
     dronedeck process --flight <flight id>   # the data pipeline
+    dronedeck upscale --session <session id> # the display chain, after it
     dronedeck mission-report --flight <flight id> [--json]
     dronedeck serve                       # the local API for the desktop app
 
@@ -136,6 +137,17 @@ def build_parser() -> argparse.ArgumentParser:
     which.add_argument("--all", action="store_true",
                        help="every flight and session this laptop recorded that has no "
                             "current result")
+
+    upscale = sub.add_parser(
+        "upscale", help="the display chain over a session's captured frames: Real-ESRGAN, "
+                        "then CLAHE — for showing, never as evidence; never connects")
+    which_up = upscale.add_mutually_exclusive_group(required=True)
+    which_up.add_argument("--session", help="the session's id")
+    which_up.add_argument("--all", action="store_true",
+                          help="every session on this laptop with frames not yet done")
+    upscale.add_argument("--chunk", type=int, default=0, metavar="N",
+                         help="with --session: at most N frames, then stop and say what is "
+                              "left (the agent's queue runs it this way); 0, every one")
 
     calibrate = sub.add_parser(
         "calibrate",
@@ -668,6 +680,43 @@ def _process_live(flight_id: str | None, point_id: str) -> int:
     return 0
 
 
+def cmd_upscale(args: argparse.Namespace) -> int:
+    """The display chain over a session's captured frames (display/frames.py).
+    With --session, the LAST LINE printed is the chunk's report as JSON —
+    what the agent's queue reads (display/queue.py). 0 done, 2 no such
+    session, 3 the model is not installed or not the one MODELS.json names."""
+    from dronedeck import history
+    from dronedeck.display.frames import run_chunk, sessions_with_frames
+    from dronedeck.display.steps import ModelUnavailable, default_steps
+    from dronedeck.processing import FLIGHT_ID
+
+    try:
+        steps = default_steps()
+    except ModelUnavailable as e:
+        print(f"  the display chain cannot run: {e}")
+        return 3
+    results = paths.results_dir()
+    if args.all:
+        made = failed = 0
+        for folder in sessions_with_frames(history.sessions_dir()):
+            chunk = run_chunk(folder, results, steps)
+            made, failed = made + chunk.done, failed + chunk.failed
+            if chunk.done or chunk.failed:
+                print(f"  {folder.name[:8]} {chunk.done} made, {chunk.failed} failed")
+        print(f"\n  {made} frame(s) made, {failed} failed")
+        return 0
+    if not FLIGHT_ID.match(args.session):
+        print(f"  {args.session!r} is not a session id")
+        return 2
+    folder = history.sessions_dir() / args.session
+    if not (folder / "frames.csv").exists():
+        print(f"  session {args.session} has no frames on this laptop")
+        return 2
+    chunk = run_chunk(folder, results, steps, limit=max(0, args.chunk))
+    print(json.dumps(chunk.to_dict()))
+    return 0
+
+
 def session_results_dir() -> Path:
     """<data folder>/results/sessions/<session id>/ — a session's own result."""
     return paths.results_dir() / "sessions"
@@ -912,6 +961,7 @@ def main(argv: list[str] | None = None) -> int:
         "hover": cmd_hover,
         "mission": cmd_mission,
         "process": cmd_process,
+        "upscale": cmd_upscale,
         "mission-report": cmd_mission_report,
         "calibrate": cmd_calibrate,
         "serve": cmd_serve,
