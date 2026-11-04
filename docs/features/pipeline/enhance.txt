@@ -1,6 +1,8 @@
 ================================================================================
 ENHANCE — clahe@1: a clearer copy of every frame, and how usable each one is
-Last verified: 2026-10-10 against main (#104) — clahe.py unchanged but for
+Last verified: 2026-11-04 on feat/offline-data — clahe.py unchanged; the
+display chain measured in ml/upscaling-eval/ (chain.py, RESULTS.txt "THE
+DISPLAY CHAIN"). 2026-10-10 against main (#104) — clahe.py unchanged but for
 its pointer to ml/upscaling-eval/. Before that, 2026-10-09 against
 docs/pipeline-v2 — tests/pipeline/test_enhance.py, ml/enhance-eval/evaluate.py
 on 600 real frames, the frozen agent's self-test (cv2), frames compared side
@@ -9,15 +11,20 @@ SOURCE: backend/agent/dronedeck/pipeline/stages/enhance/clahe.py
 ================================================================================
 
 --------------------------------------------------------------------------------
-STATUS  (Last verified: 2026-10-10)
+STATUS  (Last verified: 2026-11-04)
 --------------------------------------------------------------------------------
   agent     BUILT — clahe@1 (Samuel)
   web       BUILT — Original / Enhanced / Side by side (results.txt)
-  NOT BUILT an upscaler. Kevin's evaluation is on main (ml/upscaling-eval/,
-            #103, 2026-10-10): ESPCN ×2 and FSRCNN ×2 tie bicubic on 15
-            real frames, Real-ESRGAN invents detail — so none ships. The
-            espcn-clahe@1 steps it proposes are in
-            ml/upscaling-eval/espcn_steps.py. Colour: never as evidence.
+  MEASURED  the display chain (2026-11-04, feat/offline-data): Real-ESRGAN
+            ×4 then CLAHE 1.5 on 4×4 tiles, run after the pipeline for
+            people to look at — 0.7–1.1 s a frame on the CPU, 52 ms on an
+            RTX 3060 (RESULTS.txt, THE DISPLAY CHAIN). Colour (DDColor-large)
+            a stretch goal, previewed in PyTorch at 2.5 s a frame.
+  NOT BUILT the frame queue that runs it, its upload, and the web's views
+            of it. Kevin's evaluation (#103, 2026-10-10) still stands for
+            the PIPELINE: ESPCN ×2 and FSRCNN ×2 tie bicubic, Real-ESRGAN
+            invents detail — so clahe@1 stays this stage. Colour: never as
+            evidence.
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS
@@ -49,7 +56,14 @@ flight-frames/<session>/enhanced/<seq>.png          the copies, on the web
   15 is a hand over the lens or a wall out of focus. 2.2 % of real frames.
   An unusable frame is still enhanced and kept, with its reason; no finding
   reads it as evidence.
-• NO COLOUR: the frames hold none; colourising would guess it.
+• NO COLOUR in this stage: the frames hold none; colourising would guess it.
+• THE DISPLAY CHAIN IS NOT THIS STAGE (the team, 2026-11-04). The higher-ups
+  want Real-ESRGAN's detail and accept its invented structure, so it is
+  shown — never judged. It runs after the pipeline because it is thousands
+  of times slower than clahe@1 (0.7 s against 0.1 ms a frame); this stage, its quality figures, and everything that
+  reads them (classify, scene, interpret, live) are unchanged. Its colour
+  step paints gauge needles and arcs red: a guess that reads like a fact,
+  so every upscaled or coloured frame is labelled as one.
 
 --------------------------------------------------------------------------------
 4. INVARIANTS
