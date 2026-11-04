@@ -20,8 +20,8 @@ STATUS  (Last verified: 2026-11-04)
             people to look at — 0.7–1.1 s a frame on the CPU, 52 ms on an
             RTX 3060 (RESULTS.txt, THE DISPLAY CHAIN). Colour (DDColor-large)
             a stretch goal, previewed in PyTorch at 2.5 s a frame.
-  NOT BUILT the frame queue that runs it, its upload, and the web's views
-            of it. Kevin's evaluation (#103, 2026-10-10) still stands for
+  agent     BUILT (feat/offline-data) — the frame queue that runs it
+            (display-chain.txt). NOT BUILT: its upload and the web's view. Kevin's evaluation (#103, 2026-10-10) still stands for
             the PIPELINE: ESPCN ×2 and FSRCNN ×2 tie bicubic, Real-ESRGAN
             invents detail — so clahe@1 stays this stage. Colour: never as
             evidence.
@@ -86,3 +86,6 @@ consumed-by       results.txt
                   the enhanced copies are uploaded and shown beside originals
 consumed-by       scene.txt
                   each frame's quality: an unusable frame is never compared
+consumed-by       display-chain.txt
+                  the decision it rests on: clahe@1 stays this stage, the
+                  upscale is display only

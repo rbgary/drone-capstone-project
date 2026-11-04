@@ -67,6 +67,11 @@ AGENT CLI — the `dronedeck` command (motors only where noted)
                                     samples), --all (everything unprocessed),
                                     --fixture (the test fixture, source checkout
                                     only), --live-point POINT (with --flight).
+  dronedeck upscale --session ID  The display chain (Real-ESRGAN, then CLAHE)
+                                    over a session's captured frames; never
+                                    connects. --chunk N stops after N and prints
+                                    what is left as JSON (the agent's queue runs
+                                    it so); --all every session not yet done.
   dronedeck mission-report --flight ID
                                     Per inspection point: leg, transit, settle,
                                     hold, drift, flown-vs-estimate, and suggested

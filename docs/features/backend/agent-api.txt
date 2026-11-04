@@ -208,6 +208,9 @@ consumed-by       ../desktop/drone-wifi.txt
                   /camera/wifi carries the drone's network
 consumed-by       ../desktop/desktop-app.txt
                   /health probe after a failed command; CORS for the window
+consumed-by       ../pipeline/display-chain.txt
+                  the lifespan resumes it after processing (_resume_work) and
+                  closes it at shutdown
 
 
 LAST VERIFIED  2026-09-30, the bounded shutdown only: tests/

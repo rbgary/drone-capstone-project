@@ -96,3 +96,6 @@ consumed-by       ../desktop/mission-playback.txt
                   session's missions/ folder
 copied-to         ../desktop/mission-playback.txt
                   parts.tsx SessionRow's layout is AllFlights' FlightRow
+shares-data-with  ../pipeline/display-chain.txt
+                  the session folder also holds upscaled/, upscaled.csv and
+                  display.json; history.session_of_flight finds a flight's session

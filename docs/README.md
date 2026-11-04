@@ -62,6 +62,7 @@ Feature docs are plain `.txt`, grouped by the surface they describe.
 | [features/pipeline/scene.txt](features/pipeline/scene.txt) | scene@1: whether the camera's view changed during a finding — supports it, never contradicts |
 | [features/pipeline/session.txt](features/pipeline/session.txt) | The session itself processed — its 1 Hz samples around the flights, judged on the ground (ground@1), Auto and Manual |
 | [features/pipeline/live.txt](features/pipeline/live.txt) | Live verdicts (story 4.9): each inspection point judged as its hold ends, shown in Progress |
+| [features/pipeline/display-chain.txt](features/pipeline/display-chain.txt) | The display chain: captured frames upscaled (Real-ESRGAN, then CLAHE) after the pipeline, in chunks, never in flight — for showing, never evidence; `dronedeck upscale` |
 | [features/pipeline/calibrate.txt](features/pipeline/calibrate.txt) | `dronedeck calibrate`: the hand-warmer flights measured, thresholds recommended — the lab procedure |
 | [features/pipeline/results.txt](features/pipeline/results.txt) | Results on the web: the Processed data page (`/app/processed`), anomalies highlighted in the readings and on the frames with their meaning, the session and flight pages, notified until read |
 

@@ -1,0 +1,112 @@
+================================================================================
+THE DISPLAY CHAIN — captured frames upscaled after the pipeline, for people to
+look at, never as evidence
+Last verified: 2026-11-04 against feat/offline-data — agent pytest 1698
+(40 in tests/test_display.py, one of them the real queue end to end), the frozen agent built and verified on Linux
+(selftest runs the model), the real queue end to end on 20 real frames, its
+output within 3 grey levels of ml/upscaling-eval's chain.
+SOURCE: backend/agent/dronedeck/display/queue.py
+================================================================================
+
+--------------------------------------------------------------------------------
+STATUS  (Last verified: 2026-11-04)
+--------------------------------------------------------------------------------
+  agent     BUILT (feat/offline-data, not on main) — the queue, the steps,
+            `dronedeck upscale`, the resume; Real-ESRGAN ×4 then CLAHE 1.5
+            on 4×4 tiles, through OpenCV's dnn on the CPU
+  desktop   BUILT — the bundled agent carries pipeline/models/ and its
+            selftest runs the model (packaging/dronedeck-agent.spec)
+  NOT BUILT the upload of upscaled frames (step 3), the web's Upscaled view
+            (step 4), a GPU (step 5: ONNX Runtime's CUDA build — 52 ms a
+            frame against ~0.65 s), colour (a stretch goal; DDColor-large,
+            measured in ml/upscaling-eval/RESULTS.txt)
+
+--------------------------------------------------------------------------------
+1. WHAT IT IS
+--------------------------------------------------------------------------------
+The team's requirement (2026-11-04): frames upscaled with Real-ESRGAN, with
+CLAHE for contrast, because the higher-ups want the detail it shows. It also
+draws detail the camera never recorded — the team accepts that for SHOWING a
+frame, and nothing reads it as evidence. It is thousands of times slower
+than the pipeline's clahe@1, so it runs once a flight's processing is done:
+each session's captured frames, a few at a time, never while flying.
+
+--------------------------------------------------------------------------------
+2. WHERE IT LIVES
+--------------------------------------------------------------------------------
+backend/agent/dronedeck/display/steps.py    the steps, named and versioned;
+                                            the model checked against MODELS.json
+backend/agent/dronedeck/display/frames.py   which frames, in what order, what is
+                                            done; a chunk; display.json
+backend/agent/dronedeck/display/queue.py    sessions waiting; chunks as child
+                                            processes; paused in flight
+backend/agent/dronedeck/session.py          _queue_display, _display_changed,
+                                            resume_display
+backend/agent/dronedeck/api/rest.py         _resume_work, and close at shutdown
+backend/agent/dronedeck/cli.py              `dronedeck upscale`; selftest
+backend/agent/dronedeck/pipeline/models/    realesr-general-x4v3.onnx, MODELS.json
+backend/agent/tests/test_display.py
+<session>/upscaled/<seq>.png, upscaled.csv, display.json   on the laptop
+ml/upscaling-eval/chain.py, RESULTS.txt     where every number here was measured
+
+--------------------------------------------------------------------------------
+3. DECISIONS
+--------------------------------------------------------------------------------
+• AFTER THE PIPELINE, NOT IN IT. Nothing in the pipeline reads these frames
+  (enhance.txt); a session is queued when one of its flights' processing is
+  done, or its own — so it follows the DPP switch, and the frames a finding
+  rests on are known before it starts.
+• ORDER: a finding's frames first, then manual captures, then the rest. A
+  session too long to finish still has the frames people will open.
+• CHUNKS OF 5, NEVER IN FLIGHT. Each chunk is `dronedeck upscale --session
+  <id> --chunk 5`, a child process at lower priority on half the cores. The
+  queue asks the session before each one and waits while a flight is in the
+  air: portable (no process suspending), and a takeoff waits a few seconds.
+• OPENCV'S dnn, NOT ONNX RUNTIME (2026-11-04). The pipeline contract says
+  models are "ONNX, run with ONNX Runtime" (handoffs/sprint-1/done/
+  dpp-contract.txt, MODEL FILES). The file is ONNX; running it on the OpenCV
+  the agent already ships gave output within 1 grey level of ONNX Runtime,
+  at 581 ms a frame against 709–1100, with no new dependency. ONNX Runtime
+  comes back only for a GPU (step 5).
+• A LIST OF STEPS. Upscaling is the only step. Moving the image classifier
+  to read upscaled frames was raised and NOT decided: the classifier squashes
+  frames to 224×224, so upscaling may give it nothing, and findings resting on
+  drawn detail is a team decision still open. Measure first (plan step M).
+
+--------------------------------------------------------------------------------
+4. INVARIANTS
+--------------------------------------------------------------------------------
+• frames.csv is read in a pass of its own (frames.captured), skipping a row
+  caught half-written: the session may still be recording, and
+  camera/recording.py's read_index — for ENDED sessions — raises on one
+  (found by test_a_row_caught_half_written_is_left_for_later).
+• What is done is upscaled.csv, never memory. A row is written only after its
+  image is renamed into place, so a killed chunk redoes one frame and leaves
+  nothing half-written.
+• A row counts only for the same steps@version; a new version redoes every
+  frame. A frame that failed is not tried again at that version.
+• The model runs only if its sha256 matches MODELS.json.
+• A chunk that makes nothing and leaves frames FAILS the job — it never loops.
+• Closed mid-job, a session stays "running" in display.json and resumes when
+  the app starts (DRONEDECK_RESUME=0 turns it off, as for processing).
+• CPU: ~0.65 s a frame (median 644 ms over 20 real frames, i9-11900H in WSL);
+  a 10-minute session's 1 200 captured frames take ~13 minutes.
+
+--------------------------------------------------------------------------------
+5. RELATED
+--------------------------------------------------------------------------------
+depends-on        data-pipeline.txt
+                  queued when processing is DONE; reads result.json's
+                  evidence_frames; processing.py's child-process pattern
+depends-on        enhance.txt
+                  the decision: clahe@1 stays the pipeline's; this is display only
+depends-on        ../desktop/camera.txt
+                  frames.csv (upload, source) and the session's frames folder
+depends-on        ../backend/sessions-and-modes.txt
+                  in flight or not (_flight_id) pauses the queue
+shares-data-with  ../backend/session-history.txt
+                  the session folder: upscaled/, upscaled.csv, display.json
+depends-on        ../backend/agent-api.txt
+                  the resume in the lifespan; close at shutdown
+consumed-by       ../desktop/desktop-app.txt
+                  the bundled agent carries the model; selftest runs it

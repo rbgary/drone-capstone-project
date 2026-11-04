@@ -263,3 +263,6 @@ consumed-by       ../pipeline/session.txt
 consumed-by       ../desktop/capture.txt
                   the auto-capture switch (Session.capture), reset when a session
                   ends; a capture needs a session
+consumed-by       ../pipeline/display-chain.txt
+                  _flight_id pauses its queue between chunks; processing DONE
+                  queues a session

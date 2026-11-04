@@ -239,3 +239,6 @@ consumed-by       capture.txt
                   the recording it marks captured; the feed the Capture page shows
 depends-on        camera-firmware.txt
                   the stream: its format, its rate, why it stalls
+consumed-by       ../pipeline/display-chain.txt
+                  frames.csv's upload and source columns pick and order the
+                  frames it upscales
