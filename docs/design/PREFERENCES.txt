@@ -1,3 +1,7 @@
+This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It retires the STANDING rule that locked
+manual flight control to Samuel; the team removed the lock.
+
 ================================================================================
 PREFERENCES — WHAT THE OWNER ASKED FOR MORE THAN ONCE
 Last verified: 2026-09-27 (created by the feature-kit).
@@ -41,11 +45,12 @@ LOG  (asked twice — watching for a third)
 STANDING  (made a rule — lives in the doc named)
 --------------------------------------------------------------------------------
 (date made standing · the rule · -> the doc that now carries it)
-2026-09-30 · MANUAL FLIGHT CONTROL IS LOCKED: no one changes how the keys fly
-            the drone unless Samuel asks for it himself · -> CLAUDE.md "Manual
-            flight control is locked", features/backend/manual-control.txt
-            (LOCKED, HOW TO FLY IT). Enforced by test_manual_control_lock.py
-            and .github/CODEOWNERS. Said in so many words; standing at once.
+2026-09-30 · RETIRED 2026-11-04. Was: MANUAL FLIGHT CONTROL IS LOCKED — no one
+            changes how the keys fly the drone unless Samuel asks. Samuel left
+            the team, and the team removed the lock entirely (the CLAUDE.md
+            rule, test_manual_control_lock.py, its workflow, CODEOWNERS):
+            anyone on it may change manual flight · ->
+            features/backend/manual-control.txt.
 2026-09-29 · Every screen fits every width it can be shown at, in both themes:
             desktop measured at 720 / 900 / 1024 / 1280 / 1600, the website
             at 390 / 768 / 1024 / 1440; layout by the container's width;

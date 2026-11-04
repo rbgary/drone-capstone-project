@@ -1,3 +1,8 @@
+# This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). The station status reports the position
+# uncertainty rounded up to 0.1 cm, so a reading the 5 cm check refuses never displays
+# as within the limit.
+
 """An operating session: one operator, one drone, from sign-in to sign-off.
 
 This is what the desktop app drives, and the only thing that flies a drone.
@@ -84,7 +89,12 @@ from dronedeck.processing import LIVE, SESSION, Job, JobState, ProcessingQueue
 from dronedeck.safety.flight_guard import Action as GuardAction
 from dronedeck.safety.flight_guard import Reason as GuardReason
 from dronedeck.safety.flight_guard import Verdict as GuardVerdict
-from dronedeck.safety.flight_guard import assess_positioning, position_trusted, station_ids
+from dronedeck.safety.flight_guard import (
+    assess_positioning,
+    position_trusted,
+    station_ids,
+    uncertainty_cm,
+)
 from dronedeck.sync import auth_store, flight_playback
 from dronedeck.sync.cloud import AuthError, Cloud, CloudTimeout, Operator
 from dronedeck.sync.outbox import Kind, Outbox, new_id
@@ -1519,7 +1529,9 @@ class Session:
             "received": list(status.received),
             "measured": list(status.with_geometry),
             "usable": list(status.usable),
-            "uncertainty_cm": (round(max(variances) ** 0.5 * 100, 1)
+            # Rounded UP to 0.1 cm (2026-11-04), so a refused reading never
+            # shows as "within 5.0 cm (under 5 needed)".
+            "uncertainty_cm": (uncertainty_cm(max(variances))
                                if len(variances) == 3 else None),
             "ready": status.ready,
             # The same chain, per station (2026-10-24: two stations in the

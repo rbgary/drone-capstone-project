@@ -1,3 +1,7 @@
+This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It notes, in two lines that mention it, that the
+team removed the manual-control lock.
+
 ================================================================================
 MANUAL ROOM MAP — the room drawn from the two base stations, the drone in it,
 and where each arrow key moves it, on the Manual page
@@ -18,7 +22,7 @@ STATUS  (Last verified: 2026-10-24)
   NOT BUILT  enforcing the green as a fence — shown only (Samuel was asked;
              the recommendation was shown only until it has been flown)
   NOT BUILT  flight tuning: no manual flight with both stations heard has been
-             read yet (manual-control.txt is locked to Samuel)
+             read yet (manual-control.txt was locked until 2026-11-04)
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS
@@ -92,7 +96,8 @@ harness   "Control · Manual, the room from the stations, flying / on the
   map offers the same stages and Measure button (StationStages) itself.
 • NOT IN THE LOCK. Nothing in manual.py, keyframe.py, tuning.py, keys.ts,
   arrows.ts, ArrowFrame.tsx or App.tsx's keyboard handler changed;
-  test_manual_control_lock.py passes untouched.
+  test_manual_control_lock.py passed untouched. (That lock and its test were
+  removed on 2026-11-04 — ../backend/manual-control.txt.)
 • BAROMETER FLIGHT IS THE SECOND BUTTON. Unassisted at confirmation, the
   agent's reason is shown first, "Look again for the base stations" (retry) is
   primary and "Fly on the barometer — I am flying it by eye" secondary.

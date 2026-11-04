@@ -1,3 +1,7 @@
+This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records the new positioning readiness rule: an
+extra station in view but not yet measured no longer blocks a settled position.
+
 FLIGHT SAFETY — the checks before a flight and the guards during one
 ====================================================================
 
@@ -37,10 +41,17 @@ THE CHECKS (in order, each yields a CheckResult the UI renders live)
                blocks, and the first sample can lack this one (2026-09-30)
   deck         deck.bcLighthouse4. 0 is named as THE reason, alone — see
                "NO DECK IS NOT NO STATIONS" below
-  positioning  base stations RECEIVED and calibrated and with geometry.
+  positioning  enough USABLE base stations — received, calibrated and with
+               geometry — and the position uncertainty under 5 cm
+               (MAX_READY_VARIANCE_M2, the largest of x, y and z).
                ONE is enough to fly (MIN_USABLE_STATIONS = 1); a room with two
                insists on both with DRONEDECK_MIN_STATIONS=2. Zero is not a
                looser setting — it is unassisted flight, offered by name.
+               A station received but not yet usable (no calibration or place)
+               blocks ONLY when too few stations are usable; otherwise the
+               5 cm check decides (2026-11-04, DECISIONS). The uncertainty is
+               shown rounded UP to 0.1 cm (flight_guard.uncertainty_cm), so a
+               refused reading never reads "5.0 cm".
   still        the Kalman estimate has settled in x, y AND z
 
 On request, once the area is confirmed: the BATTERY & MOTOR TEST — the
@@ -185,6 +196,20 @@ DECISIONS
 - The geometry walk takes the samples through a caller-supplied callback, so
   the order, the refusals and the wording are tested without a drone or a
   person in the room.
+- An extra station in view does not block a settled position (2026-11-04).
+  Until then every RECEIVED station had to be calibrated and measured, so in a
+  two-station room with Ch 1 measured and settled under 5 cm, Ch 2 coming into
+  view (decoded, not yet measured) turned ② Position's Continue off — while the
+  stage row could read well under 5 cm — and only intermittently, as Ch 2 came
+  and went from view (reported by the team in the lab; the readings were not
+  recorded). The drone's estimator ignores a station it has
+  no calibration or place for, so such a station cannot make the position
+  worse; with enough usable stations the 5 cm check decides.
+  PositioningStatus.problems() and position_stages.first_blocker() apply the
+  same rule, so the stage note never contradicts the button, and the session
+  checks follow them. The 2 cm settle check at session start (checks.py) is
+  unchanged. Pinned by test_flight_guard.py TestPositioningReadiness and
+  TestUncertaintyCm, and test_position_stages.py.
 
 
 INVARIANTS
@@ -292,7 +317,11 @@ room's closed geofence (mission/plan/geofence.py), and the guard lands the drone
 outside THAT polygon; Manual and the hover demo keep the ±2.0 m square. The
 square stays the default, so nothing Manual flies changed.
 
-LAST VERIFIED  2026-09-30, the crash cut-off, the thrust ceiling and the deck
+LAST VERIFIED  2026-11-04, the positioning readiness rule only (DECISIONS,
+"An extra station in view"): ruff pass · mypy pass · pytest 1666 passed. No
+radio: the hardware gates were not run, and the two-station case is not yet
+seen on the lab drone.
+Before that: 2026-09-30, the crash cut-off, the thrust ceiling and the deck
 reason only: tests/test_flight_guard.py TestCrashCutoff and test_checks.py;
 the new guard replayed over all 97 traces on the lab laptop; `dronedeck
 check` run against the lab drone (battery passes, deck named).

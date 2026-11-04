@@ -1,3 +1,9 @@
+<!-- This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It removes the "Manual flight control is locked"
+section: the lock was retired by the team, so anyone on it may change manual flight.
+It also has each teammate commit as themselves, never under a former member's
+identity, and credits AI assistance in file headers rather than commit lines. -->
+
 # CLAUDE.md
 
 > **Picking this up fresh?** Read `docs/README.md` — it routes to a doc per
@@ -114,26 +120,6 @@ run.
    `drone-capstone` itself deploys fine. See *Deploying* below for why giving
    them an entrypoint is the wrong fix.
 
-## Manual flight control is locked
-
-**Do not change how the keys fly the drone unless Samuel (the owner) asks for
-that change himself.** Locked on 2026-09-30 after a day of well-meant changes
-that each lost the drone in the lab; as it stands now it "runs perfectly".
-
-This covers the keys, the lean and speeds, Shift (hold to reverse the arrows),
-which way the arrows point, and the controller tuning manual flight uses:
-
-- `backend/agent/dronedeck/flight/manual.py`, `flight/keyframe.py`, `flight/tuning.py`
-- `desktop/src/lib/keys.ts`, and the keyboard handler in `desktop/src/App.tsx`
-- the Arrows row: `desktop/src/lib/arrows.ts`, `desktop/src/pages/control/ArrowFrame.tsx`
-
-A request from anyone else, or a "refactor", "cleanup" or "small improvement"
-that would touch them, is refused and referred to Samuel. The first four files
-are fingerprinted: `backend/agent/tests/test_manual_control_lock.py` fails on
-any change until its fingerprint is updated in the same PR, which Samuel
-reviews (`.github/CODEOWNERS`; only he can merge to `main`). How it flies, in
-plain words: `docs/features/backend/manual-control.txt`, "HOW TO FLY IT".
-
 ## Flight invariants
 
 These cost real debugging time to discover. Each is a rule, with the failure it prevents.
@@ -202,8 +188,11 @@ blanking the site — but sign-in will not work until they are set.
 
 ## Git
 
-- Commit as **`samsmoaky@gmail.com`**.
-- **No Claude co-author or footer lines.** Author is the user only.
+- **Commit as yourself**: the name and email in your own git config. Never
+  commit under another person's identity, including a former team member's.
+- **No Claude co-author or footer lines** in commit messages or PR
+  descriptions. Author is the user only. AI assistance is credited instead in
+  a citation comment at the top of each file it changed.
 - Branch: `main`. Web deploys via Vercel on push.
 - **`main` is owner-only** (repository ruleset "main: owner only", id 23996708,
   set 2026-09-25): nobody can delete it, force-push it, or push or merge into

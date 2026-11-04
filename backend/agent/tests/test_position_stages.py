@@ -1,3 +1,8 @@
+# This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). Adds tests that a second, unmeasured station no
+# longer blocks a placed drone unless the room requires two stations, and moves the
+# "names its channel" test to a drone with no measured station.
+
 """The first stage between base-station light and a position that is not done
 (flight/position_stages.py) — one rule for the map, the stages and ② Position."""
 
@@ -39,6 +44,17 @@ class TestTheOrder:
         assert found is not None and found.stage == "decoded" and "Ch 1 and Ch 2" in found.fix
 
     def test_a_decoded_station_without_a_place_names_its_channel(self):
+        found = first_blocker(status(received=(0, 1), geometry=()),
+                              deck_detected=True, deck_needs_fw=False)
+        assert found is not None and found.stage == "stored" and "Ch 1 and Ch 2" in found.text
+
+    def test_a_second_station_without_a_place_does_not_block_a_placed_drone(self):
+        """2026-11-04: Ch 1 measured and settled; Ch 2 in view, not measured.
+        One usable station is enough (MIN_USABLE_STATIONS), so it is placed."""
+        assert stage(status(received=(0, 1), geometry=(0,))) is None
+
+    def test_a_room_that_insists_on_two_names_the_unmeasured_one(self, monkeypatch):
+        monkeypatch.setenv("DRONEDECK_MIN_STATIONS", "2")
         found = first_blocker(status(received=(0, 1), geometry=(0,)),
                               deck_detected=True, deck_needs_fw=False)
         assert found is not None and found.stage == "stored" and "Ch 2" in found.text

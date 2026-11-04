@@ -1,3 +1,7 @@
+This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It notes that the landing in flight/manual.py
+is no longer locked, so the motor-lock finding can now be worked on.
+
 ================================================================================
 THE MISSION CONTROLLER — how a saved mission is flown
 Last verified: 2026-10-11 — re-read after .github/workflows/agent-tests.yml changed for mission playback; it runs this doc's tests in CI, as section 6 says. Before that:
@@ -236,10 +240,10 @@ FOUND, NOT FIXED — outside both tickets; Samuel's call
 • WHAT LOCKS THE DRONE AFTER A LANDING (2026-10-05, flight 0fca5fb4): the
   manual system declared "landed" at z 0.055 m with thrust ~47 600 and motor
   m1 ~59 900 — still 5.5 cm up, motors high — then cut them, and within six
-  minutes supervisor.info read LOCKED. The landing is flight/manual.py's
-  (LOCKED — CLAUDE.md "Manual flight control is locked"), so it is reported
-  here, not changed: the mission path now refuses and names the lock instead
-  of flying blind. Whether the cut-from-5 cm is what trips the lock is NOT
+  minutes supervisor.info read LOCKED. The landing is flight/manual.py's,
+  which was locked to Samuel then, so it was reported here, not changed: the
+  mission path now refuses and names the lock instead of flying blind. (That
+  lock was removed 2026-11-04 — ../backend/manual-control.txt.) Whether the cut-from-5 cm is what trips the lock is NOT
   YET MEASURED.
 • `dronedeck mission` DOES check BUILT (cli.py, since 0ca26ba, 2026-09-28)
   — so with BUILT = True it flies the drone, as designed.
