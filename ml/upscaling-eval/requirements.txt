@@ -8,3 +8,5 @@ onnx==1.23.2
 # PyTorch only exports Real-ESRGAN to ONNX (fetch_models.py). The CPU build is
 # a tenth of the size: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.14.1
+# DDColor's export only: its vendored basicsr imports torchvision (fetch_models.py).
+torchvision==0.29.2

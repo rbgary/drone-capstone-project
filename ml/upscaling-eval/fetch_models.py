@@ -2,7 +2,12 @@
 export Real-ESRGAN to ONNX — the form the agent would run it in (contract,
 MODEL FILES: ONNX, run with ONNX Runtime).
 
-    python fetch_models.py
+    python fetch_models.py                 # also DDColor's checkpoints and code
+    python fetch_models.py --ddcolor-onnx  # and DDColor to ONNX: more than 8 GB of memory
+
+DDColor's ONNX export is asked for, never automatic: colour is a stretch goal
+(2026-11-04) that chain.py previews in PyTorch, and the export was killed
+for memory on an 8 GB machine (export_ddcolor).
 
 Every model's source and licence is recorded here, and goes into MODELS.json
 with the one that wins.
@@ -10,8 +15,10 @@ with the one that wins.
 
 from __future__ import annotations
 
+import sys
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
 from common import MODELS, sha256
 
@@ -60,6 +67,38 @@ DOWNLOADS = [
 ]
 
 REALESRGAN_ONNX = "realesr-general-x4v3.onnx"
+
+# DDColor-large, the colour step (2026-11-04: the team's pick). Two of the three
+# large checkpoints: modelscope is the author's default "especially for images
+# outside ImageNet"; artistic was trained without the colourfulness loss and may
+# give "fewer unreasonable color artifacts" (MODEL_ZOO.md). The third, paper, only
+# reproduces the paper. Hashes are Hugging Face's LFS oids, pinned 2026-11-04.
+DDCOLOR = ("modelscope", "artistic")
+DDCOLOR_DOWNLOADS = [
+    Download(
+        "ddcolor_modelscope.pth",
+        "https://huggingface.co/piddnad/DDColor-models/resolve/main/ddcolor_modelscope.pth",
+        "17c460d7e55b32a598370621d77173be59e03c24b0823f06821db23a50c263ce",
+        "Apache-2.0 (huggingface.co/piddnad/DDColor-models)",
+    ),
+    Download(
+        "ddcolor_artistic.pth",
+        "https://huggingface.co/piddnad/DDColor-models/resolve/main/ddcolor_artistic.pth",
+        "a591ee5beedad36de703d8977e92d0c30c1eedc6453fd1b300f3b460842a23a9",
+        "Apache-2.0 (huggingface.co/piddnad/DDColor-models)",
+    ),
+]
+# The architecture is DDColor's own code at a pinned commit: ConvNeXt-L and a
+# transformer decoder are too much to restate here the way SRVGGNetCompact is.
+# Only the export imports it — the ONNX file is what anything else runs.
+DDCOLOR_REPO = "https://github.com/piddnad/DDColor.git"
+DDCOLOR_COMMIT = "2adb63f2656ac41cbdf7b894cddd94121a3faf13"
+DDCOLOR_SRC = MODELS.parent / "vendor" / "DDColor"
+DDCOLOR_SIZE = 512  # the size the model sees, whatever the frame's (ddcolor/pipeline.py)
+
+
+def ddcolor_onnx(checkpoint: str, fp16: bool = False) -> str:
+    return f"ddcolor-{checkpoint}{'-fp16' if fp16 else ''}.onnx"
 
 
 def fetch(d: Download) -> None:
@@ -143,12 +182,135 @@ def export_realesrgan() -> None:
     )
 
 
-def main() -> None:
+def ddcolor_source() -> None:
+    """DDColor's repository at the pinned commit, under data/vendor/ (gitignored)."""
+    import subprocess
+
+    if not DDCOLOR_SRC.exists():
+        DDCOLOR_SRC.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "clone", "-q", DDCOLOR_REPO, str(DDCOLOR_SRC)], check=True)
+    subprocess.run(["git", "-C", str(DDCOLOR_SRC), "checkout", "-q", DDCOLOR_COMMIT], check=True)
+
+
+def export_ddcolor(checkpoint: str) -> None:
+    """DDColor-large to ONNX at its fixed 512×512 input, in fp32 and fp16.
+
+    The fp32 export must compute what PyTorch computes, or every number below is
+    of the wrong model. The fp16 copy halves the download; how far its colour
+    drifts from fp32 is printed, not judged here — chain.py measures it on real
+    frames, where it matters.
+
+    EACH STEP IS A PROCESS OF ITS OWN (ddcolor_step). The model is 912 MB, and
+    one process holding the checkpoint, the network, the traced graph and an
+    ONNX Runtime session at once went past the 8 GB of the WSL machine it was
+    first run on and was killed (2026-11-04). A file is renamed into place only
+    once its check passes, so a killed step leaves nothing that looks finished."""
+    import subprocess
+    import sys
+
+    for step, done in (
+        ("export", MODELS / ddcolor_onnx(checkpoint)),
+        ("fp16", MODELS / ddcolor_onnx(checkpoint, fp16=True)),
+    ):
+        if done.exists():
+            print(f"ok  {done.name}  {done.stat().st_size / 1e6:.2f} MB  (already exported)")
+            continue
+        subprocess.run([sys.executable, __file__, "--ddcolor", step, checkpoint], check=True)
+
+
+def _ddcolor_check(checkpoint: str) -> Path:
+    """The input and PyTorch's output on it, kept for the steps after the export."""
+    return MODELS / f"ddcolor-{checkpoint}-check.npz"
+
+
+def ddcolor_step(step: str, checkpoint: str) -> None:
+    import gc
+
+    import numpy as np
+    import onnxruntime as ort
+
+    out = MODELS / ddcolor_onnx(checkpoint)
+    half = MODELS / ddcolor_onnx(checkpoint, fp16=True)
+
+    if step == "export":
+        import torch
+
+        sys.path.insert(0, str(DDCOLOR_SRC))
+        from ddcolor import DDColor, build_ddcolor_model
+
+        net = build_ddcolor_model(
+            DDColor,
+            model_path=str(MODELS / f"ddcolor_{checkpoint}.pth"),
+            input_size=DDCOLOR_SIZE,
+            model_size="large",
+            device=torch.device("cpu"),
+        )
+        gc.collect()  # the checkpoint's own copy of the weights
+        # A gray frame as the model is given it: L only, a and b zero, back to
+        # RGB — three equal channels, as colour.py feeds it.
+        dummy = torch.rand(1, 1, DDCOLOR_SIZE, DDCOLOR_SIZE).repeat(1, 3, 1, 1)
+        with torch.inference_mode():
+            want = net(dummy).numpy()
+        np.savez(_ddcolor_check(checkpoint), input=dummy.numpy(), want=want)
+        part = out.with_suffix(".onnx.part")
+        torch.onnx.export(
+            net,
+            (dummy,),
+            str(part),
+            input_names=["input"],
+            output_names=["output"],
+            opset_version=17,
+            dynamo=False,
+        )
+        del net
+        gc.collect()
+        check = np.load(_ddcolor_check(checkpoint))
+        got = ort.InferenceSession(str(part), providers=["CPUExecutionProvider"]).run(
+            None, {"input": check["input"]}
+        )[0]
+        err = float(np.abs(check["want"] - got).max())
+        if err > 1e-2:  # ab is in Lab units, ±128: a hundredth of a unit is invisible
+            part.unlink()
+            raise SystemExit(f"{out.name}: ONNX disagrees with PyTorch by {err} — deleted")
+        part.rename(out)
+        print(f"ok  {out.name}  {out.stat().st_size / 1e6:.2f} MB  (max |ONNX − PyTorch| = {err:.1e})")
+
+    elif step == "fp16":
+        import onnx
+        from onnxruntime.transformers.float16 import convert_float_to_float16
+
+        part = half.with_suffix(".onnx.part")
+        model = convert_float_to_float16(onnx.load(str(out)), keep_io_types=True)
+        onnx.save(model, str(part))
+        del model
+        gc.collect()
+        check = np.load(_ddcolor_check(checkpoint))
+        got = ort.InferenceSession(str(part), providers=["CPUExecutionProvider"]).run(
+            None, {"input": check["input"]}
+        )[0]
+        diff = np.abs(check["want"] - got)
+        part.rename(half)
+        print(
+            f"ok  {half.name}  {half.stat().st_size / 1e6:.2f} MB  "
+            f"(|fp16 − PyTorch| mean {diff.mean():.2f}, max {diff.max():.2f} ab units, on noise)"
+        )
+
+
+def main(ddcolor_onnx_too: bool) -> None:
     MODELS.mkdir(parents=True, exist_ok=True)
     for d in DOWNLOADS:
         fetch(d)
     export_realesrgan()
+    for d in DDCOLOR_DOWNLOADS:
+        fetch(d)
+    ddcolor_source()
+    if ddcolor_onnx_too:
+        for checkpoint in DDCOLOR:
+            export_ddcolor(checkpoint)
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 4 and sys.argv[1] == "--ddcolor":
+        ddcolor_step(sys.argv[2], sys.argv[3])
+    else:
+        main(ddcolor_onnx_too="--ddcolor-onnx" in sys.argv[1:])
