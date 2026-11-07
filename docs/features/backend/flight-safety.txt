@@ -285,6 +285,37 @@ INVARIANTS
   low-level setpoint in the same power cycle holds priority and silently locks
   the high-level commander out: takeoff() returns success with motors at 0.
 
+THE 30 % BATTERY REPORT (SPRINT 3, TASK 19 — Yordanos) — STARTER
+
+Requirement: "threshold should be <30 and drone should report when it hits
+threshold". safety/battery_monitor.py, fed every telemetry snapshot by the
+session:
+
+  - percent is checks.battery_percent (linear, 3.30 V = 0 %, 4.20 V = 100 %),
+    read with the MOTORS OFF and held in flight
+  - motors off: LOW after it stays under 30 % (3.57 V) for 3 s; cleared above 35 %
+  - motors on: LOW after it stays under 3.40 V for 3 s; cleared above 3.45 V.
+    WHY two: under thrust the cell sags. 2026-11-07, three lab flights: a
+    64-74 % battery hovered at 3.40-3.50 V (the ground map: 11-22 %), so the
+    first version, one 30 % line for both, said "low" 4 s after takeoff in
+    two of the three. Replayed with the two lines: none low. The third
+    flight's dips under 3.40 V (full thrust, before it tumbled) lasted under
+    a second each — a sag, not a flat battery. 3.40 V is a first estimate;
+    no flight has yet flown a battery down to it.
+  - every telemetry event carries {"battery": {percent, vbat, low,
+    threshold_percent}}; the moment it goes low the agent logs a warning and
+    emits ONE "battery_low" event with the message
+  - the desktop's vitals strip shows "Battery · NN%", turns critical and says
+    "Battery under 30%" (or "under 3.40 V under load") "— finish up and land soon"
+
+IT REPORTS; IT DOES NOT LAND. BATTERY_LOW above (pm.state, and the 3.10 V
+floor) still ends the flight. Returning to base at the threshold is sprint 4
+(task 8, Yordanos; task 5, Hannah) and can act on `low`.
+
+NOT DONE: both lines measured against real flight time on this airframe
+(the linear map is a guess for a LiPo; 3.40 V from three short flights); the web live page; the audit trail.
+
+
 A MISSION'S ROOM FENCE (2026-09-28)
 
 GuardContext.fence is an optional (x, y) → inside? test. A mission passes its
