@@ -10,6 +10,7 @@ import pytest
 from dronedeck.telemetry import correction
 from dronedeck.telemetry.correction import ThermalEngine
 from dronedeck.telemetry.heat_bias import (
+    BENCH_CPU_WARMUP,
     HeatBiasModel,
     HeatBiasTuning,
     fit_cpu_warmup,
@@ -114,3 +115,21 @@ class TestEngine:
         fixed_err = abs(fixed[-1] - ROOM_C)
         assert fixed_err < plain_err
         assert fixed_err < 0.3
+
+    def test_the_bench_fit_keeps_a_lab_like_warm_up_flat(self, clock):
+        """BENCH_CPU_WARMUP (the 2026-11-07 bench run): a board warming the
+        way the lab drone's did reads the room for five minutes."""
+        a, tau = BENCH_CPU_WARMUP.cpu_amp_c, BENCH_CPU_WARMUP.cpu_tau_s
+
+        def lab_raw(t: float) -> float:
+            return ROOM_C + STARTUP_OFFSET_C + a * (1 - math.exp(-t / tau))
+
+        engine = ThermalEngine(lab_raw(0), ROOM_C, heat_bias=HeatBiasModel(BENCH_CPU_WARMUP))
+        start = clock.now
+        out = []
+        for t in range(1, 301):
+            clock.now = start + t
+            out.append(engine.process(lab_raw(t), 0, 1013.25).corrected_temp_c)
+        # The EMA lags the fast first minute a little; the mean stays on the room.
+        assert max(abs(c - ROOM_C) for c in out) < 0.25
+        assert sum(abs(c - ROOM_C) for c in out) / len(out) < 0.1

@@ -55,6 +55,14 @@ class HeatBiasTuning:
         return self.cpu_amp_c != 0.0 or self.thrust_gain_c != 0.0
 
 
+#: The CPU warm-up fitted from the first bench run on the lab drone
+#: (thermal-bench-20261107-155544.csv: 5 min, motors off, room 71.3 °F on a
+#: thermometer; rms 0.09 °C). Valid only when the engine starts as the drone
+#: powers on cold — the bench test's case, NOT a flight's (a flight's engine
+#: starts at takeoff, minutes after power-on). Used by `dronedeck thermal-test`.
+BENCH_CPU_WARMUP = HeatBiasTuning(cpu_amp_c=6.14, cpu_tau_s=130.0)
+
+
 class HeatBiasModel:
     """Feed it each sample's time since start and thrust; it returns the bias
     to subtract from the corrected temperature, °C."""

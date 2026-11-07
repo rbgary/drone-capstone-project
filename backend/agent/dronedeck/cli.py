@@ -170,6 +170,9 @@ def build_parser() -> argparse.ArgumentParser:
                               "the summary's error is measured against it")
     thermal.add_argument("--out", type=Path, default=None, help="CSV path (default: "
                          "the data folder's flights/thermal-bench/)")
+    thermal.add_argument("--no-warmup", action="store_true",
+                         help="leave out the fitted CPU warm-up correction (heat_bias.py "
+                              "BENCH_CPU_WARMUP) — the engine as it was")
     return parser
 
 
@@ -872,6 +875,7 @@ def cmd_thermal_test(args: argparse.Namespace) -> int:
 
     from dronedeck.telemetry.bench import SAMPLE_PERIOD_S, BenchSample, ThermalBench, default_path
     from dronedeck.telemetry.correction import ThermalEngine
+    from dronedeck.telemetry.heat_bias import BENCH_CPU_WARMUP, HeatBiasModel
     from dronedeck.telemetry.row import TempUnit
 
     ambient_c, _unit = parse_ambient(args.ambient)
@@ -890,8 +894,13 @@ def cmd_thermal_test(args: argparse.Namespace) -> int:
         if seed is None:
             print("\n  no barometer reading from the drone — is it powered?\n")
             return 1
-        bench = ThermalBench(ThermalEngine(seed, ambient_c), f)
+        warmup = None if args.no_warmup else HeatBiasModel(BENCH_CPU_WARMUP)
+        bench = ThermalBench(ThermalEngine(seed, ambient_c, heat_bias=warmup), f)
         print(f"\n  Thermal bench test, {args.minutes:g} min. Motors stay off. Ctrl-C ends early.")
+        if warmup is not None:
+            print(f"  CPU warm-up correction on (A {BENCH_CPU_WARMUP.cpu_amp_c} °C, "
+                  f"τ {BENCH_CPU_WARMUP.cpu_tau_s:g} s) — start with the drone just "
+                  f"switched on. --no-warmup turns it off.")
         print(f"  writing {out}\n")
         start = time.monotonic()
         end = start + args.minutes * 60
