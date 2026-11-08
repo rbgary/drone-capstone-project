@@ -219,6 +219,36 @@ def run_chunk(folder: Path, results_root: Path, steps: list[Step], *, limit: int
     return Chunk(done=made, failed=failed, remaining=len(todo) - len(batch))
 
 
+@dataclass(frozen=True)
+class Upscaled:
+    """One frame's upscaled copy: "ready" (path set), "pending" (not made yet)
+    or "failed" (error says why)."""
+
+    state: str
+    path: Path | None = None
+    error: str | None = None
+
+
+def upscaled_file(folder: Path, seq: int) -> Upscaled:
+    """The newest copy upscaled.csv lists for a frame, whatever made it —
+    read from the index, never from the request, as recording.frame_file does."""
+    index = folder / INDEX
+    last: dict[str, str] | None = None
+    if index.exists():
+        with index.open(newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row.get("seq") == str(seq):
+                    last = row
+    if last is None:
+        return Upscaled("pending")
+    if last.get("error"):
+        return Upscaled("failed", error=last["error"])
+    path = folder / last.get("file", "")
+    if not last.get("file") or not path.is_file():
+        return Upscaled("failed", error="the upscaled file is gone from this computer")
+    return Upscaled("ready", path=path)
+
+
 def set_state(folder: Path, state: str, error: str | None = None) -> None:
     """The session's job state, for the resume. A temp file, then a rename."""
     fd, temp = tempfile.mkstemp(dir=folder, prefix=".display.", suffix=".tmp")

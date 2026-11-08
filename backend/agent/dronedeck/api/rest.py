@@ -950,6 +950,24 @@ def read_session_frame(session_id: str, seq: int) -> Response:
                     headers={"Cache-Control": "no-store"})
 
 
+@app.get("/history/sessions/{session_id}/frames/{seq}/upscaled", dependencies=[Command])
+def read_session_frame_upscaled(session_id: str, seq: int) -> Response:
+    """One frame's upscaled copy (display/frames.py) — for looking at, never
+    evidence. A 404 says which: not made yet ("pending") or never will be at
+    this version ("failed"), so the app can show the original meanwhile."""
+    try:
+        found = history.session_upscaled(session_id, seq)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="No such session on this computer.") from None
+    if found.state != "ready" or found.path is None:
+        message = ("Not upscaled yet: it runs once the session's processing is done."
+                   if found.state == "pending"
+                   else f"This frame could not be upscaled: {found.error}")
+        raise HTTPException(status_code=404, detail={"state": found.state, "message": message})
+    return Response(content=found.path.read_bytes(), media_type="image/webp",
+                    headers={"Cache-Control": "no-store"})
+
+
 def _signed_in_cloud() -> SupabaseCloud | None:
     """The cloud client when someone is signed in — what the syncer uses."""
     return agent.cloud if getattr(agent.cloud, "operator", None) is not None else None

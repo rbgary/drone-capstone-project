@@ -491,6 +491,13 @@ def session_frame(session_id: str, seq: int, *,
     return frame_file(_session_folder(session_id, root), seq)
 
 
+def session_upscaled(session_id: str, seq: int, *, root: Path | None = None) -> Any:
+    """One frame's upscaled copy (display/frames.py Upscaled). Raises
+    ValueError for a bad id."""
+    from dronedeck.display.frames import upscaled_file
+    return upscaled_file(_session_folder(session_id, root), seq)
+
+
 def _session_folder(session_id: str, root: Path | None) -> Path:
     # The id arrives from a URL: refuse anything that could walk out of the folder.
     if not session_id or any(c in session_id for c in "/\\."):

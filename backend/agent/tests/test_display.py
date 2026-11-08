@@ -160,6 +160,53 @@ class TestTheFile:
         assert data[:4] == b"RIFF" and data[8:12] == b"WEBP"
         assert index_rows(folder)[0]["file"] == "upscaled/000001.webp"
 
+    def test_ready_pending_and_failed_are_told_apart(self, tmp_path):
+        folder, results = make_session(tmp_path, [{"seq": 1}, {"seq": 2, "file": False},
+                                                  {"seq": 3}])
+        frames.run_chunk(folder, results, [Times4()], limit=2)  # 1 made, 2 failed
+        made = frames.upscaled_file(folder, 1)
+        assert made.state == "ready" and made.path.name == "000001.webp"
+        assert frames.upscaled_file(folder, 2).state == "failed"
+        assert frames.upscaled_file(folder, 3).state == "pending"
+
+    def test_the_newest_copy_is_the_one_shown(self, tmp_path):
+        folder, results = make_session(tmp_path, [{"seq": 1}])
+        frames.run_chunk(folder, results, [Times4()])
+        frames.run_chunk(folder, results, [Breaks()])  # other steps, run later, that failed
+        assert frames.upscaled_file(folder, 1).state == "failed"
+
+    def test_a_copy_gone_from_disk_says_so(self, tmp_path):
+        folder, results = make_session(tmp_path, [{"seq": 1}])
+        frames.run_chunk(folder, results, [Times4()])
+        (folder / "upscaled" / "000001.webp").unlink()
+        gone = frames.upscaled_file(folder, 1)
+        assert gone.state == "failed" and "gone" in gone.error
+
+
+class TestTheRoute:
+    def test_ready_pending_failed_and_refused(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from dronedeck.api import rest
+        from dronedeck.api.tokens import HEADER
+        monkeypatch.setenv("DRONEDECK_DATA_DIR", str(tmp_path))
+        folder, results = make_session(tmp_path, [{"seq": 1}, {"seq": 2, "file": False},
+                                                  {"seq": 3}])
+        frames.run_chunk(folder, results, [Times4()], limit=2)
+        client, headers = TestClient(rest.app), {HEADER: rest.agent.token}
+        url = f"/history/sessions/{SESSION}/frames/{{}}/upscaled"
+        ready = client.get(url.format(1), headers=headers)
+        assert ready.status_code == 200 and ready.headers["content-type"] == "image/webp"
+        assert ready.headers["cache-control"] == "no-store"
+        failed = client.get(url.format(2), headers=headers)
+        assert failed.status_code == 404 and failed.json()["detail"]["state"] == "failed"
+        pending = client.get(url.format(3), headers=headers)
+        assert pending.json()["detail"]["state"] == "pending"
+        assert "processing" in pending.json()["detail"]["message"]
+        assert client.get("/history/sessions/../frames/1/upscaled", headers=headers) \
+            .status_code == 404
+        assert client.get(url.format(1)).status_code == 401
+
 
 class TestWhileStillRecording:
     def test_a_frame_recorded_between_chunks_is_done_by_the_next(self, tmp_path):
