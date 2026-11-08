@@ -12,7 +12,7 @@ ml/upscaling-eval/chain.py (CLAHE_CLIP, CLAHE_TILES) — measured there
 
 THE MODEL RUNS ON OPENCV'S dnn, not ONNX Runtime: the agent already ships
 OpenCV, and on the 15 evaluation frames dnn's output was within one grey
-level of ONNX Runtime's, at 581 ms a frame against 709–1100 (2026-11-04).
+level of ONNX Runtime's (2026-11-04) — the same result, one dependency fewer.
 The file is ONNX either way, so ONNX Runtime — and with it a GPU — can run
 it later behind the same `run`.
 """
