@@ -1,7 +1,7 @@
 """Which of a session's frames go through the display chain, in what order,
 and what is already done.
 
-    <session>/upscaled/<seq>.png   each frame, made by the steps (steps.py)
+    <session>/upscaled/<seq>.webp  each frame, made by the steps (steps.py)
     <session>/upscaled.csv         one row per frame done: seq, file, steps,
                                    done_at, ms, error
     <session>/display.json         the session's job: queued, running, done,
@@ -13,6 +13,10 @@ IN WHAT ORDER: the frames a finding rests on first (result.json
 evidence_frames, the flights' and the session's own), then the manual
 captures, then the rest; oldest first within each. A session too long to
 finish before the laptop closes still has the frames people will look at.
+
+WEBP AT QUALITY 90, NOT PNG (2026-11-08): on 20 real frames an upscaled PNG
+averaged 424 kB — 509 MB a 10-minute session on the laptop — and WebP q90
+52 kB. These frames are for looking at; the originals stay lossless.
 
 WHAT IS DONE is upscaled.csv, never memory: a row is written only once its
 image is in place (written to a temp file, then renamed), so a chunk killed
@@ -158,8 +162,13 @@ def _append(folder: Path, row: dict[str, Any]) -> None:
         writer.writerow(row)
 
 
-def _write_png(path: Path, img: Gray) -> None:
-    ok, buf = cv2.imencode(".png", img)
+#: WebP quality: 52 kB a frame against PNG's 424 (the module docstring).
+QUALITY = 90
+EXT = ".webp"
+
+
+def _write_image(path: Path, img: Gray) -> None:
+    ok, buf = cv2.imencode(EXT, img, [cv2.IMWRITE_WEBP_QUALITY, QUALITY])
     if not ok:
         raise ValueError("the image could not be encoded")
     fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}.", suffix=".tmp")
@@ -191,13 +200,13 @@ def run_chunk(folder: Path, results_root: Path, steps: list[Step], *, limit: int
     out_dir.mkdir(exist_ok=True)
     made = failed = 0
     for seq, path in batch:
-        name = f"{seq:06d}.png"
+        name = f"{seq:06d}{EXT}"
         start = clock()
         try:
             img = _read_gray(path)
             for step in steps:
                 img = step.run(img)
-            _write_png(out_dir / name, img)
+            _write_image(out_dir / name, img)
             error = ""
             made += 1
         except Exception as e:  # noqa: BLE001 — one frame must not stop the session

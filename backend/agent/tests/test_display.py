@@ -104,7 +104,7 @@ class TestChunks:
         folder, results = make_session(tmp_path, [{"seq": n} for n in range(1, 6)])
         chunk = frames.run_chunk(folder, results, [Times4()], limit=2)
         assert chunk.to_dict() == {"done": 2, "failed": 0, "remaining": 3}
-        out = cv2.imread(str(folder / "upscaled" / "000001.png"), cv2.IMREAD_GRAYSCALE)
+        out = cv2.imread(str(folder / "upscaled" / "000001.webp"), cv2.IMREAD_GRAYSCALE)
         assert out.shape == (24, 32)
         assert [r["seq"] for r in index_rows(folder)] == ["1", "2"]
 
@@ -152,6 +152,15 @@ def append_frame(folder: Path, seq: int) -> None:
                                               "upload": "1", "source": "auto"})
 
 
+class TestTheFile:
+    def test_an_upscaled_frame_is_saved_as_webp(self, tmp_path):
+        folder, results = make_session(tmp_path, [{"seq": 1}])
+        frames.run_chunk(folder, results, [Times4()])
+        data = (folder / "upscaled" / "000001.webp").read_bytes()
+        assert data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+        assert index_rows(folder)[0]["file"] == "upscaled/000001.webp"
+
+
 class TestWhileStillRecording:
     def test_a_frame_recorded_between_chunks_is_done_by_the_next(self, tmp_path):
         folder, results = make_session(tmp_path, [{"seq": 1}, {"seq": 2}])
@@ -159,7 +168,7 @@ class TestWhileStillRecording:
         append_frame(folder, 3)
         chunk = frames.run_chunk(folder, results, [Times4()])
         assert chunk.to_dict() == {"done": 1, "failed": 0, "remaining": 0}
-        assert (folder / "upscaled" / "000003.png").exists()
+        assert (folder / "upscaled" / "000003.webp").exists()
 
     def test_a_row_caught_half_written_is_left_for_later(self, tmp_path):
         folder, results = make_session(tmp_path, [{"seq": 1}])
@@ -383,7 +392,7 @@ class TestTheCommand:
         assert cli.main(["upscale", "--session", SESSION, "--chunk", "2"]) == 0
         last = capsys.readouterr().out.strip().splitlines()[-1]
         assert json.loads(last) == {"done": 2, "failed": 0, "remaining": 1}
-        assert (folder / "upscaled" / "000001.png").exists()
+        assert (folder / "upscaled" / "000001.webp").exists()
 
     def test_a_session_with_no_frames_here_is_not_found(self, tmp_path, monkeypatch):
         monkeypatch.setenv("DRONEDECK_DATA_DIR", str(tmp_path))
@@ -431,5 +440,5 @@ class TestEndToEnd:
         assert (job.state, job.made, job.failed, job.error) == ("done", 3, 0, None)
         assert ("running", 2, 1) in progress
         for seq in (1, 2, 3):
-            out = cv2.imread(str(folder / "upscaled" / f"{seq:06d}.png"), cv2.IMREAD_GRAYSCALE)
+            out = cv2.imread(str(folder / "upscaled" / f"{seq:06d}.webp"), cv2.IMREAD_GRAYSCALE)
             assert out.shape == (24, 32)
