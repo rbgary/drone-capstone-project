@@ -8,34 +8,78 @@
  * reader the caller gives (the running recording, or an ended session's
  * files), and kept as an object URL until the gallery goes away. Choosing one
  * shows it large; Close returns to the grid.
+ *
+ * With `readUpscaled` (Sessions, once a session has ended) the large view has
+ * an "Upscaled ×4" switch: the display chain's copy of the frame (Real-ESRGAN,
+ * then CLAHE — docs/features/pipeline/display-chain.txt), fetched only when
+ * asked for and labelled every time it shows, because it can contain detail
+ * the camera never recorded. Not made yet, the original stays in view.
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { RecordedFrameInfo } from "@/lib/agent";
+import { AgentError, type RecordedFrameInfo, type UpscaledFrame } from "@/lib/agent";
 import { formatTime } from "@/lib/format";
-import { Button, Message, Spinner } from "@/components/ui";
+import { Button, Message, Spinner, Switch } from "@/components/ui";
 
 export type GalleryLoad =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; frames: RecordedFrameInfo[] };
 
+/** One frame's upscaled copy, as the large view holds it. */
+type UpscaledShown =
+  | { kind: "loading" }
+  | { kind: "ready"; url: string }
+  | { kind: "pending" | "failed" | "error"; message: string };
+
 /** Seconds as m:ss, for a capture's place in its session. */
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
-export function CaptureGallery({ load, read, onRetry, emptyText }: {
+export function CaptureGallery({ load, read, readUpscaled, onRetry, emptyText }: {
   load: GalleryLoad;
   /** One frame's image, by number. */
   read: (seq: number) => Promise<Blob | null>;
+  /** One frame's upscaled copy, by number — offered only where one can exist. */
+  readUpscaled?: (seq: number) => Promise<UpscaledFrame>;
   onRetry: () => void;
   emptyText: string;
 }) {
   const [urls, setUrls] = useState<Record<number, string | null>>({});
   const [open, setOpen] = useState<number | null>(null);
+  // Kept while moving between frames, so several can be compared upscaled.
+  const [upscaledOn, setUpscaledOn] = useState(false);
+  const [upscaled, setUpscaled] = useState<Record<number, UpscaledShown>>({});
   const asked = useRef(new Set<number>());
   const all = useRef<string[]>([]);
 
   const frames = load.kind === "ready" ? load.frames : [];
+
+  // The open frame's upscaled copy, once, when the switch asks for it.
+  useEffect(() => {
+    if (!readUpscaled || !upscaledOn || open === null || upscaled[open]) return;
+    const seq = open;
+    setUpscaled((u) => ({ ...u, [seq]: { kind: "loading" } }));
+    readUpscaled(seq)
+      .then((got) => {
+        if (got.kind !== "ready") {
+          setUpscaled((u) => ({ ...u, [seq]: got }));
+          return;
+        }
+        const url = URL.createObjectURL(got.blob);
+        all.current.push(url);
+        setUpscaled((u) => ({ ...u, [seq]: { kind: "ready", url } }));
+      })
+      .catch((e: unknown) => setUpscaled((u) => ({ ...u, [seq]: {
+        kind: "error",
+        message: e instanceof AgentError ? e.message : "The upscaled copy could not be read.",
+      } })));
+  }, [readUpscaled, upscaledOn, open, upscaled]);
+
+  /** Ask again — after an error, or for a copy that was not made yet. */
+  const retryUpscaled = (seq: number) => setUpscaled((u) => {
+    const { [seq]: _gone, ...rest } = u;
+    return rest;
+  });
 
   useEffect(() => {
     for (const f of frames) {
@@ -67,19 +111,43 @@ export function CaptureGallery({ load, read, onRetry, emptyText }: {
 
   const newestFirst = [...frames].reverse();
   const shown = open !== null ? frames.find((f) => f.seq === open) ?? null : null;
+  const copy = shown && readUpscaled && upscaledOn ? upscaled[shown.seq] : undefined;
+  const showingUpscaled = copy?.kind === "ready";
 
   return (
     <div className="grid gap-3">
       {shown && (
         <figure className="grid gap-2">
-          {urls[shown.seq]
-            ? <img src={urls[shown.seq] ?? ""} alt={`Captured manually at ${clock(shown.t_s)} — frame ${shown.seq}`}
+          {readUpscaled && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Switch on={upscaledOn} label="Upscaled ×4" onClick={() => setUpscaledOn((v) => !v)}
+                      title="The display chain's copy: Real-ESRGAN, then CLAHE" />
+              {copy?.kind === "loading" && <Spinner label="Loading the upscaled copy…" />}
+            </div>
+          )}
+          {showingUpscaled && (
+            <Message tone="warning"
+                     text="AI-upscaled: detail may be invented. For looking at, never as evidence." />
+          )}
+          {(copy?.kind === "pending" || copy?.kind === "failed" || copy?.kind === "error") && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Message tone={copy.kind === "error" ? "critical" : "idle"}
+                       text={`${copy.message} The original is shown.`} />
+              {copy.kind !== "failed" && <Button onClick={() => retryUpscaled(shown.seq)}>Check again</Button>}
+            </div>
+          )}
+          {copy?.kind === "ready"
+            ? <img src={copy.url} alt={`AI-upscaled copy of the frame captured manually at ${clock(shown.t_s)} — frame ${shown.seq}`}
                    className="max-h-[60vh] w-full border border-[var(--border)] bg-[var(--console)] object-contain" />
-            : <p className="text-sm text-[var(--muted)]">This image could not be read from this computer.</p>}
+            : urls[shown.seq]
+              ? <img src={urls[shown.seq] ?? ""} alt={`Captured manually at ${clock(shown.t_s)} — frame ${shown.seq}`}
+                     className="max-h-[60vh] w-full border border-[var(--border)] bg-[var(--console)] object-contain" />
+              : <p className="text-sm text-[var(--muted)]">This image could not be read from this computer.</p>}
           <figcaption className="flex flex-wrap items-center justify-between gap-2 text-sm">
             <span className="mono">
               Captured manually · {clock(shown.t_s)} into the session · {formatTime(shown.recorded_at)}
               {shown.point_id ? ` · at ${shown.point_id}` : ""} · frame {shown.seq}
+              {showingUpscaled ? " · upscaled ×4" : ""}
             </span>
             <Button onClick={() => setOpen(null)}>Close</Button>
           </figcaption>
