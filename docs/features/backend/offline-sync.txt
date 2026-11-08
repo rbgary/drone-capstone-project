@@ -132,6 +132,16 @@ INVARIANTS
   every resumed upload was wrong.
 - Flight data never goes in git.
 
+- KNOWN ISSUE, NOT FIXED — A FULL BUCKET STALLS EVERY UPLOAD (found
+  2026-11-08, deferred by the team). sync_once runs its steps in order and
+  one CloudError ends the pass. Once storage is full, _send_frames is refused
+  on every pass, so session vitals, pipeline results and findings, and
+  playback stop reaching Supabase too — although they are database rows,
+  with their own 500 MB, not storage. Nothing is lost (the laptop keeps
+  everything); the dashboard silently stops updating. The free plan has 1 GB
+  of file storage and more than half was in use on 2026-11-08. THE FIX: a
+  storage-quota refusal skips the picture uploads (frames, enhanced frames)
+  and lets the database rows through, and the window says storage is full.
 - telemetry.point_id (migration 20260928000012) may not exist on the database
   yet. A batch with no point id sends no point_id key; a batch refused over the
   column is re-sent without it (sync/cloud.py). One failed batch aborts a whole

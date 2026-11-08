@@ -9,17 +9,26 @@ SOURCE: backend/agent/dronedeck/display/queue.py
 ================================================================================
 
 --------------------------------------------------------------------------------
-STATUS  (Last verified: 2026-11-04)
+STATUS  (Last verified: 2026-11-08)
 --------------------------------------------------------------------------------
   agent     BUILT (feat/offline-data, not on main) — the queue, the steps,
             `dronedeck upscale`, the resume; Real-ESRGAN ×4 then CLAHE 1.5
             on 4×4 tiles, through OpenCV's dnn on the CPU
   desktop   BUILT — the bundled agent carries pipeline/models/ and its
             selftest runs the model (packaging/dronedeck-agent.spec)
-  NOT BUILT the upload of upscaled frames (step 3), the web's Upscaled view
-            (step 4), a GPU (step 5: ONNX Runtime's CUDA build — 52 ms a
-            frame against ~0.65 s), colour (a stretch goal; DDColor-large,
-            measured in ml/upscaling-eval/RESULTS.txt)
+  NOT BUILT the desktop's view of upscaled frames (next); a GPU (ONNX
+            Runtime's CUDA build — 52 ms a frame against ~0.65 s); colour
+            (a stretch goal; DDColor-large, ml/upscaling-eval/RESULTS.txt)
+  DEFERRED  uploading upscaled frames, and the web's view of them (the team,
+            2026-11-08). Upscaled frames stay on the laptop; only originals
+            go to Supabase. The project is on the free plan — 1 GB of file
+            storage, more than half already used by frames, CSVs and old
+            installers — and is a proof of concept. An upscaled PNG is
+            424 kB (509 MB a 10-minute session); WebP q90 is 52 kB. WHEN
+            THERE IS A BIGGER PROJECT: upload only the frames a finding rests
+            on and manual captures, as WebP, last in the sync pass, from a
+            cursor over upscaled.csv rows; flight-frames' policies already
+            cover a new folder (migration 0011) — no migration needed.
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS
@@ -66,8 +75,9 @@ ml/upscaling-eval/chain.py, RESULTS.txt     where every number here was measured
   models are "ONNX, run with ONNX Runtime" (handoffs/sprint-1/done/
   dpp-contract.txt, MODEL FILES). The file is ONNX; running it on the OpenCV
   the agent already ships gave output within 1 grey level of ONNX Runtime,
-  at 581 ms a frame against 709–1100, with no new dependency. ONNX Runtime
-  comes back only for a GPU (step 5).
+  with no new dependency — the team's rule (2026-11-08): fewer dependencies,
+  as long as the results match. Not a speed claim: the two were never timed
+  side by side. ONNX Runtime comes back only for a GPU (step 5).
 • A LIST OF STEPS. Upscaling is the only step. Moving the image classifier
   to read upscaled frames was raised and NOT decided: the classifier squashes
   frames to 224×224, so upscaling may give it nothing, and findings resting on
