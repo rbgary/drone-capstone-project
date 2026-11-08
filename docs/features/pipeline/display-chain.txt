@@ -1,10 +1,14 @@
 ================================================================================
 THE DISPLAY CHAIN — captured frames upscaled after the pipeline, for people to
 look at, never as evidence
-Last verified: 2026-11-04 against feat/offline-data — agent pytest 1698
-(40 in tests/test_display.py, one of them the real queue end to end), the frozen agent built and verified on Linux
-(selftest runs the model), the real queue end to end on 20 real frames, its
-output within 3 grey levels of ml/upscaling-eval's chain.
+Last verified: 2026-11-08 against feat/offline-data — agent pytest 1703
+(45 in tests/test_display.py, one the real queue end to end); desktop pnpm
+build and test; the real Sessions page against a real agent in headless
+Chrome at 720 and 1600 px, dark and light (the harness's ?agent= mode): an
+upscaled capture shown 1296×976 with its label, a pending one keeping the
+original, no horizontal overflow. 2026-11-04: the frozen agent built and
+verified on Linux (selftest runs the model); output within 3 grey levels
+of ml/upscaling-eval's chain.
 SOURCE: backend/agent/dronedeck/display/queue.py
 ================================================================================
 
@@ -15,8 +19,11 @@ STATUS  (Last verified: 2026-11-08)
             `dronedeck upscale`, the resume; Real-ESRGAN ×4 then CLAHE 1.5
             on 4×4 tiles, through OpenCV's dnn on the CPU
   desktop   BUILT — the bundled agent carries pipeline/models/ and its
-            selftest runs the model (packaging/dronedeck-agent.spec)
-  NOT BUILT the desktop's view of upscaled frames (next); a GPU (ONNX
+            selftest runs the model (packaging/dronedeck-agent.spec).
+            Sessions › a session › Captured manually: an "Upscaled ×4"
+            switch on the large view (CaptureGallery readUpscaled)
+  NOT BUILT a desktop view of a session's automatically captured frames —
+            the desktop has none, for originals either; a GPU (ONNX
             Runtime's CUDA build — 52 ms a frame against ~0.65 s); colour
             (a stretch goal; DDColor-large, ml/upscaling-eval/RESULTS.txt)
   DEFERRED  uploading upscaled frames, and the web's view of them (the team,
@@ -51,11 +58,17 @@ backend/agent/dronedeck/display/queue.py    sessions waiting; chunks as child
                                             processes; paused in flight
 backend/agent/dronedeck/session.py          _queue_display, _display_changed,
                                             resume_display
-backend/agent/dronedeck/api/rest.py         _resume_work, and close at shutdown
+backend/agent/dronedeck/api/rest.py         _resume_work, close at shutdown;
+                                            GET /history/sessions/{id}/frames/
+                                            {seq}/upscaled
+backend/agent/dronedeck/history.py          session_of_flight, session_upscaled
+desktop/src/lib/agent.ts                    sessionFrameUpscaled, UpscaledFrame
+desktop/src/components/CaptureGallery.tsx   the switch, its label and states
+desktop/src/pages/sessions/SessionsPage.tsx ManualCaptures passes readUpscaled
 backend/agent/dronedeck/cli.py              `dronedeck upscale`; selftest
 backend/agent/dronedeck/pipeline/models/    realesr-general-x4v3.onnx, MODELS.json
 backend/agent/tests/test_display.py
-<session>/upscaled/<seq>.png, upscaled.csv, display.json   on the laptop
+<session>/upscaled/<seq>.webp, upscaled.csv, display.json  on the laptop
 ml/upscaling-eval/chain.py, RESULTS.txt     where every number here was measured
 
 --------------------------------------------------------------------------------
@@ -78,6 +91,13 @@ ml/upscaling-eval/chain.py, RESULTS.txt     where every number here was measured
   with no new dependency — the team's rule (2026-11-08): fewer dependencies,
   as long as the results match. Not a speed claim: the two were never timed
   side by side. ONNX Runtime comes back only for a GPU (step 5).
+• WEBP q90, NOT PNG (2026-11-08): 52 kB a frame against 424 — 62 MB a
+  10-minute session on the laptop instead of 509. For looking at; the
+  originals stay lossless PNG.
+• SHOWN ON THE SESSIONS PAGE ONLY. The Capture page shows a RUNNING session,
+  and nothing is upscaled until its processing is done, so a switch there
+  would only ever say "not yet". The large view fetches the copy only when
+  the switch asks; the thumbnails stay originals.
 • A LIST OF STEPS. Upscaling is the only step. Moving the image classifier
   to read upscaled frames was raised and NOT decided: the classifier squashes
   frames to 224×224, so upscaling may give it nothing, and findings resting on
@@ -96,6 +116,11 @@ ml/upscaling-eval/chain.py, RESULTS.txt     where every number here was measured
 • A row counts only for the same steps@version; a new version redoes every
   frame. A frame that failed is not tried again at that version.
 • The model runs only if its sha256 matches MODELS.json.
+• An upscaled copy is labelled every time it shows ("AI-upscaled: detail may
+  be invented. For looking at, never as evidence."), and the caption says
+  "upscaled ×4". Not made yet ("pending") or never at this version
+  ("failed"), the route answers 404 with that state and the original stays
+  in view — a 404 with no state is an agent from before the display chain.
 • A chunk that makes nothing and leaves frames FAILS the job — it never loops.
 • Closed mid-job, a session stays "running" in display.json and resumes when
   the app starts (DRONEDECK_RESUME=0 turns it off, as for processing).
@@ -120,3 +145,5 @@ depends-on        ../backend/agent-api.txt
                   the resume in the lifespan; close at shutdown
 consumed-by       ../desktop/desktop-app.txt
                   the bundled agent carries the model; selftest runs it
+consumed-by       ../desktop/capture.txt
+                  CaptureGallery's Upscaled ×4 switch reads the route above
