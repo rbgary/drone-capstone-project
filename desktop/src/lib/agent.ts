@@ -976,6 +976,34 @@ export async function sessionFrame(sessionId: string, seq: number): Promise<Blob
   return response.blob();
 }
 
+/** A frame's upscaled copy (the display chain, Real-ESRGAN then CLAHE, made
+ *  after the session's processing) — for looking at, never as evidence.
+ *  "pending": not made yet; "failed": never will be at this version. */
+export type UpscaledFrame =
+  | { kind: "ready"; blob: Blob }
+  | { kind: "pending"; message: string }
+  | { kind: "failed"; message: string };
+
+export async function sessionFrameUpscaled(sessionId: string, seq: number): Promise<UpscaledFrame> {
+  const response = await fetch(
+    `${base()}/history/sessions/${encodeURIComponent(sessionId)}/frames/${seq}/upscaled`, {
+      headers: { "X-Agent-Token": token },
+      cache: "no-store",
+    });
+  if (response.ok) return { kind: "ready", blob: await response.blob() };
+  if (response.status === 404) {
+    const body = (await response.json().catch(() => null)) as
+      { detail?: { state?: string; message?: string } | string } | null;
+    const detail = body?.detail;
+    if (typeof detail === "object" && (detail.state === "pending" || detail.state === "failed")) {
+      return { kind: detail.state, message: detail.message ?? "" };
+    }
+    // An agent from before the display chain answers a plain 404.
+    return { kind: "failed", message: "There is no upscaled copy of this frame on this computer." };
+  }
+  throw new AgentError("The upscaled copy could not be read.");
+}
+
 /** Where the AI deck is in joining the operator's Wi-Fi. No password, ever. */
 /** What the deck's radio is set to. `brownout`: held at reduced power
  *  until the battery is unplugged (camera/wifi.py DeckLink). */

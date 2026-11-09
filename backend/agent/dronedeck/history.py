@@ -376,6 +376,18 @@ def recorded_flights(*, root: Path | None = None) -> list[str]:
     return [flight_id for _, flight_id in sorted(found)]
 
 
+def session_of_flight(flight_id: str, *, root: Path | None = None) -> str | None:
+    """The session on this laptop that recorded a flight, or None."""
+    for meta_file in (root or sessions_dir()).glob("*/meta.json"):
+        try:
+            raw = json.loads(meta_file.read_text())
+        except (OSError, ValueError):
+            continue
+        if any(f.get("id") == flight_id for f in raw.get("flights") or []):
+            return str(raw.get("id") or meta_file.parent.name)
+    return None
+
+
 #: One writer at a time for closed sessions' meta.json. A processing job
 #: reports "queued" from the caller's thread and "running"/"done" from the
 #: queue's worker; two unguarded read-modify-writes through one temp file
@@ -477,6 +489,13 @@ def session_frame(session_id: str, seq: int, *,
     """One recorded frame of a session, by number. Raises ValueError for a bad id."""
     from dronedeck.camera.recording import frame_file
     return frame_file(_session_folder(session_id, root), seq)
+
+
+def session_upscaled(session_id: str, seq: int, *, root: Path | None = None) -> Any:
+    """One frame's upscaled copy (display/frames.py Upscaled). Raises
+    ValueError for a bad id."""
+    from dronedeck.display.frames import upscaled_file
+    return upscaled_file(_session_folder(session_id, root), seq)
 
 
 def _session_folder(session_id: str, root: Path | None) -> Path:

@@ -83,7 +83,7 @@ def zoom(img: np.ndarray, x: int, y: int) -> np.ndarray:
 
 
 def labelled(img: np.ndarray, text: str) -> np.ndarray:
-    bar = np.full((LABEL_H, img.shape[1]), WHITE, np.uint8)
+    bar = np.full((LABEL_H, *img.shape[1:]), WHITE, np.uint8)  # gray or colour
     # shrunk to fit, so a long method name is never cut off at the panel's edge
     scale = 0.45
     while scale > 0.2 and cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)[0][0] > (
@@ -102,14 +102,14 @@ def context(frame: np.ndarray, x: int, y: int) -> np.ndarray:
 
 
 def hstack(panels: list[np.ndarray]) -> np.ndarray:
-    gap = np.full((panels[0].shape[0], GAP), WHITE, np.uint8)
+    gap = np.full((panels[0].shape[0], GAP, *panels[0].shape[2:]), WHITE, np.uint8)
     return np.hstack([p if i == 0 else np.hstack([gap, p]) for i, p in enumerate(panels)])
 
 
 def vstack(rows: list[np.ndarray], title: str) -> np.ndarray:
     width = rows[0].shape[1]
-    gap = np.full((GAP * 2, width), WHITE, np.uint8)
-    head = labelled(np.full((0, width), WHITE, np.uint8), title)
+    gap = np.full((GAP * 2, width, *rows[0].shape[2:]), WHITE, np.uint8)
+    head = labelled(np.full((0, width, *rows[0].shape[2:]), WHITE, np.uint8), title)
     parts = [head]
     for r in rows:
         parts += [gap, r]

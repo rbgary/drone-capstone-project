@@ -1,0 +1,2 @@
+# Model files are binary: a diff of one is noise, never a review.
+*.onnx binary

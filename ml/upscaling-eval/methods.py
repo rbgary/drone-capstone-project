@@ -121,10 +121,26 @@ def _realesrgan() -> ort.InferenceSession:
     )
 
 
-def realesrgan(img: np.ndarray) -> np.ndarray:
+def run_realesrgan(session: ort.InferenceSession, img: np.ndarray) -> np.ndarray:
+    """On any session — chain.py passes one on the GPU."""
     x = np.repeat(img[None, None].astype(np.float32) / 255.0, 3, axis=1)
-    y = _realesrgan().run(None, {"input": x})[0][0].mean(axis=0)
+    y = session.run(None, {"input": x})[0][0].mean(axis=0)
     return np.clip(y * 255.0 + 0.5, 0, 255).astype(np.uint8)
+
+
+def realesrgan(img: np.ndarray) -> np.ndarray:
+    return run_realesrgan(_realesrgan(), img)
+
+
+# ── Real-ESRGAN, then CLAHE: the display chain (2026-11-04, the team's pick) ─
+# Upscale first, so CLAHE does not lift noise the network then draws as
+# texture. The grid is counted across the frame, so 4×4 on the ×4 frame covers
+# the same part of the scene as clahe@1's 4×4 on the original; 8×8 is
+# espcn_steps.py's.
+
+
+def clahe_tiles(clip: float, tiles: int) -> Fn:
+    return lambda img: cv2.createCLAHE(clipLimit=clip, tileGridSize=(tiles, tiles)).apply(img)
 
 
 # ── the registry ────────────────────────────────────────────────────────────
@@ -193,6 +209,17 @@ METHODS: list[Method] = [
         for h, amount in [(3, 0.6), (3, 1.0), (5, 1.0)]
     ),
     Method("realesrgan-x4", 4, realesrgan, "sr-gan", ("realesr-general-x4v3.onnx",)),
+    *(
+        Method(
+            f"realesrgan-x4+clahe-{clip}-tiles{tiles}",
+            4,
+            then(realesrgan, clahe_tiles(clip, tiles)),
+            "sr-gan",
+            ("realesr-general-x4v3.onnx",),
+        )
+        for clip in (1.5, 2.0)
+        for tiles in (4, 8)
+    ),
 ]
 
 BY_NAME = {m.name: m for m in METHODS}
@@ -202,10 +229,11 @@ def pick(names: str) -> list[Method]:
     """ "all", or a comma-separated list of method names."""
     if names == "all":
         return METHODS
-    unknown = [n for n in names.split(",") if n not in BY_NAME]
+    wanted = list(dict.fromkeys(names.split(",")))  # a name given twice is scored once
+    unknown = [n for n in wanted if n not in BY_NAME]
     if unknown:
         raise SystemExit(f"unknown method(s) {unknown}; known: {', '.join(BY_NAME)}")
-    return [BY_NAME[n] for n in names.split(",")]
+    return [BY_NAME[n] for n in wanted]
 
 # The pipeline's method must be one this registry scored, under the same name.
 assert runtime.METHOD in BY_NAME, f"{runtime.METHOD} is not a scored candidate"

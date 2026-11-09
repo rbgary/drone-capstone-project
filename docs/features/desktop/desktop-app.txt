@@ -332,3 +332,6 @@ depends-on        ../development/releases.txt
                   CI runs install.mjs, the same path people use
 shares-data-with  ../backend/running-from-source.txt
                   the same venv, set up by setup.mjs
+depends-on        ../pipeline/display-chain.txt
+                  the bundled agent carries pipeline/models/; selftest runs the
+                  model, so a bundle without it fails its build

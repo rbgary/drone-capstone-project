@@ -1,6 +1,11 @@
 ================================================================================
 CAPTURE — pictures by hand, and which of the camera's frames are kept
-Last verified: 2026-10-24 against desktop/camera-capture — agent tests
+Last verified: 2026-11-08 against feat/offline-data, CaptureGallery and
+Sessions › Captured manually only — the real Sessions page against a real
+agent in headless Chrome, 720 and 1600 px, both themes, the gallery as it
+was plus the Upscaled ×4 switch (pipeline/display-chain.txt). The Capture
+page itself was not re-checked. Before that, 2026-10-24 against
+desktop/camera-capture — agent tests
 (test_camera_capture.py 11, test_capture_switch.py 15, test_recording.py 19,
 all 1 537 passing), the capture threshold measured on the lab laptop's 11
 recorded sessions, the desktop harness at 720 · 900 · 1024 · 1280 · 1600 px in
@@ -176,3 +181,6 @@ shares-data-with  ../backend/audit-trail.txt
                   capture_set and camera_capture
 depends-on        pages-and-windows.txt
                   the sidebar page, the shell, the harness it is measured in
+depends-on        ../pipeline/display-chain.txt
+                  CaptureGallery's readUpscaled: the Upscaled ×4 switch on the
+                  Sessions page's Captured manually, labelled AI-upscaled

@@ -9,6 +9,10 @@ Nothing here runs on the agent. methods.py imports the winner's steps from
 espcn_steps.py. The agent does not run them: it ships clahe@1
 (docs/features/pipeline/enhance.txt), because ESPCN ×2 tied bicubic here.
 
+Since 2026-11-04 it also measures the DISPLAY CHAIN the team chose —
+Real-ESRGAN, then CLAHE, then (a stretch goal) DDColor-large colour — for
+showing frames after the pipeline, never as evidence (chain.py, colour.py).
+
 
 SET UP (once)
 
@@ -32,6 +36,33 @@ RUN (per set of images)
   When the story 4.1 photos arrive, put them in data/photos/ and run the same
   three with --src data/photos --name photos --protocol reference (no --mask).
   The camera-frames set stays as it is beside it.
+
+  prepare.py takes every image in --src, so keep one folder per set (the
+  2026-10-21 screenshots are camera-frames-1021, from their own folder).
+
+
+THE DISPLAY CHAIN — Real-ESRGAN → CLAHE → colour (RESULTS.txt says why)
+
+  .venv/bin/python chain.py --set camera-frames                 # time each step, CPU
+  .venv/bin/python chain.py --set camera-frames-1021 --sheet    # + chain-sheet.jpg
+
+  colour.py is the colour step. DDColor runs from its ONNX export where one
+  exists, and otherwise as its PyTorch network on the CPU (about 2 GB of
+  memory). The export is asked for — fetch_models.py --ddcolor-onnx — and
+  needs more than 8 GB; each of its steps is a process of its own, and a
+  file is renamed into place only once its check passes.
+
+
+GPU (optional, NVIDIA)
+
+  ONNX Runtime's CUDA build cannot share a venv with the CPU one:
+
+  python3 -m venv data/venv-gpu
+  data/venv-gpu/bin/pip install numpy==2.5.3 opencv-contrib-python-headless==5.0.0.93 \
+      scikit-image==0.26.0 "onnxruntime-gpu[cuda,cudnn]==1.30.0"
+  data/venv-gpu/bin/python chain.py --set camera-frames --gpu
+
+  It has no PyTorch, so colour is left out there until DDColor is exported.
 
 
 WHAT IS COMMITTED, AND WHAT IS NOT

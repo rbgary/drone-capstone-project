@@ -1,7 +1,7 @@
 /** Every session this computer recorded, and one session in full. */
 
 import { useCallback, useEffect, useState } from "react";
-import { AgentError, api, sessionFrame, type FlightRecord, type Mode, type SessionRecord } from "@/lib/agent";
+import { AgentError, api, sessionFrame, sessionFrameUpscaled, type FlightRecord, type Mode, type SessionRecord } from "@/lib/agent";
 import { endReasonLabel, formatDateTime, formatDuration, formatNumber, formatTime } from "@/lib/format";
 import { Button, Message, PageHeader, Panel, Spinner, Stat, StatusDot } from "@/components/ui";
 import { CaptureGallery, type GalleryLoad } from "@/components/CaptureGallery";
@@ -199,12 +199,14 @@ function ManualCaptures({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
   useEffect(() => { void read(); }, [read]);
   const frame = useCallback((seq: number) => sessionFrame(sessionId, seq), [sessionId]);
+  const upscaled = useCallback((seq: number) => sessionFrameUpscaled(sessionId, seq), [sessionId]);
 
   if (load.kind === "ready" && load.frames.length === 0) return null;
   return (
     <Panel title={load.kind === "ready" ? `Captured manually · ${load.frames.length}` : "Captured manually"}
            note="Pictures taken by hand during this session, on the Capture page.">
-      <CaptureGallery load={load} read={frame} onRetry={() => void read()} emptyText="No manual captures." />
+      <CaptureGallery load={load} read={frame} readUpscaled={upscaled} onRetry={() => void read()}
+                      emptyText="No manual captures." />
     </Panel>
   );
 }

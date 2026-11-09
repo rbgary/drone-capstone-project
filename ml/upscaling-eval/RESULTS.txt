@@ -7,6 +7,11 @@ WINNER: espcn-x2+clahe-1.5+edge-0.6
   EspcnEnhancer, espcn-clahe@1 (#103); the agent ships clahe@1 instead
   (docs/features/pipeline/enhance.txt).
 
+DISPLAY CHAIN (2026-11-04): realesrgan-x4, then CLAHE 1.5 on 4×4 tiles —
+  for showing frames, never as evidence; colour (DDColor-large) a stretch
+  goal after it. The team chose Real-ESRGAN for its detail, accepting the
+  invented structure REJECTED below. Measured in THE DISPLAY CHAIN, below.
+
 Scored 2026-10-09. The ticket: docs/handoffs/sprint-1/done/dpp-enhance.txt.
 The stage the pipeline runs, and why: docs/features/pipeline/enhance.txt.
 
@@ -83,6 +88,8 @@ WHY THIS ONE
   realesrgan-x4   Invents structure: windows' panes became blank panels with
                   dividers the scene does not have, mesh was wiped flat,
                   hazard stripes redrawn. 14 s for 20 frames; 4.9 MB.
+                  Rejected for the pipeline; chosen for display only
+                  (2026-11-04, THE DISPLAY CHAIN).
   ×4 of any kind  No detail for it to show: 16× the pixels of the frame and
                   4× the file of ×2, and ESPCN ×4 looks like bicubic ×4.
   clahe 2.0 rows  The most grain of the CLAHE family (2.71 to 5.03).
@@ -114,6 +121,74 @@ KNOWN LIMITS
     slower.
   - The ×4 scores start from 81×61, an input the stage never sees, so they
     understate ×4 slightly; the side-by-side on real frames agreed.
+
+
+THE DISPLAY CHAIN  (measured 2026-11-04, i9-11900H in WSL, RTX 3060 Laptop)
+
+  The team's requirement (2026-11-04): frames upscaled with Real-ESRGAN, with
+  CLAHE for contrast, for people to look at. Too slow for the pipeline, so it
+  runs after it, on the laptop (docs/features/pipeline/enhance.txt). The
+  invented detail above is an accepted risk; the pipeline still judges the
+  readings, and clahe@1 stays its enhancer. chain.py runs it.
+
+  This setup was checked first: score.py on camera-frames reproduced every
+  quality figure of THE TABLE to the last digit.
+
+  WHICH CLAHE. Upscale first, then CLAHE: the other way round, CLAHE lifts
+  noise the network then draws as texture. The grid counts across the frame,
+  so 4×4 on the ×4 frame covers what clahe@1's 4×4 covers on the original.
+  Read flat texture (lower is better) and edges kept; PSNR and SSIM do not
+  rank CLAHE rows.
+
+                                      camera-frames (15)   camera-frames-1021 (81)
+  method                              edges   flat         edges   flat
+  realesrgan-x4                        1.17   1.69          1.01   1.60
+  realesrgan-x4+clahe-1.5-tiles4       1.24   2.73          1.27   2.90   ← chosen
+  realesrgan-x4+clahe-1.5-tiles8       1.25   2.83          1.30   3.05
+  realesrgan-x4+clahe-2.0-tiles4       1.26   3.06          1.33   3.33
+  realesrgan-x4+clahe-2.0-tiles8       1.25   3.10          1.34   3.40
+
+  → CLAHE 1.5 on 4×4: the least grain on both sets, edges kept like the
+    rest — the clip this evaluation's winner landed on too.
+  camera-frames-1021 is 81 more screenshots of 2026-10-21, the same viewer
+  and crosshair, prepared as a set of their own so THE TABLE's 15 stay as
+  they were.
+
+  TIME, per real 324×244 frame (chain.py; median, warm)
+
+  step                        CPU (16 threads)     GPU (CUDA)
+  realesrgan-x4               0.7–1.1 s            52 ms
+  clahe 1.5, 4×4              1–2 ms               1 ms
+  ddcolor-large (PyTorch)     2.5 s                not measured
+
+  The CPU figure moved between 0.7 and 1.1 s from run to run on an idle
+  machine (a laptop's clocks); Kevin's 0.70 s was the same CPU model. A
+  10-minute session captures up to 1 200 frames: 14–22 minutes of
+  Real-ESRGAN on the CPU, about 1 minute on this GPU. The GPU needs ONNX
+  Runtime's CUDA build — data/venv-gpu here (README.txt, GPU), not yet a
+  dependency the desktop app can ship.
+
+  WHAT IT LOOKS LIKE (data/runs/camera-frames-1021/chain-sheet.jpg). On the
+  pressure gauge the original's numbers and ticks are a blur; upscaled they
+  are crisp and readable. Real fine texture goes: the gauge face's grain and
+  the foil's crinkle come out as smooth, painted surfaces. Whether every
+  drawn tick is really there cannot be told from the frame — the accepted
+  risk.
+
+  COLOUR — A STRETCH GOAL. DDColor-large, two checkpoints (fetch_models.py
+  says why these two), run as DDColor's own PyTorch network because the ONNX
+  export needs more than this machine's 8 GB (fetch_models.py
+  --ddcolor-onnx, killed at 437 MB free).
+
+  checkpoint     s/frame   L kept p99   colourful
+  modelscope     2.47      0.32         42.9
+  artistic       2.55      0.31         28.5
+
+  Brightness is untouched (L moves by rounding only), so the upscaled
+  detail and CLAHE's contrast survive. Both checkpoints paint the gauges'
+  needles and their 500–600 arc RED — a danger zone the real gauge may not
+  have. Colour is a guess about what such objects usually look like; on an
+  inspection frame it can read as a fact. Label it, every time.
 
 
 HOW THE STAGE WAS CHECKED

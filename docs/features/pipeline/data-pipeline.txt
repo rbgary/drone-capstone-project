@@ -187,3 +187,6 @@ consumed-by       scene.txt
                   ClassifyResult.views, FrameRecord.view_change
 consumed-by       calibrate.txt
                   the stages, run again over the hand-warmer flights
+consumed-by       display-chain.txt
+                  a processing job DONE queues its session's frames; findings'
+                  evidence_frames go first

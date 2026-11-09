@@ -47,7 +47,10 @@ a = Analysis(
     binaries=[],
     # The camera firmware Set up installs on a drone (drone_setup.py).
     datas=[(os.path.join(SPECPATH, "..", "dronedeck", "firmware_bundle"),
-            "dronedeck/firmware_bundle")],
+            "dronedeck/firmware_bundle"),
+           # MODELS.json and the display chain's Real-ESRGAN (display/steps.py).
+           (os.path.join(SPECPATH, "..", "dronedeck", "pipeline", "models"),
+            "dronedeck/pipeline/models")],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

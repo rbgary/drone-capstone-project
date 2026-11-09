@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "name": "realesr-general-x4v3",
+    "version": "v0.2.5.0",
+    "file": "realesr-general-x4v3.onnx",
+    "sha256": "f788518cc66e302bc9b6946016e989dd9374f1012d5b6c0c7e753904ef3f99e4",
+    "source": "github.com/xinntao/Real-ESRGAN release v0.2.5.0, exported to ONNX by ml/upscaling-eval/fetch_models.py (max |ONNX - PyTorch| 8.3e-07)",
+    "license": "BSD-3-Clause (github.com/xinntao/Real-ESRGAN)",
+    "use": "display",
+    "runtime": "OpenCV dnn (cv2.dnn.readNetFromONNX) - within 1 grey level of ONNX Runtime on 15 real frames, 2026-11-04",
+    "input": "1x3xHxW float32 0..1, grayscale repeated to 3 channels",
+    "output": "1x3x4Hx4W float32 0..1; the three channels averaged back to gray"
+  }
+]
