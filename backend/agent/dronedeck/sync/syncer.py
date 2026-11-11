@@ -12,6 +12,11 @@ foreign keys precisely so they can go first and never wait for anything.
 Nothing is ever sent twice into a duplicate: ids are generated on the laptop,
 records upsert on their id, and telemetry upserts on ``(flight_id, index)``
 after asking the server for the highest row it already holds.
+
+File storage is a separate resource from the database, with its own quota.
+The first file upload storage refuses in a pass skips the rest of that pass's
+file uploads, and the database rows go on without them: the files wait on
+this computer, cursors unmoved, and are tried again on the next pass.
 """
 
 from __future__ import annotations
@@ -23,13 +28,13 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, get_args, get_type_hints
+from typing import Any, ParamSpec, get_args, get_type_hints
 
 from dronedeck import playback
 from dronedeck.camera.recording import INDEX_NAME, frames_to_upload
 from dronedeck.paths import data_dir
 from dronedeck.sync import flight_playback, results, samples
-from dronedeck.sync.cloud import Cloud, CloudError, CloudRefused
+from dronedeck.sync.cloud import Cloud, CloudError, CloudRefused, StorageError
 from dronedeck.sync.outbox import Kind, Outbox
 from dronedeck.telemetry.row import TelemetryRow
 
@@ -38,6 +43,19 @@ log = logging.getLogger(__name__)
 AUDIT_BATCH = 100
 TELEMETRY_BATCH = 500
 SYNC_INTERVAL_S = 60.0
+
+STORAGE_FULL = ("Supabase file storage is full. Readings and results still upload; "
+                "photos and flight logs wait on this computer until space is freed.")
+
+_P = ParamSpec("_P")
+
+
+def storage_message(error: StorageError) -> str:
+    """What the window says when file storage refused an upload."""
+    if error.full:
+        return STORAGE_FULL
+    return (f"Photos and flight logs did not upload ({error}). They wait on this "
+            "computer and are tried again.")
 
 # Column → type, from the one row schema shared by the CSV and Postgres.
 #
@@ -132,6 +150,10 @@ class SyncStatus:
     uploading: str | None = None
     last_error: str | None = None
     last_success_at: float | None = None
+    #: Set while file storage refuses uploads, from the last pass that tried
+    #: one; cleared by the first pass whose file uploads go through.
+    storage_error: str | None = None
+    storage_full: bool = False
 
     @property
     def everything_sent(self) -> bool:
@@ -144,6 +166,8 @@ class SyncStatus:
             "uploading": self.uploading,
             "last_error": self.last_error,
             "everything_sent": self.everything_sent,
+            "storage_error": self.storage_error,
+            "storage_full": self.storage_full,
         }
 
 
@@ -171,6 +195,10 @@ class Syncer:
         self._wake = threading.Event()
         self._thread: threading.Thread | None = None
         self._running = False
+        # This pass's file storage: the refusal that closed it, and whether a
+        # file upload was tried at all (a pass with none says nothing new).
+        self._storage_refused: StorageError | None = None
+        self._storage_tried = False
 
     # ── loop ─────────────────────────────────────────────────────────────
 
@@ -208,6 +236,7 @@ class Syncer:
             if cloud is None:
                 self._refresh_counts(offline=True)
                 return self.status
+            self._storage_refused, self._storage_tried = None, False
             try:
                 self._send_audit(cloud)
                 self._send_drones(cloud)
@@ -233,8 +262,43 @@ class Syncer:
                 log.info("sync incomplete: %s", e)
             finally:
                 self.status.uploading = None
+                self._note_storage()
                 self._refresh_counts()
             return self.status
+
+    def _note_storage(self) -> None:
+        """Carry this pass's file storage into the status. The raw refusal is
+        logged when storage first starts refusing, not every pass: its shape
+        on a full project is not documented, and this is how it gets seen."""
+        refused = self._storage_refused
+        if refused is not None:
+            if self.status.storage_error is None:
+                log.warning("file storage refused an upload (%r); files wait on this "
+                            "computer, rows go on", refused.__cause__ or refused)
+            self.status.storage_error = storage_message(refused)
+            self.status.storage_full = refused.full
+        elif self._storage_tried:
+            if self.status.storage_error is not None:
+                log.info("file storage accepts uploads again")
+            self.status.storage_error = None
+            self.status.storage_full = False
+
+    def _store(self, upload: Callable[_P, None], *args: _P.args, **kwargs: _P.kwargs) -> bool:
+        """One file upload, unless storage already refused one this pass.
+
+        False when it did not happen: the caller leaves its cursor where it
+        is and goes on to its rows. Only a StorageError is held here — a
+        database error still ends the pass as before."""
+        if self._storage_refused is not None:
+            return False
+        self._storage_tried = True
+        try:
+            upload(*args, **kwargs)
+        except StorageError as e:
+            self._storage_refused = e
+            log.info("file uploads paused for this pass: %s", e)
+            return False
+        return True
 
     def _refresh_counts(self, offline: bool = False) -> None:
         self.status.pending_flights = self._outbox.count_pending(Kind.FLIGHT)
@@ -317,9 +381,20 @@ class Syncer:
             if not payload.get("ended_at"):
                 continue        # still flying: rows keep coming
 
+            expected = payload.get("rows_written")
+            # A flight that wrote no rows is complete once its record is up —
+            # otherwise it is retried every pass, forever.
+            complete = not expected or (sent_to is not None and sent_to + 1 >= expected)
+            if complete and not payload.get("_rows_sent"):
+                # What results and playback wait on: the row and its telemetry
+                # are up, whether or not the log file has followed yet.
+                self._outbox.update(Kind.FLIGHT, flight_id,
+                                    lambda p: p.__setitem__("_rows_sent", True))
+
             object_path = payload.get("csv_object") or f"{flight_id}.csv.gz"
             if not payload.get("csv_uploaded"):
-                cloud.upload_flight_csv(object_path, csv_path)
+                if not self._store(cloud.upload_flight_csv, object_path, csv_path):
+                    continue    # storage refused: the log waits here, the record stays pending
                 self._outbox.update(
                     Kind.FLIGHT, flight_id,
                     lambda payload, object_path=object_path: payload.update(
@@ -328,10 +403,6 @@ class Syncer:
                 # The server can finish the import even if this laptop closes now.
                 cloud.request_backfill(flight_id, object_path)
 
-            expected = payload.get("rows_written")
-            # A flight that wrote no rows is complete once its record is up —
-            # otherwise it is retried every pass, forever.
-            complete = not expected or (sent_to is not None and sent_to + 1 >= expected)
             if complete:
                 self._outbox.mark_sent(Kind.FLIGHT, flight_id)
             else:
@@ -344,7 +415,8 @@ class Syncer:
         Only frames frames.csv marks for upload; the cursor advances after each
         one lands, so an interrupted pass resumes exactly where it stopped. The
         index goes last, once the session has ended — replacing any earlier
-        copy — and only then is the record sent.
+        copy — and only then is the record sent. When storage refuses, the
+        record keeps its cursor and waits for a later pass.
         """
         for record in self._outbox.pending(Kind.FRAMES):
             payload = record.payload
@@ -356,16 +428,20 @@ class Syncer:
                 continue
             self.status.uploading = f"frames {session_id[:8]}"
             cursor = int(payload.get("uploaded_through", 0))
+            stored = True
             for seq, path, content_type in frames_to_upload(folder, cursor):
-                cloud.upload_frame(f"{session_id}/{path.parent.name}/{path.name}",
-                                   path, content_type)
+                stored = self._store(cloud.upload_frame,
+                                     f"{session_id}/{path.parent.name}/{path.name}",
+                                     path, content_type)
+                if not stored:
+                    break
                 self._outbox.update(Kind.FRAMES, session_id,
                                     lambda p, seq=seq: p.__setitem__("uploaded_through", seq))
-            if not payload.get("ended"):
-                continue        # still recording: more frames will come
-            cloud.upload_frame(f"{session_id}/{INDEX_NAME}", folder / INDEX_NAME, "text/csv",
-                               replace=True)
-            self._outbox.mark_sent(Kind.FRAMES, session_id)
+            if not stored or not payload.get("ended"):
+                continue        # storage refused, or still recording: more frames will come
+            if self._store(cloud.upload_frame, f"{session_id}/{INDEX_NAME}",
+                           folder / INDEX_NAME, "text/csv", replace=True):
+                self._outbox.mark_sent(Kind.FRAMES, session_id)
 
     def _send_samples(self, cloud: Cloud) -> None:
         """A session's 1 Hz vitals, from its cursor on (sync/samples.py).
@@ -392,16 +468,19 @@ class Syncer:
         """A processed flight's result, findings and enhanced frames
         (sync/results.py).
 
-        Waits while the flight's own record is still pending: the result's
-        foreign key needs the flight row. Enhanced frames go first, from a
-        cursor (replacing — a re-process may change them), then the result,
-        then the findings, then the findings this result no longer makes are
-        deleted. Re-processing re-queues the record, which resets the cursor."""
+        Waits until the flight's row and telemetry are up: the result's
+        foreign key needs the flight row (not its log file, which may be
+        waiting on storage). Enhanced frames go first, from a cursor
+        (replacing — a re-process may change them), then the result, then the
+        findings, then the findings this result no longer makes are deleted.
+        When storage refuses a frame, the rows go anyway, once, and the record
+        waits for its frames. Re-processing re-queues the record, which resets
+        the cursor and the rows."""
         for record in self._outbox.pending(Kind.RESULTS):
             payload = record.payload
             flight_id = record.id
             flight = self._outbox.get(Kind.FLIGHT, flight_id)
-            if flight is not None and not flight.get("_sent"):
+            if flight is not None and not self._flight_rows_up(flight):
                 continue            # the flight row first
             folder = Path(payload.get("folder", ""))
             try:
@@ -412,20 +491,18 @@ class Syncer:
                 continue
             self.status.uploading = f"result {flight_id[:8]}"
             session_id = result.get("session_id")
-            if session_id:
-                done = int(payload.get("frames_uploaded", 0))
-                for n, (seq, path) in enumerate(results.enhanced_frames(folder, result)):
-                    if n < done:
-                        continue
-                    cloud.upload_frame(results.enhanced_object_path(session_id, seq), path,
-                                       "image/png", replace=True)
-                    self._outbox.update(Kind.RESULTS, flight_id,
-                                        lambda p, n=n: p.__setitem__("frames_uploaded", n + 1))
-            cloud.upsert_result(results.result_row(result))
-            rows = results.finding_rows(result)
-            cloud.upsert_findings(rows)
-            cloud.delete_findings_except(flight_id, [r["id"] for r in rows])
-            self._outbox.mark_sent(Kind.RESULTS, flight_id)
+            frames_up = not session_id or self._store_enhanced(
+                cloud, Kind.RESULTS, flight_id, session_id, folder, result, payload)
+            if not payload.get("_rows_sent"):
+                cloud.upsert_result(results.result_row(result))
+                rows = results.finding_rows(result)
+                cloud.upsert_findings(rows)
+                cloud.delete_findings_except(flight_id, [r["id"] for r in rows])
+            if frames_up:
+                self._outbox.mark_sent(Kind.RESULTS, flight_id)
+            else:
+                self._outbox.update(Kind.RESULTS, flight_id,
+                                    lambda p: p.__setitem__("_rows_sent", True))
 
     def _send_playback(self, cloud: Cloud) -> None:
         """A flight's plan as flown and its control trace (sync/flight_playback.py),
@@ -446,7 +523,7 @@ class Syncer:
                             "cannot be uploaded", flight_id)
                 self._outbox.mark_sent(Kind.PLAYBACK, flight_id)
                 continue
-            if not flight.get("_sent"):
+            if not self._flight_rows_up(flight):
                 continue            # the flight row first
             try:
                 files = playback.files_of(root, flight_id)
@@ -485,7 +562,8 @@ class Syncer:
         enhanced frames from a cursor, the result, its findings, and the
         retraction of session findings a re-process no longer makes. Waits
         while the session's own record is still pending: the row's foreign key
-        needs the session."""
+        needs the session. When storage refuses a frame, the rows go anyway,
+        once, and the record waits for its frames."""
         for record in self._outbox.pending(Kind.SESSION_RESULTS):
             payload = record.payload
             session_id = record.id
@@ -500,21 +578,42 @@ class Syncer:
                 self._outbox.mark_sent(Kind.SESSION_RESULTS, session_id)
                 continue
             self.status.uploading = f"session result {session_id[:8]}"
-            done = int(payload.get("frames_uploaded", 0))
-            for n, (seq, path) in enumerate(results.enhanced_frames(folder, result)):
-                if n < done:
-                    continue
-                cloud.upload_frame(results.enhanced_object_path(session_id, seq), path,
-                                   "image/png", replace=True)
+            frames_up = self._store_enhanced(
+                cloud, Kind.SESSION_RESULTS, session_id, session_id, folder, result, payload)
+            if not payload.get("_rows_sent"):
+                cloud.upsert_session_result(results.session_result_row(result))
+                rows = results.finding_rows(result)
+                cloud.upsert_findings(rows)
+                cloud.delete_session_findings_except(session_id, [r["id"] for r in rows])
+            if frames_up:
+                self._outbox.mark_sent(Kind.SESSION_RESULTS, session_id)
+            else:
                 self._outbox.update(Kind.SESSION_RESULTS, session_id,
-                                    lambda p, n=n: p.__setitem__("frames_uploaded", n + 1))
-            cloud.upsert_session_result(results.session_result_row(result))
-            rows = results.finding_rows(result)
-            cloud.upsert_findings(rows)
-            cloud.delete_session_findings_except(session_id, [r["id"] for r in rows])
-            self._outbox.mark_sent(Kind.SESSION_RESULTS, session_id)
+                                    lambda p: p.__setitem__("_rows_sent", True))
 
     # ── helpers ──────────────────────────────────────────────────────────
+
+    def _store_enhanced(self, cloud: Cloud, kind: Kind, record_id: str, session_id: str,
+                        folder: Path, result: dict[str, Any], payload: dict[str, Any]) -> bool:
+        """A result's enhanced frames from the record's cursor. False when
+        storage refused one: the rest wait for a later pass."""
+        done = int(payload.get("frames_uploaded", 0))
+        for n, (seq, path) in enumerate(results.enhanced_frames(folder, result)):
+            if n < done:
+                continue
+            if not self._store(cloud.upload_frame, results.enhanced_object_path(session_id, seq),
+                               path, "image/png", replace=True):
+                return False
+            self._outbox.update(kind, record_id,
+                                lambda p, n=n: p.__setitem__("frames_uploaded", n + 1))
+        return True
+
+    @staticmethod
+    def _flight_rows_up(flight: dict[str, Any]) -> bool:
+        """Whether a flight's row and telemetry are on the server — what its
+        result and playback wait on. Its log file may still be waiting on
+        storage (`_rows_sent` without `_sent`)."""
+        return bool(flight.get("_sent") or flight.get("_rows_sent"))
 
     def _drone_id(self, hardware_id: str | None) -> str | None:
         if not hardware_id:

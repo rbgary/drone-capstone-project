@@ -464,7 +464,8 @@ function Shell({ label, children }: { label: string; children: React.ReactNode }
         <div className="flex min-w-0 flex-1 flex-col">
           <FlightStrip
             session={session}
-            sync={{ pending_flights: 2, pending_events: 5, uploading: null, last_error: null, everything_sent: false }}
+            sync={{ pending_flights: 2, pending_events: 5, uploading: null, last_error: null, everything_sent: false,
+                    storage_error: null, storage_full: false }}
             connected
             flying={false}
             inSession
