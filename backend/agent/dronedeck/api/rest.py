@@ -119,7 +119,7 @@ DESKTOP_ORIGINS = (
 # is running. They may never command: a page on the internet cannot know the
 # token, and these origins are not allowed to POST at all.
 WEBSITE_ORIGINS = (
-    "https://drone-capstone.vercel.app",
+    "https://drone-capstone-project.vercel.app",
     "http://localhost:3000",
 )
 

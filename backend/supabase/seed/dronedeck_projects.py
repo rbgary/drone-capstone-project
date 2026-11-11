@@ -231,7 +231,7 @@ OVERVIEW: dict[str, Any] = {
           "acceptance criteria, the Gantt chart and the Sprint 1 backlog. ",
           link("Read the Project Management Planning document (PDF)", PDF), "."),
         p("The code, and a working record of every decision and measurement behind it, is at ",
-          link("github.com/samsmoak/drone-capstone", "https://github.com/samsmoak/drone-capstone"), "."),
+          link("github.com/rbgary/drone-capstone-project", "https://github.com/rbgary/drone-capstone-project"), "."),
     ],
 }
 

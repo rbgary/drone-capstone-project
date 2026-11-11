@@ -98,7 +98,7 @@ INVARIANTS
   nothing of the kind. It cost a debugging session; the fix is in seed.sql.
 - GOOGLE SIGN-IN NEEDS A REDIRECT URL REGISTERED BY HAND, once, by the project
   owner: Supabase -> Authentication -> URL Configuration -> Redirect URLs, add
-  https://drone-capstone.vercel.app/auth/callback. Nothing in this repo can do
+  https://drone-capstone-project.vercel.app/auth/callback. Nothing in this repo can do
   it. Email and password work without it, so the gap shows up only when someone
   tries the Google button.
 

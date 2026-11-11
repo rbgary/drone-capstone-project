@@ -8,7 +8,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
  * this window does not try to repeat. Compiled in beside the Supabase project
  * (src-tauri/src/lib.rs) and overridable for a preview deployment.
  */
-export const WEB_APP_URL = "https://drone-capstone.vercel.app";
+export const WEB_APP_URL = "https://drone-capstone-project.vercel.app";
 
 export const dashboardUrl = (path = "/app") => `${WEB_APP_URL}${path}`;
 
