@@ -3,8 +3,8 @@
  *
  * ONE LIST, ONE STEP OPEN. The step in front of the operator is open; finished
  * steps shrink to a line with a check; later steps are titles only. Words are
- * instructions, not explanations — the why lives in the docs (drone-wifi.txt,
- * camera.txt), not on the screen.
+ * instructions, not explanations — the why lives in the docs (setup.txt), not
+ * on the screen.
  *
  * Step 2 is the agent's drone_setup.py, RUN IN A TERMINAL — there is no
  * install button (2026-10-24, Samuel: "i dont want people accidentally
@@ -34,23 +34,26 @@
  * Measuring where the base station stands is NOT here: it is part of flying,
  * Control › Auto › ② Position, where the operator already is (2026-10-05 —
  * it sat here as step 4 and could not be found).
+ *
+ * "Connect the camera to Wi-Fi" was step 4 until 2026-11-15: the drone carries
+ * no camera now. Step 2 still installs the AI deck's parts on a drone that has
+ * one — that goes in the no-camera work's firmware phase.
  */
 
 import { useEffect, useState, type ReactNode } from "react";
 import type { Page, Run } from "@/App";
 import {
-  AgentError, api, type BaseStation, type CameraWifi, type Session, type SetupCommand,
+  AgentError, api, type BaseStation, type Session, type SetupCommand,
   type SetupState, type StationStatus,
 } from "@/lib/agent";
 import { StationStages, useStation } from "@/components/StationStages";
 import { Button, Message, PageHeader, Spinner, StatusDot, type Tone } from "@/components/ui";
 
-type Step = "connect" | "install" | "channels" | "wifi" | "session";
+type Step = "connect" | "install" | "channels" | "session";
 
-export function SetupPage({ session, setup, wifi, run, onGo }: {
+export function SetupPage({ session, setup, run, onGo }: {
   session: Session | null;
   setup: SetupState | null;
-  wifi: CameraWifi | null;
   run: Run;
   onGo: (page: Page) => void;
 }) {
@@ -58,7 +61,6 @@ export function SetupPage({ session, setup, wifi, run, onGo }: {
   const installed = setup?.phase === "done";
   const connected = radio === "connected" || (setup !== null && setup.phase !== "idle"
     && setup.phase !== "failed" && setup.facts !== null);
-  const wifiDone = wifi?.phase === "joined";
   const inSession = session?.session_id != null;
   const station = useStation(radio === "connected");
   // A step the operator opened by its button, over the one the list chose.
@@ -72,10 +74,10 @@ export function SetupPage({ session, setup, wifi, run, onGo }: {
   // takes the list's place: the list moves on from connecting to the
   // channels, whatever the drone has installed.
   const listed: Step = !connected ? "connect"
-    : !decoding ? "channels" : !wifiDone ? "wifi" : "session";
+    : !decoding ? "channels" : "session";
   const current: Step = connected && opened !== null ? opened : listed;
   const done = (s: Step) => ({
-    connect: connected, install: installed, channels: decoding, wifi: wifiDone, session: inSession,
+    connect: connected, install: installed, channels: decoding, session: inSession,
   })[s];
 
   return (
@@ -102,13 +104,7 @@ export function SetupPage({ session, setup, wifi, run, onGo }: {
           <Channels station={station} run={run} onDone={() => setOpened(null)} />
         </Item>
 
-        <Item n={4} title="Connect the camera to Wi-Fi" done={done("wifi")} open={current === "wifi"}
-              summary={wifi?.ssid ? `On ${wifi.ssid}` : "Connected"}>
-          <p className="text-sm">Choose the Wi-Fi network this laptop is on. The drone joins it and the camera streams over it.</p>
-          <div><Button variant="primary" onClick={() => onGo("wifi")}>Open Drone Wi-Fi</Button></div>
-        </Item>
-
-        <Item n={5} title="Fly" done={done("session")} open={current === "session"}
+        <Item n={4} title="Fly" done={done("session")} open={current === "session"}
               summary="Session running">
           <p className="text-sm">The drone is set up. In Control › Auto, ② Position measures where the base station stands from where the drone sits, then the flyable space, the plan, and Fly.</p>
           <div><Button variant="primary" onClick={() => onGo("control")}>Go to Control</Button></div>

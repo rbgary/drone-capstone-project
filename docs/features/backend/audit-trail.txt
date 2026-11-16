@@ -81,5 +81,5 @@ INVARIANTS
 
 RELATED
 
-No typed edge since 2026-11-15: its one, to ../desktop/capture.txt, went with
+No typed edge since 2026-11-15: its one, to the Capture page's doc, went with
 the camera's audit actions.

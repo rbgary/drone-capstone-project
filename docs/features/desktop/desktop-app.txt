@@ -72,13 +72,14 @@ DECISIONS
 - A control token is generated per launch (Uuid::new_v4), passed to the agent in
   its environment and to the window through the `agent_token` command. See
   ../backend/agent-api.txt.
-- Native work the webview cannot do lives in Rust commands: the control token,
-  stop_motors, and Drone Wi-Fi's network scan and secure store (src/wifi/,
-  see drone-wifi.txt). The Wi-Fi password is pushed to the agent FROM RUST, so
-  it is never read back into the window.
-- THE APP IS NOT CODE-SIGNED (ad-hoc locally; no signing step in CI). Every
-  build is a new app to the macOS Keychain, so Drone Wi-Fi's saved password
-  prompts once per build (drone-wifi.txt). A Developer ID would end that.
+- Native work the webview cannot do lives in Rust commands: the control token
+  and stop_motors. (Drone Wi-Fi's network scan and Keychain / Credential
+  Manager store, src/wifi/, went with the camera on 2026-11-15, with the
+  keyring, objc2-core-wlan and windows crates and Info.plist's Location
+  strings.)
+- THE APP IS NOT CODE-SIGNED (ad-hoc locally; no signing step in CI). Nothing
+  it stores in the Keychain now, so a new build no longer prompts for one. A
+  Developer ID is still owed for Gatekeeper.
 - The Supabase project URL and PUBLISHABLE key are compiled into lib.rs, with
   the environment able to override them. An installed .app is launched by Finder
   with no shell profile, so reading them from the environment alone gives an
@@ -176,9 +177,9 @@ THE NAME: DRONEDECK (CropWatcher until 2026-09-28, a greenhouse brief)
                     _migrate_legacy moves an existing CropWatcher folder across
                     per-entry, so flights, sessions, sign-in and outbox come with
                     it even if the shell wrote the new folder's launch log first.
-                    The one exception is the saved Wi-Fi password: the new bundle
-                    identifier is a new app to the Keychain, so it is asked again
-                    once (the banner in App.tsx says so).
+                    The one exception was the saved Wi-Fi password: the new bundle
+                    identifier is a new app to the Keychain, so it was asked
+                    again once. (No password is kept since 2026-11-15.)
   The old install   install.mjs removes the pre-2026-09-28 copy once DroneDeck is
                     installed (removeLegacyCopy): the CropWatcher.app bundle, the
                     old per-user Windows install via its own uninstall.exe /S, and
@@ -245,11 +246,10 @@ INVARIANTS
   device is attached with usbipd-win. Detected by WSL_DISTRO_NAME or
   "microsoft" in /proc/sys/kernel/osrelease. A first version refused WSL
   outright; it would have blocked a setup that works, and never shipped.
-- THE WI-FI PASSWORD STORE ON LINUX IS SECRET SERVICE (keyring
-  sync-secret-service + crypto-rust, Cargo.toml). With no Linux feature
-  keyring 3 uses its MOCK store: the password "saved" and was gone at the next
-  launch, silently. Needs libdbus-1 headers to build; without a keyring
-  daemon a save fails with a message.
+- LINUX NEEDS THE libdbus-1 HEADERS TO BUILD: Tauri's window layer (tao)
+  links libdbus (`cargo tree -i libdbus-sys`). Until 2026-11-15 the Wi-Fi
+  password store (keyring's Secret Service) did too; it is gone, the
+  requirement is not.
 - LINUX PYTHON NEEDS ITS SHARED LIBRARY for PyInstaller. Ubuntu packages it
   apart (libpython3.X) and reports Py_ENABLE_SHARED=1 without it; setup.mjs
   checks the file at LIBDIR/INSTSONAME, and ensurepip (python3.X-venv).
@@ -306,6 +306,9 @@ NOT YET VERIFIED
   2026-09-16) but has not yet flown a drone from inside the bundle.
 
 
+LAST VERIFIED  2026-11-15 on feat/no-camera, the Wi-Fi removal only: `cargo
+test` in desktop/src-tauri (10 passing, on WSL2 Linux), `pnpm build`;
+`cargo tree -i libdbus-sys` for the Linux rule. No installer was built.
 LAST VERIFIED  2026-09-27, the two Linux rules above only: setup.mjs --check
 unchanged on an M-series Mac; checkWsl and the xdg-open note exercised by
 running setup.mjs with process.platform forced to linux, with and without
@@ -322,8 +325,6 @@ bind-failure line captured and matched by lib.rs's tests.
 
 RELATED
 
-shares-data-with  drone-wifi.txt
-                  the secure store and the drone_wifi_* commands
 depends-on        ../backend/agent-api.txt
                   /health (the no-cors probe), CORS for the window
 consumed-by       auto-control.txt

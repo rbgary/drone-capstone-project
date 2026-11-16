@@ -14,7 +14,7 @@ Four buckets:
                 covers, team photos and images inside write-ups.
   flight-frames PRIVATE (migration 0011, applied 2026-09-24). A session's
                 CAPTURED camera frames — those that changed, at most two a
-                second, and every manual capture (desktop/capture.txt) — and
+                second, and every manual capture (the Capture page, removed) — and
                 its frames.csv:
                 <session id>/frames/000001.png, <session id>/frames.csv.
                 Operators insert, read, and update (frames.csv is replaced

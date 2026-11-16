@@ -201,7 +201,7 @@ function ManualMapBody({ session, telemetry, history, run, fill = false, toolbar
   }
   const space = loaded.space;
   if (space.predicted === null) {
-    return <NotMeasured session={session} station={station} outcome={outcome} working={working}
+    return <NotMeasured station={station} outcome={outcome} working={working}
                         canMeasure={canMeasure} measure={measure} />;
   }
 
@@ -267,10 +267,9 @@ function KeysLegend({ forward, placed }: { forward: KeyForward; placed: boolean 
   );
 }
 
-/** No station measured in this room (or the decks gone): the stages, with the
- *  first that fails said first, and Measure. */
-function NotMeasured({ session, station, outcome, working, canMeasure, measure }: {
-  session: Session;
+/** No station measured in this room: the stages, with the first that fails
+ *  said first, and Measure. */
+function NotMeasured({ station, outcome, working, canMeasure, measure }: {
   station: ReturnType<typeof useStation>;
   outcome: { tone: Tone; text: string } | null;
   working: boolean;
@@ -279,13 +278,7 @@ function NotMeasured({ session, station, outcome, working, canMeasure, measure }
 }) {
   return (
     <div className="grid gap-3 p-3">
-      {session.decks_lost ? (
-        // Not "not measured": the drone had its decks a moment ago (2026-10-24
-        // — a restart over the radio unpowered them). Measuring cannot help.
-        <Message tone="warning" text="The drone does not detect its decks now — the positioning deck and the camera. Unplug the battery for 10 seconds and plug it back in: decks are detected when the drone starts." />
-      ) : (
-        <Message tone="warning" text="The base stations are not measured from this drone yet, so the room cannot be drawn. Put the drone flat on the floor in view of both stations and press Measure — that spot becomes 0, 0." />
-      )}
+      <Message tone="warning" text="The base stations are not measured from this drone yet, so the room cannot be drawn. Put the drone flat on the floor in view of both stations and press Measure — that spot becomes 0, 0." />
       {station?.connected && <StationStages station={station} />}
       {working && <Spinner label="Measuring — keep the drone still…" />}
       {outcome && !working && <Message tone={outcome.tone} text={outcome.text} />}

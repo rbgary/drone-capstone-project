@@ -28,28 +28,8 @@ tauri-plugin-http = "2.6.1"
 # (src/lib/os-notify.ts).
 tauri-plugin-notification = "2"
 uuid = { version = "1.26.1", features = ["v4"] }
-# The drone's Wi-Fi password lives in the OS secure store: Keychain on macOS,
-# Credential Manager on Windows. Never in a file, never in Supabase.
-keyring = { version = "3", features = ["apple-native", "windows-native"] }
-
-# Listing nearby networks for the Drone Wi-Fi picker.
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSSet", "NSError", "NSEnumerator"] }
-objc2-core-wlan = { version = "0.3", features = ["CWWiFiClient", "CWInterface", "CWNetwork", "CWChannel", "CoreWLANTypes"] }
-objc2-core-location = { version = "0.3", features = ["CLLocationManager", "CLError"] }
-
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_WiFi"] }
-
-# The secure store on Linux: Secret Service over D-Bus (GNOME Keyring,
-# KWallet). Without a Linux feature keyring 3 falls back to its MOCK store
-# (keyring/src/lib.rs) — the drone's Wi-Fi password would "save" and be gone at
-# the next launch, silently. crypto-rust avoids linking OpenSSL. Needs the
-# libdbus-1 headers to build (scripts/setup.mjs checks for them). Cargo unifies
-# these features with the macOS/Windows ones above.
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+# (The drone's Wi-Fi — keyring for its password, CoreWLAN / the WLAN API for
+# the network picker — went with the camera, 2026-11-15.)
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

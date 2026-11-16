@@ -198,8 +198,9 @@ function checkNativeToolchain() {
 /**
  * The packages that provide everything below, per distribution family:
  * Tauri's own lists (https://v2.tauri.app/start/prerequisites/), plus the
- * D-Bus headers the Wi-Fi password store needs (keyring's Secret Service
- * backend, desktop/src-tauri/Cargo.toml), pkg-config, and xdg-utils — Tauri's
+ * D-Bus headers (Tauri's window layer, tao, links libdbus — `cargo tree -i
+ * libdbus-sys`; until 2026-11-15 the drone Wi-Fi password store did too),
+ * pkg-config, and xdg-utils — Tauri's
  * AppImage bundle needs xdg-open, so `pnpm app` failed without it on an
  * Ubuntu that lacked it (2026-09-27). install.mjs never bundles on Linux.
  */

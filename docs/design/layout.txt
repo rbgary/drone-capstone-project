@@ -3,7 +3,8 @@ LAYOUT — the rule every screen obeys, in both apps
 Last verified: 2026-10-24 against desktop/camera-capture — the whole desktop harness
 with the new Capture sections, at the five widths, both themes: 10 runs PASS,
 the self-test FAIL as it must; screenshots at 720 and 1280 caught Capture
-below the fold, which the DOM measurement passed (features/desktop/capture.txt).
+below the fold, which the DOM measurement passed (the Capture page's doc,
+deleted with the camera 2026-11-15).
 (2026-10-11, against desktop/mission-playback: the whole desktop harness
 (desktop/src/measure.ts), with the new Playback sections, at the five desktop
 widths, both themes: 10 runs PASS, the self-test FAIL as it must; the Playback
@@ -80,8 +81,11 @@ desktop/src-tauri/tauri.conf.json   the window's minimum width, 720 px
   screenshot it at the widths as well (?only=<section>).
 • A fixed full-screen overlay sits over the whole harness page; measure it in
   its own section (?only=full) so it does not hide the others.
-• KNOWN BUG, NOT FIXED — ?agent= MODE RENDERS A BLANK PAGE (found 2026-11-08,
-  deferred by the team). Its stand-in Tauri bridge (harness.tsx, the
+• ?agent= MODE RENDERED A BLANK PAGE (found 2026-11-08). ITS CAUSE IS GONE
+  SINCE 2026-11-15: DroneWifiForm and every Wi-Fi page were deleted with the
+  camera, and nothing in the window calls wifi_scan any more. NOT re-checked
+  in a browser against a real agent — do that before calling it fixed. The
+  per-section error boundary below is still worth adding. What it was: Its stand-in Tauri bridge (harness.tsx, the
   __TAURI_INTERNALS__ invoke) answers null to every command but agent_port
   and agent_token. DroneWifiForm (Setup, Drone Wi-Fi — in the harness since
   e25e132, 2026-10-24) calls wifi_scan, gets null rather than an error, and

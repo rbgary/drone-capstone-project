@@ -12,8 +12,15 @@ The Set up page (sidebar). One list, one step open at a time:
                                 run it in Terminal: install what is missing,
                                 reinstall one part, or read only (--check)
   3. Base stations: one channel each   each station on USB → channel 1 / 2
-  4. Connect the camera to Wi-Fi   → the Drone Wi-Fi page (drone-wifi.txt)
-  5. Fly                        → Control › Auto (auto-control.txt)
+  4. Fly                        → Control › Auto (auto-control.txt)
+
+"Connect the camera to Wi-Fi" was step 4 until 2026-11-15: the AI deck is off
+the drone (../architecture.txt, DECISIONS), and the Drone Wi-Fi page went with
+it. STEP 2 STILL INSTALLS THE DECK'S PARTS, AND IS BROKEN FOR A DRONE WITHOUT
+ONE: drone_setup.py (_facts) raises "This drone has no AI deck, so there is no
+camera to set up" before installing anything — main and lighthouse included.
+A set-up drone flies regardless; a NEW drone cannot be set up until the
+no-camera work's firmware phase changes step 2. Found 2026-11-15, not fixed.
 
 Step 2 puts on a new drone exactly what the first drone was given by hand —
 and on a new AI deck too: a replaced deck is told apart by its factory serial
@@ -132,7 +139,7 @@ DECISIONS
   "remove that install button"). The header's "Install or reinstall" only
   opened the step, but it read as an install button and the commands hid
   behind it. The step is open on every visit, never takes the list's place
-  (the list goes connect → channels → Wi-Fi), and its one button is "Check
+  (the list goes connect → channels → fly), and its one button is "Check
   what's on the drone" — "only reads, it never writes". The commands are
   fetched until they arrive (every 3 s): an agent still starting no longer
   leaves them behind a Try again.
@@ -201,9 +208,7 @@ DECISIONS
 RELATED
 
 depends-on        drone-wifi.txt
-                  step 5; drone_wifi is what "main" installs
-depends-on        camera.txt
-                  the patched ESP32 and the GAP8 streamer
+                  drone_wifi is what "main" installs
 depends-on        camera-firmware.txt
                   the deck firmware bundled for step 2, and when its bundle is raised
 shares-data-with  ../backend/sessions-and-modes.txt
@@ -217,7 +222,9 @@ depends-on        ../backend/flight-safety.txt
                   rule that decides when it is done
 
 
-LAST VERIFIED  2026-10-24 (the command): tests/test_setup_cli.py (new drone,
+LAST VERIFIED  2026-11-15 on feat/no-camera, step 4's removal only: `pnpm
+build`; the no-deck refusal read in drone_setup.py (_facts), not run on a
+drone. 2026-10-24 (the command): tests/test_setup_cli.py (new drone,
 --check, set-up drone, --reinstall, unknown part, no drone, refused while
 DroneDeck runs, the line on macOS/Linux/Windows/dev); ruff, mypy; desktop
 build; harness "Set up · install by command" light and dark. NOT YET on a

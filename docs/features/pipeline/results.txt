@@ -104,8 +104,8 @@ web/app/app/sessions/[id]/page.tsx, web/app/app/flights/[id]/page.tsx
   (greenhouse) is gone; the predictions table stays.
 • CAPTURED MANUALLY, AND DOWNLOAD (2026-10-24, Samuel). The session page shows
   the pictures taken by hand on the desktop's Capture page in a section of
-  their own above the camera (frames.csv's source column; ../desktop/
-  capture.txt), and every frame gallery — session, flight, processed — has
+  their own above the camera (frames.csv's source column; the Capture page
+  was removed 2026-11-15), and every frame gallery — session, flight, processed — has
   "Select to download": tick frames or Select all, then one zip with an
   index.csv of when, where and how each was taken. Built IN THE BROWSER from
   the signed links the page already holds: nothing new is exposed and no
@@ -196,7 +196,5 @@ consumed-by       ../frontend/operator-dashboard.txt
                   /app/notifications
 depends-on        session.txt
                   the session's own result, uploaded beside its flights'
-depends-on        ../desktop/capture.txt
-                  frames.csv's source column: which uploaded frames were captured by hand
 shares-data-with  ../../design/components.txt
                   the readings table, the error table, the mark legend

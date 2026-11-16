@@ -119,8 +119,12 @@ harness   "Control · Manual, the room from the stations, flying / on the
   solves every station the record received, and storing writes both
   (bsGeoVal 3). With no light on the deck there is nothing to place the drone
   with — the geometry is not the fault then, the light is.
-• DECKS LOST IS NOT "NOT MEASURED". With the decks unpowered (0 deck
-  memories), the page says to switch the drone off and on, not to Measure.
+• DECKS LOST WAS NOT "NOT MEASURED" (2026-10-24 to 2026-11-15). The page said
+  to switch the drone off and on when the session's decks_lost was set. That
+  flag was worked out from the AI deck, which is off the drone now, so it and
+  its message went (2026-11-15). A positioning deck that is not detected still
+  shows: it is the first stage of the station stages under Measure
+  ("deck" — StationStages, from /station).
 
 --------------------------------------------------------------------------------
 4. INVARIANTS

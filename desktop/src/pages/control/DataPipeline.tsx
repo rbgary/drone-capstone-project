@@ -56,43 +56,10 @@ export function ProcessingSwitch({ session, run }: { session: Session; run: Run 
   );
 }
 
-/**
- * The auto-capture switch, beside the DPP's, in both modes (2026-10-24). On
- * by default; off keeps the camera live and saves only what is captured by
- * hand (agent camera/recording.py). Unlike the DPP it applies at once — the
- * recording reads it on every frame.
- */
-export function CaptureSwitch({ session, run }: { session: Session; run: Run }) {
-  const auto = session.capture?.auto ?? true;
-  const chosen = session.capture?.chosen ?? false;
-  const signedOut = session.state === "signed_out";
-  const inSession = session.session_id !== null;
-  const note = signedOut
-    ? "Sign in to change it."
-    : !auto
-      ? "The camera stays on; only frames you capture by hand are saved."
-      : chosen
-        ? inSession ? "Your choice until this session ends." : "Your choice for the session you start next."
-        : "On by default.";
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <Switch
-        on={auto}
-        label="Auto-capture"
-        disabled={signedOut}
-        title={signedOut ? "Sign in first." : undefined}
-        onClick={() => void run(() => api.setCaptureAuto(!auto), auto ? "Turn auto-capture off" : "Turn auto-capture on")}
-      />
-      <span className="text-xs text-[var(--muted)]">{note}</span>
-    </div>
-  );
-}
-
 /** Which flight to show: the session's most recent flight to land, with its
  *  job if it has one; else the most recent job (a flight processed by hand). */
 function lastFlight(session: Session): { id: string; job: ProcessingJob | null } | null {
-  // Flight jobs only: a session's own job and a point judged in flight are not
-  // a flight's result.
+  // Flight jobs only: a session's own job is not a flight's result.
   const jobs = (session.processing?.jobs ?? []).filter((j) => (j.kind ?? "flight") === "flight");
   const landed = session.processing?.last_flight_id ?? null;
   if (landed) return { id: landed, job: jobs.find((j) => j.flight_id === landed) ?? null };

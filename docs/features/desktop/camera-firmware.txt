@@ -235,7 +235,5 @@ deck flashed for it, and it is not video.
 --------------------------------------------------------------------------------
 9. RELATED
 --------------------------------------------------------------------------------
-consumed-by       camera.txt
-                  the stream the window shows, and its measured rate
 consumed-by       setup.txt
                   installs the bundled pair on a new drone
