@@ -18,11 +18,7 @@ import pytest
 
 from dronedeck.pipeline.contracts import (
     CleanResult,
-    EnhancedFrame,
-    EnhanceResult,
     FlightContext,
-    Frame,
-    FrameQuality,
     InspectionPoint,
     PointData,
     Reading,
@@ -71,7 +67,7 @@ def flight(seconds: float = 60.0, *, bump_c: float = 0.0, bump_at_s: float = 30.
                     "lighthouse_received": 1.0 if positioned else 0.0},
             point_id="P1" if 25 <= t < 45 else None,
             text={"thermal_state": "FLIGHT (POWER)" if airborne else "IDLE"}))
-    return PointData(InspectionPoint("flight", None, 0, 0, 0), tuple(readings), ())
+    return PointData(InspectionPoint("flight", None, 0, 0, 0), tuple(readings))
 
 
 def ctx(tmp_path: Path, unit: str = "C") -> FlightContext:
@@ -82,7 +78,7 @@ def ctx(tmp_path: Path, unit: str = "C") -> FlightContext:
 def classify(data: PointData, tmp_path: Path, unit: str = "C",
              flags: tuple[ReadingFlag, ...] = ()):
     return BlocksClassifier().classify(data, CleanResult(data.readings, flags),
-                                       EnhanceResult(()), ctx(tmp_path, unit))
+                                       ctx(tmp_path, unit))
 
 
 def test_a_normal_flight_cools_as_expected_and_raises_nothing(tmp_path):
@@ -134,7 +130,7 @@ def test_a_flagged_value_never_reaches_a_model(tmp_path):
     spiked = list(data.readings)
     spiked[300] = replace(spiked[300], values={**spiked[300].values, "raw_temp": 80.0})
     flag = (ReadingFlag(300, "raw_temp", "spike", "planted"),)
-    clean_run = classify(PointData(data.point, tuple(spiked), ()), tmp_path, flags=flag)
+    clean_run = classify(PointData(data.point, tuple(spiked)), tmp_path, flags=flag)
     without = classify(data, tmp_path, flags=flag)
     assert clean_run.events == without.events
     assert 300 not in clean_run.tracks[0].indexes
@@ -158,27 +154,9 @@ def test_too_short_a_flight_is_unknown_and_says_why(tmp_path):
 
 
 def test_an_empty_flight_is_unknown(tmp_path):
-    empty = PointData(InspectionPoint("flight", None, 0, 0, 0), (), ())
+    empty = PointData(InspectionPoint("flight", None, 0, 0, 0), ())
     result = classify(empty, tmp_path)
-    assert result.images == () and result.sensors.value == "unknown"
-
-
-def test_every_frame_is_unknown_and_an_unreadable_one_says_why(tmp_path):
-    frames = tuple(Frame(s, START, s, tmp_path / f"{s}.png", 324, 244, None, None, None)
-                   for s in (1, 2))
-    enhanced = EnhanceResult((
-        EnhancedFrame(frames[0], None, "clahe", 1, quality=FrameQuality(
-            300.0, 60.0, 0.0, 0.0, True)),
-        EnhancedFrame(frames[1], None, "clahe", 1, quality=FrameQuality(
-            5.0, 6.0, 0.9, 0.0, False, "too dark: mean 6 of 255")),
-    ))
-    data = replace(flight(), frames=frames)
-    result = BlocksClassifier().classify(data, CleanResult(data.readings, ()), enhanced,
-                                         ctx(tmp_path))
-    first, second = (v.label for v in result.images)
-    assert first.value == second.value == "unknown"
-    assert first.reason == "no image model yet"
-    assert second.reason and "too dark" in second.reason
+    assert result.sensors.value == "unknown"
 
 
 def test_the_cooling_fit_holds_against_an_outlier_burst():

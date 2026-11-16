@@ -110,20 +110,9 @@ export type ProcessingJob = {
   queued_at: string;
   finished_at: string | null;
   error: string | null;
-  /** "flight", "session" (the session around its flights) or "live" (one
-   *  point's verdict in flight, story 4.9). Absent from an older agent. */
-  kind?: "flight" | "session" | "live";
-  point_id?: string | null;
-};
-
-/** One inspection point's verdict while the mission still flies (story 4.9,
- *  agent pipeline/runner.py run_live_point). */
-export type LivePoint = {
-  state: ProcessingJob["state"];
-  verdict?: "normal" | "anomaly" | "insufficient_data";
-  reasons?: string[];
-  findings?: { id: string; title: string; severity: "info" | "warning" | "critical"; sentence: string; signal: string }[];
-  error?: string | null;
+  /** "flight", or "session" (the session around its flights). Absent from an
+   *  older agent. Nothing is processed in flight (2026-11-15). */
+  kind?: "flight" | "session";
 };
 
 export type Processing = {
@@ -132,8 +121,6 @@ export type Processing = {
   jobs: ProcessingJob[];
   /** The session's most recent flight to land — processed or not. */
   last_flight_id: string | null;
-  /** The flight in the air's points, judged as each hold ends. */
-  live?: { flight_id: string | null; points: Record<string, LivePoint> };
 };
 
 /** One inspection point's verdict (pipeline/contracts.py PointResult). */
@@ -155,9 +142,6 @@ export type PipelineFinding = {
   t_start_s: number;
   t_end_s: number;
   point_ids: string[];
-  evidence_frames: number[];
-  image_support: "supports" | "contradicts" | "cannot_tell";
-  image_note: string;
 };
 
 /** results/<flight id>/result.json, as the pipeline wrote it. Version 1
@@ -173,7 +157,7 @@ export type FlightResult = {
     created_at: string;
     points: PointVerdict[];
     failures: { point_id: string; stage: string; reason: string }[];
-    summary: Record<string, { readings?: number; frames?: number; flags?: number }>;
+    summary: Record<string, { readings?: number; flags?: number }>;
     findings?: PipelineFinding[];
   };
 };

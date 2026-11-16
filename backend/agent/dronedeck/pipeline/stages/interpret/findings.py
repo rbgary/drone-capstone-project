@@ -1,14 +1,10 @@
 """Interpret — stage 4: the classifier's events → findings an inspector can act
 on, and a verdict for every inspection point.
 
-THE TELEMETRY IS THE EVIDENCE; THE FRAMES ONLY SUPPORT IT (the owner,
-2026-10-09). A finding is made from an event in the readings. The frames
-taken during it are attached so a person can look — the camera may have been
-facing away. No image model judges the equipment (the camera cannot see heat);
-scene@1 says whether the camera's VIEW CHANGED during the stretch — something
-moving in front of the drone — and that, and only that, "supports" a finding.
-A steady view is "cannot tell", never "contradicts": what changed may simply
-not be visible.
+THE TELEMETRY IS THE EVIDENCE (the owner, 2026-10-09). A finding is made from
+an event in the readings, and from nothing else. The drone carries no camera
+(contract v3); photos taken by hand are classified on their own and never
+change a finding.
 
 SEVERITY is tied to the measurement, never invented (CLAUDE.md, invariant 1).
 The classifier only raises an event beyond the most a NORMAL flight's blocks
@@ -40,12 +36,9 @@ from dronedeck.pipeline.contracts import (
     Alert,
     ClassifyResult,
     CleanResult,
-    EnhancedFrame,
-    EnhanceResult,
     Event,
     Finding,
     FlightContext,
-    ImageSupport,
     InspectionPoint,
     InterpretResult,
     PointData,
@@ -63,8 +56,6 @@ from dronedeck.pipeline.stages.classify.blocks import MIN_EVENT_C, MIN_EVENT_HPA
 WARNING_FACTOR = 2.0
 #: Peak at least this many × the event minimum: critical (MEASUREMENTS.txt).
 CRITICAL_FACTOR = 5.0
-#: Frames this close before and after a stretch count as taken during it, s.
-FRAME_MARGIN_S = 1.0
 #: The namespace of finding ids: re-processing the same flight gives the same
 #: id to the same stretch, so an upload replaces instead of duplicating.
 FINDINGS_NAMESPACE = uuid.UUID("6f1c2a8e-3b7d-4e55-9a51-0d2f7c4b8e10")
@@ -168,54 +159,6 @@ def _sentence(event: Event, height_measured: bool, ground: bool = False) -> str:
     return f"{when}, {what}, for {held:.0f} s."
 
 
-def _frames(event: Event, enhanced: EnhanceResult,
-            classified: ClassifyResult) -> tuple[tuple[int, ...], ImageSupport, str]:
-    """The frames taken during the stretch, and whether an image model's labels
-    back the readings. They can support or contradict; they never decide."""
-    during: list[EnhancedFrame] = [
-        e for e in enhanced.frames
-        if event.t_start_s - FRAME_MARGIN_S <= e.frame.t_s <= event.t_end_s + FRAME_MARGIN_S]
-    readable = [e for e in during if e.quality is None or e.quality.usable]
-    if not during:
-        return (), "cannot_tell", "No camera frames were taken during this stretch."
-    if not readable:
-        why = sorted({(e.quality.reason or "").split(":")[0] for e in during if e.quality})
-        return (), "cannot_tell", (f"{len(during)} frames were taken during this stretch and "
-                                   f"none can be read ({', '.join(why)}).")
-    seqs = tuple(e.frame.seq for e in readable)
-    views = {v.seq: v for v in classified.views if v.seq in seqs}
-    changed = [views[s] for s in seqs if s in views and views[s].changed]
-    labels = {v.seq: v.label for v in classified.images if v.seq in seqs}
-    faulty = [s for s in seqs if s in labels and labels[s].value == "faulty"]
-    judged = [s for s in seqs if s in labels and labels[s].value != "unknown"]
-    if faulty:
-        model = labels[faulty[0]].model
-        return seqs, "supports", (f"{len(faulty)} of {len(seqs)} readable frames taken during "
-                                  f"this stretch were labelled faulty by {model}.")
-    if judged and len(judged) == len(seqs):
-        model = labels[judged[0]].model
-        return seqs, "contradicts", (f"{model} saw nothing faulty in the {len(seqs)} readable "
-                                     f"frames taken during this stretch — the camera may have "
-                                     f"been facing away; the readings stand.")
-    if changed:
-        first = changed[0]
-        return seqs, "supports", (
-            f"The camera's view changed during this stretch (frame {first.seq}, "
-            f"{first.score:.2f} against frame {first.against}; "
-            f"{len(changed)} of {len(seqs)} readable frames changed): something moved in front "
-            f"of the drone as the reading departed. Look at the frames.")
-    steady = [s for s in seqs if s in views and views[s].score is not None]
-    if steady:
-        return seqs, "cannot_tell", (
-            f"{len(seqs)} readable frames were taken during this stretch and the camera's view "
-            f"held steady — whatever changed was not visible to it (a grayscale camera does "
-            f"not see heat). Look at them beside the readings.")
-    return seqs, "cannot_tell", (f"{len(seqs)} readable frames were taken during this stretch. "
-                                 f"The drone was moving, so the view could not be compared — "
-                                 f"look at them beside the readings; the camera may have been "
-                                 f"facing away.")
-
-
 def _height_measured(tracks: Sequence[Track]) -> bool:
     return not any(t.signal == "pressure" and "height not measured" in t.model for t in tracks)
 
@@ -224,14 +167,13 @@ class FindingInterpreter:
     name = "findings"
     version = "1"
 
-    def interpret(self, data: PointData, clean: CleanResult, enhanced: EnhanceResult,
-                  classified: ClassifyResult, ctx: FlightContext) -> InterpretResult:
+    def interpret(self, data: PointData, clean: CleanResult, classified: ClassifyResult,
+                  ctx: FlightContext) -> InterpretResult:
         measured = _height_measured(classified.tracks)
         ground = ctx.scope == "session"
         findings = []
         for event in classified.events:
             height_ok = measured or event.signal != "pressure"
-            frames, support, note = _frames(event, enhanced, classified)
             findings.append(Finding(
                 id=finding_id(ctx.flight_id, event), signal=event.signal,
                 severity=severity(event, classified.features, height_ok),
@@ -240,8 +182,7 @@ class FindingInterpreter:
                 t_start_s=event.t_start_s, t_end_s=event.t_end_s, unit=event.unit,
                 observed=event.observed, expected=event.expected, delta=event.delta,
                 z=event.z, point_ids=event.point_ids, x_m=event.x_m, y_m=event.y_m,
-                z_m=event.z_m, evidence_frames=frames, image_support=support,
-                image_note=note))
+                z_m=event.z_m))
         points = ctx.points or (data.point,)
         whole = not ctx.points
         return InterpretResult(
@@ -259,10 +200,9 @@ def _verdict(point: InspectionPoint, data: PointData, clean: CleanResult,
     readings = [r for r in data.readings if mine(r.point_id)]
     usable = [r for r in readings
               if any(c in r.values and clean.usable(r.index, c) for c in SENSOR_COLUMNS)]
-    frames = [f for f in data.frames if mine(f.point_id)]
-    if not usable and not frames:
+    if not usable:
         return PointResult(point.id, "insufficient_data",
-                           ("No usable readings and no frames at this point.",))
+                           ("No usable readings at this point.",))
     here = [f for f in findings if whole or point.id in f.point_ids]
     serious = [f for f in here if RANK[f.severity] >= RANK["warning"]]
     if serious:
@@ -270,11 +210,8 @@ def _verdict(point: InspectionPoint, data: PointData, clean: CleanResult,
             point.id, "anomaly", tuple(f.sentence for f in serious),
             tuple(Alert(point.id, f.severity, f.sentence,
                         evidence_readings=tuple(r.index for r in usable
-                                                if f.start_index <= r.index <= f.end_index),
-                        evidence_frames=f.evidence_frames) for f in serious))
-    if not usable:
-        return PointResult(point.id, "insufficient_data",
-                           ("Frames only — no usable readings at this point.",))
+                                                if f.start_index <= r.index <= f.end_index))
+                  for f in serious))
     if not classified.tracks:
         why = classified.sensors.reason or "the readings could not be analysed"
         return PointResult(point.id, "insufficient_data", (f"Not analysed: {why}.",))

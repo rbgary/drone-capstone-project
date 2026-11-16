@@ -15,8 +15,9 @@ dependencies = [
     # installed through cflib (numpy~=2.2); declared so the stage does not
     # depend on another package's choice.
     "numpy>=2.2",
-    # The data pipeline's enhancer (pipeline/stages/enhance/clahe.py): CLAHE
-    # and the frame-quality measure. Headless — the agent opens no window.
+    # Image work: the camera's capture rule (camera/capture.py, removed in the
+    # no-camera work) and the photo classifier that replaces it (story 4.4).
+    # Headless — the agent opens no window.
     "opencv-python-headless>=4.10,<6",
     # Setting a base station's channel over its micro-USB port (flight/
     # basestation.py) — what Bitcraze's client does in "Set BS channel".

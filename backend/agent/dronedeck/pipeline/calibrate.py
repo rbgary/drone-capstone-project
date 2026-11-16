@@ -115,8 +115,7 @@ def measure(marked: Sequence[Marked], source: LocalFlightSource, workdir: Path) 
                     peak = max(peak, level, key=abs)
                 else:
                     wander.append(abs(level))
-        classified = blocks.BlocksClassifier().classify(
-            data, clean, _no_frames(data), ctx)
+        classified = blocks.BlocksClassifier().classify(data, clean, ctx)
         here_events = [e for e in classified.events if m.point_id in e.point_ids]
         severity = None
         if here_events:
@@ -159,12 +158,6 @@ def measure(marked: Sequence[Marked], source: LocalFlightSource, workdir: Path) 
                       "wander below the minimum — no change needed.")
     return Report(datetime.now(UTC).isoformat(), tuple(points), round(normal, 3), current,
                   recommended, tuple(notes))
-
-
-def _no_frames(data: Any) -> Any:
-    from dronedeck.pipeline.contracts import EnhanceResult
-
-    return EnhanceResult(())
 
 
 def save(report: Report, data_root: Path) -> Path:

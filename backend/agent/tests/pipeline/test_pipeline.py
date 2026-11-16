@@ -1,4 +1,4 @@
-"""Loading a flight, running the stages once over the whole flight (contract v2),
+"""Loading a flight, running the stages once over the whole flight (contract v3),
 a verdict per inspection point, surviving a stage that fails or breaks the
 contract, and saving the result."""
 
@@ -13,11 +13,8 @@ import pytest
 from dronedeck.cli import main
 from dronedeck.pipeline.compose import default_stages
 from dronedeck.pipeline.contracts import (
-    ClassifyResult,
     CleanResult,
-    ImageVerdict,
     InterpretResult,
-    Label,
     PointResult,
     ReadingFlag,
     StageError,
@@ -43,10 +40,6 @@ class TestLoading:
         assert flight.unassigned_readings == 400 - 120
         assert flight.temp_unit == "C"
 
-    def test_frames_are_the_sessions_frames_inside_the_flight_and_at_the_point(self):
-        flight = LocalFlightSource(FIXTURE).load(FLIGHT)
-        assert [[f.seq for f in p.frames] for p in flight.points] == [[2, 3], [5, 6], []]
-
     def test_readings_keep_their_numbers_their_time_and_their_point(self):
         first = LocalFlightSource(FIXTURE).load(FLIGHT).points[0].readings[0]
         assert first.index == 100
@@ -63,8 +56,6 @@ class TestLoading:
         assert len(flight.whole.readings) == 400
         assert [r.index for r in flight.whole.readings] == list(range(400))
         assert sum(1 for r in flight.whole.readings if r.point_id is None) == 280
-        assert [f.seq for f in flight.whole.frames] == [2, 3, 4, 5, 6]
-        assert [f.point_id for f in flight.whole.frames] == ["P1", "P1", None, "P2", "P2"]
         assert [p.id for p in flight.plan] == ["P1", "P2", "P3"]
 
     def test_a_flight_with_no_mission_is_one_point(self, tmp_path):
@@ -89,15 +80,15 @@ class TestRunning:
         # A real flight's readings: nothing departs from expected at P1 and P2;
         # P3 was never reached.
         assert [p.verdict for p in result.points] == ["normal", "normal", "insufficient_data"]
-        assert result.stages == {"clean": "robust@1", "enhance": "clahe@1",
-                                 "classify": "blocks@1", "interpret": "findings@1"}
-        assert result.pipeline_version == "3"
+        assert result.stages == {"clean": "robust@1", "classify": "blocks@1",
+                                 "interpret": "findings@1"}
+        assert result.pipeline_version == "4"
         saved = json.loads(Path(where).read_text())
         assert saved["flight_id"] == FLIGHT
         assert saved["summary"]["_transit"] == {"readings": 280}
         assert saved["summary"]["P1"]["readings"] == 60
         assert saved["session_id"] == "a5788fe1-02fb-49d7-ac1c-b400d825d45f"
-        assert [f["seq"] for f in saved["frames"]] == [2, 3, 4, 5, 6]
+        assert "frames" not in saved and "frames" not in saved["summary"]["P1"]
 
     def test_running_again_replaces_the_result(self, tmp_path):
         run(tmp_path)
@@ -129,23 +120,6 @@ class TestRunning:
         assert finding.sentence.startswith("From ") and "near P1" in finding.sentence
         assert result.points[0].verdict == "anomaly"
 
-    def test_an_image_alone_never_makes_an_anomaly(self, tmp_path):
-        """The telemetry is the source of truth (the owner, 2026-10-09): frames
-        an image model calls faulty, with no event in the readings, leave every
-        point short of an anomaly."""
-        class SaysFaulty:
-            name, version = "fake", "1"
-
-            def classify(self, data, clean, enhanced, ctx):
-                faulty = Label("faulty", 0.9, "fake@1")
-                return ClassifyResult(
-                    tuple(ImageVerdict(f.seq, "original", faulty) for f in data.frames),
-                    Label("normal", 0.1, "fake@1"), {"temp_max_c": 31.0})
-
-        result, _ = run(tmp_path, replace(default_stages(), classifier=SaysFaulty()))
-        assert all(p.verdict != "anomaly" for p in result.points)
-        assert result.findings == ()
-
     def test_a_failing_stage_is_recorded_and_the_flight_still_finishes(self, tmp_path):
         class Broken:
             name, version = "broken", "1"
@@ -173,7 +147,7 @@ class TestRunning:
         class Skips:
             name, version = "skips", "1"
 
-            def interpret(self, data, clean, enhanced, classified, ctx):
+            def interpret(self, data, clean, classified, ctx):
                 return InterpretResult((PointResult("P1", "normal", ("fine",)),))
 
         result, _ = run(tmp_path, replace(default_stages(), interpreter=Skips()))

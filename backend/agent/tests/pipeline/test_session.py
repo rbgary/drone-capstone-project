@@ -41,9 +41,9 @@ FIELDS = ["recorded_at", "mode", "height_m", "baro.temp", "baro.pressure", "stat
 
 
 def write_session(root: Path, *, seconds: int = 300, flights=(), bump=None, gap_at=None,
-                  frames=(), seed: int = 0, session_id: str = SID) -> Path:
+                  seed: int = 0, session_id: str = SID) -> Path:
     """A session folder: samples.csv at 1 Hz (a board warming towards 36 °C,
-    pressure drifting slowly), meta.json with its flights, frames.csv.
+    pressure drifting slowly) and meta.json with its flights.
     `flights` are (start s, end s); `bump` is (start s, size °C) — 10 s up,
     20 s held, 10 s down; `gap_at` drops 4 samples there."""
     rng = random.Random(seed)
@@ -83,27 +83,7 @@ def write_session(root: Path, *, seconds: int = 300, flights=(), bump=None, gap_
                          "ended_at": (T0 + timedelta(seconds=b)).isoformat()}
                         for n, (a, b) in enumerate(flights)]}
     (folder / "meta.json").write_text(json.dumps(meta))
-    if frames:
-        (folder / "frames").mkdir()
-        with (folder / "frames.csv").open("w", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["seq", "recorded_at", "t_s", "file", "width", "height", "bytes", "x_m",
-                        "y_m", "z_m", "upload", "point_id"])
-            for seq, at in enumerate(frames, start=1):
-                name = f"frames/{seq:06d}.png"
-                _png(folder / name, seq)
-                w.writerow([seq, (T0 + timedelta(seconds=at)).isoformat(), f"{at:.3f}", name,
-                            324, 244, 1, "0.1", "0.2", "1.0", 1, ""])
     return folder
-
-
-def _png(path: Path, seed: int) -> None:
-    import cv2
-    import numpy as np
-
-    rng = np.random.default_rng(seed)
-    img = (rng.random((244, 324)) * 60 + 20).astype("uint8")
-    cv2.imwrite(str(path), img)
 
 
 def _ctx(tmp_path: Path, period: float = 1.0) -> FlightContext:
@@ -123,20 +103,20 @@ def _readings(n: int, dt: float, gap_after: int | None = None) -> tuple[Reading,
 
 class TestTheCleanerAtOneHertz:
     def test_one_reading_a_second_is_not_a_gap(self, tmp_path):
-        data = PointData(InspectionPoint(WHOLE_SESSION, None, 0, 0, 0), _readings(120, 1.0), ())
+        data = PointData(InspectionPoint(WHOLE_SESSION, None, 0, 0, 0), _readings(120, 1.0))
         flags = RobustCleaner().clean(data, _ctx(tmp_path)).flags
         assert not [f for f in flags if f.kind == "gap"]
 
     def test_three_seconds_lost_at_one_hertz_is_a_gap(self, tmp_path):
         data = PointData(InspectionPoint(WHOLE_SESSION, None, 0, 0, 0),
-                         _readings(120, 1.0, gap_after=60), ())
+                         _readings(120, 1.0, gap_after=60))
         gaps = [f for f in RobustCleaner().clean(data, _ctx(tmp_path)).flags if f.kind == "gap"]
         assert [f.index for f in gaps] == [61]
         assert "limit 2.50 s" in gaps[0].reason
 
     def test_the_same_readings_at_flight_rate_are_all_gaps(self, tmp_path):
         # The flight's 10 Hz limit is untouched: a 1 s cadence there is lost time.
-        data = PointData(InspectionPoint(WHOLE_SESSION, None, 0, 0, 0), _readings(20, 1.0), ())
+        data = PointData(InspectionPoint(WHOLE_SESSION, None, 0, 0, 0), _readings(20, 1.0))
         flags = RobustCleaner().clean(data, _ctx(tmp_path, period=0.1)).flags
         assert len([f for f in flags if f.kind == "gap"]) == 19
 
@@ -147,7 +127,7 @@ class TestTheCleanerAtOneHertz:
                     {"raw_temp": 30.0 + 0.01 * i,
                      "station_pressure_hpa": 1013.25 if 40 <= i < 54 else 1013.0 + 0.003 * i})
             for i in range(120))
-        data = PointData(InspectionPoint(WHOLE_SESSION, None, 0, 0, 0), readings, ())
+        data = PointData(InspectionPoint(WHOLE_SESSION, None, 0, 0, 0), readings)
         stuck = [f for f in RobustCleaner().clean(data, _ctx(tmp_path)).flags if f.kind == "stuck"]
         assert len(stuck) == 14
         assert "14 readings (14.0 s" in stuck[0].reason
@@ -213,12 +193,6 @@ class TestTheSource:
         phases = [r.text["phase"] for r in s.whole.readings]
         assert phases[10] == "flying" and phases[5] == "ground" and phases[20] == "ground"
 
-    def test_only_frames_outside_the_flights_are_the_sessions(self, tmp_path):
-        root = write_session(tmp_path, seconds=60, flights=[(20, 40)],
-                             frames=(5, 30, 50)).parent.parent
-        frames = LocalSessionSource(root).load(SID).whole.frames
-        assert [f.seq for f in frames] == [1, 3]
-
     def test_a_session_with_no_samples_is_not_found(self, tmp_path):
         (tmp_path / "sessions" / SID).mkdir(parents=True)
         with pytest.raises(SessionNotFound):
@@ -229,7 +203,7 @@ class TestTheCommand:
     @pytest.fixture
     def data(self, tmp_path, monkeypatch):
         root = tmp_path / "data"
-        write_session(root, seconds=200, frames=(10, 20))
+        write_session(root, seconds=200)
         monkeypatch.setenv("DRONEDECK_DATA_DIR", str(root))
         return root
 
@@ -239,7 +213,7 @@ class TestTheCommand:
         assert cli.main(["process", "--session", SID]) == 0
         out = json.loads((paths.results_dir() / "sessions" / SID / "result.json").read_text())
         assert out["scope"] == "session" and out["pipeline_version"] == PIPELINE_VERSION
-        assert len(out["frames"]) == 2
+        assert "frames" not in out
         assert json.loads((data / "sessions" / SID / "meta.json").read_text())["processing"] \
             == "done"
 

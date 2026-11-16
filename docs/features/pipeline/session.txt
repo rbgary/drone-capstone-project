@@ -1,6 +1,8 @@
 ================================================================================
 THE SESSION, PROCESSED — whatever a session records, not only its flights
-Last verified: 2026-10-11 — re-read after session.py changed for playback (#109); it only gained the playback queue at flight end and an outbox property; the session's own processing is unchanged. Before that:
+Last verified: 2026-11-15 on feat/no-camera — contract v3: a session's run
+reads its samples only (no frames), tests/pipeline/test_session.py passing.
+2026-10-11 — re-read after session.py changed for playback (#109). Before that:
 2026-10-09 against dpp/session … data/session-results — 179
 real sessions through `dronedeck process --session` (14 s, slowest 2 s), the
 ground classifier measured on them (ml/session-eval/MEASUREMENTS.txt), the
@@ -30,10 +32,10 @@ The owner, 2026-10-09: "data processing should happen in both Auto and Manual
 — as long as a session is started we process whatever data comes, not only
 data in flight." A session records its own samples once a second from Start
 session to End session (samples.csv, the same file the web's session vitals
-come from) and the camera throughout. A flight's result covers its flight; the
-session's run covers everything around them: its samples cleaned, the frames
-taken outside its flights enhanced, and the stretches when the drone sat on the
-ground judged for anomalies.
+come from). A flight's result covers its flight; the session's run covers
+everything around them: its samples cleaned, and the stretches when the drone
+sat on the ground judged for anomalies. (Until 2026-11-15 it also enhanced the
+camera frames taken outside the flights; the drone carries no camera now.)
 
 --------------------------------------------------------------------------------
 2. WHERE IT LIVES
@@ -65,8 +67,8 @@ ml/session-eval/evaluate.py, MEASUREMENTS.txt
 --------------------------------------------------------------------------------
 3. DECISIONS
 --------------------------------------------------------------------------------
-• THE SAME FOUR STAGES, one swapped. The cleaner, enhancer and interpreter are
-  the flight's; the classifier is ground@1. A flight is judged against the
+• THE SAME THREE STAGES, one swapped. The cleaner and interpreter are the
+  flight's; the classifier is ground@1. A flight is judged against the
   board cooling in the propellers' air at 10 Hz; on the ground the board does
   the opposite (it warms, towards a level) at 1 Hz. Same model family —
   T∞ + A·e^(−t/τ) fits warming as well as cooling — fitted per ground stretch.

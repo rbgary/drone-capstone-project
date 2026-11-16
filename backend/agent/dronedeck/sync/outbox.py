@@ -44,11 +44,11 @@ class Kind(StrEnum):
     #: One per session: its 1 Hz vitals (samples.csv), uploaded from a cursor
     #: (sync/samples.py) — never one record per row.
     SAMPLES = "samples"
-    #: One per processed flight: its pipeline result and enhanced frames
+    #: One per processed flight: its pipeline result and findings
     #: (sync/results.py). Re-processing replaces the record.
     RESULTS = "results"
     #: One per processed session: its own result — the samples around its
-    #: flights — and enhanced frames (sync/results.py session_result_row).
+    #: flights (sync/results.py session_result_row).
     SESSION_RESULTS = "session_results"
     #: One per flight: its plan as flown and its control trace, for playback
     #: on any computer (sync/flight_playback.py) — the trace from a cursor.

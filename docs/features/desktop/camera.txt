@@ -14,8 +14,9 @@ the way in). That had DRIFTED: the lab laptop holds 8 748 recorded frames —
 324×244, 8-bit grayscale, real images of the lab — from 43 sessions between
 2026-09-24 and 2026-10-09 (836 on 09-24, 3 800 on 09-30, 3 167 on 10-05).
 They are dark (median brightness 61 of 255), which is why the data pipeline
-enhances them (../pipeline/enhance.txt). Verified by reading the frames
-themselves, not the logs.
+enhanced them (clahe@1 — removed 2026-11-15 with contract v3: the pipeline no
+longer reads frames, and this camera is removed next, in the no-camera work).
+Verified by reading the frames themselves, not the logs.
 
 THIS IS NOT VIDEO. The window pulls one still every 200 ms — about 5 fps at
 best — and the deck has delivered 0.7–4.9 (camera-firmware.txt).
@@ -226,15 +227,10 @@ LAST VERIFIED  2026-10-24 — the shared feed and the rate line in the harness
 
 RELATED
 
-consumed-by       ../pipeline/data-pipeline.txt
-                  frames.csv (now with point_id) and the frames in a flight's window
-
 consumed-by       setup.txt
                   installs the patched ESP32 and the GAP8 streamer
 consumed-by       drone-wifi.txt
                   sets the address DeckStream streams from
-consumed-by       ../pipeline/scene.txt
-                  frames.csv: each frame's time and position, for scene@1
 consumed-by       capture.txt
                   the recording it marks captured; the feed the Capture page shows
 depends-on        camera-firmware.txt

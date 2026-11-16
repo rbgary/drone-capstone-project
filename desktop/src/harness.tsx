@@ -341,7 +341,7 @@ if (!agentToken) {
           created_at: "2026-09-29T10:00:02+00:00", failures: [],
           points: ["P1", "P2", "P3"].map((id) => ({ point_id: id, verdict: "insufficient_data",
             reasons: ["No model gave a verdict: no classifier yet."], alerts: [] })),
-          summary: { P1: { readings: 60, frames: 22 }, P2: { readings: 52, frames: 18 }, P3: { readings: 81, frames: 30 } },
+          summary: { P1: { readings: 60 }, P2: { readings: 52 }, P3: { readings: 81 } },
         },
       });
     }
@@ -591,12 +591,6 @@ createRoot(document.getElementById("root")!).render(
       },
       processing: {
         on: true, chosen: false, last_flight_id: null, jobs: [],
-        live: { flight_id: "f-air", points: {
-          P1: { state: "done", verdict: "anomaly", reasons: ["Warmer than expected near P1"],
-                findings: [{ id: "x1", title: "Warmer than expected near P1", severity: "warning",
-                             sentence: "From 0:11 to 0:15, near P1, the temperature sensor read 3.8 °C above the drone's normal cooling curve.", signal: "temperature" }] },
-          P2: { state: "running" },
-        } },
       },
     }, { step: 5, missionId: "m-long" })}
     {control("Auto · ③ Fly, landed", {

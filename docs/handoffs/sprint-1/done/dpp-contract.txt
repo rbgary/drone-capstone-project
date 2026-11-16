@@ -1,10 +1,28 @@
 DATA PIPELINE — the contract every stage builds against
 =======================================================
 
-STATUS: VERSION 2 (2026-10-09, branch dpp/contract-v2; version 1 was built
-2026-09-28 on feat/missions-and-pipeline). The authority is
+STATUS: VERSION 3 (2026-11-15, branch feat/no-camera; version 2 was
+2026-10-09 on dpp/contract-v2, version 1 2026-09-28 on
+feat/missions-and-pipeline). The authority is
 backend/agent/dronedeck/pipeline/contracts.py; this page describes it. If the
 two ever disagree, the CODE wins — tell Samuel so this page is corrected.
+
+WHAT VERSION 3 CHANGED, AND WHY (read this if you built against version 2)
+  - THE DRONE CARRIES NO CAMERA (docs/features/architecture.txt, DECISIONS):
+    the AI deck is off the airframe. So the pipeline is the SENSORS only —
+    clean → classify → interpret, three stages.
+  - GONE: Frame, PointData.frames, the enhance stage (Enhancer,
+    EnhanceResult, EnhancedFrame, FrameQuality — clahe@1 is deleted),
+    ImageVerdict, ViewChange (scene@1 is deleted), ClassifyResult.images and
+    .views, Alert.evidence_frames, Finding.evidence_frames / image_support /
+    image_note, FrameRecord, FlightResult.frames, FlightContext.mode.
+  - classify(data, clean, ctx) and interpret(data, clean, classified, ctx):
+    no `enhanced` argument.
+  - NO LIVE RUN. A flight is processed once its data has arrived; story 4.9's
+    run over the flight so far is removed.
+  - Photos taken by hand are classified on their own (story 4.4), not by a
+    stage of this pipeline.
+  - PIPELINE_VERSION "4"; `dronedeck process --all` re-processes older results.
 
 WHAT VERSION 2 CHANGED, AND WHY (read this if you built against version 1)
   - THE UNIT OF WORK IS THE FLIGHT. Clean, enhance and classify run ONCE over
@@ -28,20 +46,21 @@ THE WHOLE SYSTEM, IN ONE PAGE
 ─────────────────────────────
 
 DroneDeck flies a Crazyflie around a room, stops at pieces of equipment, and
-records temperature, pressure and camera frames at each.
+records temperature and pressure at each. (Until v3 it recorded camera frames
+too; photos are now taken by hand.)
 
   1  PLANNING  the operator draws a room (geofence, obstacles) and a mission
                in it: an ordered list of INSPECTION POINTS. (Samuel, built.)
   2  FLYING    the mission controller flies the mission through the manual
                flight system; while the drone HOLDS at a point, every reading
-               and frame is stamped with that point's id. (Hannah.)
-  3  PROCESSING  THIS PIPELINE: the stamped readings and frames of each point
-               go through clean → enhance → classify → interpret, and each
+               is stamped with that point's id. (Hannah.)
+  3  PROCESSING  THIS PIPELINE: the stamped readings go through clean →
+               classify → interpret once the flight has landed, and each
                point gets a verdict. (Samuel, Kevin, Reagan.)
 
-  readings ─▶ clean ─▶ enhance ─▶ classify ─▶ interpret ─▶ result.json
-  + frames    Kevin    Kevin      Reagan      Samuel
-              (4.2)    (4.3)      (4.4, 4.6)  (4.6)
+  readings ─▶ clean ─▶ classify ─▶ interpret ─▶ result.json
+              Kevin    Reagan      Samuel
+              (4.2)    (4.6)       (4.6)
 
 Planning story 4.5: "A single command turns a recorded flight into a result
 with a verdict for each inspection point." That command exists:
@@ -49,22 +68,19 @@ with a verdict for each inspection point." That command exists:
   dronedeck process --flight <flight id>     a flight on this laptop
   dronedeck process --fixture                the test fixture (source checkout)
 
-THE UNIT OF WORK IS THE FLIGHT (version 2), not one row, one frame or one
-point. The runner hands every stage the whole flight as one PointData whose
-point is "flight" (contracts.WHOLE_FLIGHT), transit included; each reading and
-frame says which inspection point it was taken at (point_id, None in transit),
-and ctx.points lists the mission's points in order (() with no mission). The
-same stage code serves a run after the flight (batch, built) and, later, a run
-over the flight so far (live, story 4.9). A stage must still accept ANY
-PointData — a single point's readings, or none.
+THE UNIT OF WORK IS THE FLIGHT (version 2), not one row or one point. The
+runner hands every stage the whole flight as one PointData whose point is
+"flight" (contracts.WHOLE_FLIGHT), transit included; each reading says which
+inspection point it was taken at (point_id, None in transit), and ctx.points
+lists the mission's points in order (() with no mission). A stage must still
+accept ANY PointData — a single point's readings, or none.
 
 
 WHERE IT RUNS, AND WHY IT IS BUILT THIS WAY
 ───────────────────────────────────────────
 
-On the laptop, inside the agent: the laptop has every frame the moment the
-drone lands (the cloud only ever gets 2 a second), and only the laptop can
-steer the drone, which stories 4.9 and 4.10 need.
+On the laptop, inside the agent: the laptop has every reading the moment the
+drone lands, and needs no network to process them.
 
 Built to move to a cloud worker later without rewriting a stage:
 
@@ -78,8 +94,8 @@ Built to move to a cloud worker later without rewriting a stage:
   STRATEGY             each stage is an interface (a Protocol); your class is
                        one implementation. Plugging in is a one-line change.
 
-The batch runner runs in the command's own process (it flies nothing). The
-live runner will run in a PROCESS OF ITS OWN, never a thread beside the 50 Hz
+The runner runs in the command's own process (it flies nothing). The agent
+starts that command as a PROCESS OF ITS OWN, never a thread beside the 50 Hz
 flight loop — CPU work there competes for Python's one interpreter lock, and a
 late setpoint drops the drone. That is why every stage must be self-contained.
 
@@ -121,14 +137,12 @@ WHERE THE FILES ARE
 
   backend/agent/dronedeck/pipeline/
     contracts.py          the types and interfaces below — THE authority
-    sources.py            LocalFlightSource: the CSV, the session's frames in
-                          the flight's time window, the plan flown
+    sources.py            LocalFlightSource: the CSV and the plan flown
     sinks.py              LocalResultSink: results/<flight>/result.json, work/
     runner.py             run_stages (once over the flight), run_flight
     compose.py            which implementation each stage uses  ← you edit one line
     stages/
       clean/stub.py       flags nothing                          ← Kevin adds his
-      enhance/stub.py     passes originals through               ← Kevin adds his
       classify/stub.py    "unknown", with the reason             ← Reagan adds hers
       interpret/labels.py labels → verdicts (no invented thresholds)  Samuel
     models/MODELS.json    one entry per model file (empty today)
@@ -149,9 +163,9 @@ Shared input
 
   FlightContext        flight_id, session_id, temp_unit ("C" | "F" — the unit
                        of EVERY temperature), ground_z_m, started_at (UTC),
-                       workdir (the ONLY place a stage may write), mode
-                       ("batch" | "live"), points (the mission's inspection
-                       points in order; () with no mission)
+                       workdir (the ONLY place a stage may write), points
+                       (the mission's inspection points in order; () with no
+                       mission)
   InspectionPoint      id, label, x_m, y_m (absolute Lighthouse metres),
                        z_m (above the floor captured at takeoff)
   Reading              index (unique within the flight), recorded_at (UTC),
@@ -159,10 +173,8 @@ Shared input
                        Mapping[str, float | None] — numeric columns by name,
                        point_id (None in transit), text: the row's words
                        (mode, thermal_state, event)
-  Frame                seq, recorded_at, t_s, path (READ ONLY), width (324),
-                       height (244), x_m, y_m, z_m, point_id
-  PointData            point, readings (by index), frames (by seq; may be
-                       empty). The whole flight is one, with point "flight".
+  PointData            point, readings (by index). The whole flight is one,
+                       with point "flight".
 
 The names in Reading.values are TelemetryRow's field names
 (dronedeck/telemetry/row.py — the authority). The ones that matter:
@@ -189,20 +201,9 @@ Stage 1 — clean (story 4.2)            class Cleaner(Protocol)
                                              untrusted (a position the drone
                                              did not measure)
 
-Stage 2 — enhance (story 4.3)          class Enhancer(Protocol)
-  enhance(data, ctx) -> EnhanceResult
-  EnhanceResult(frames)                ONE PER INPUT FRAME, SAME ORDER
-  EnhancedFrame(frame, path, method, scale, note=None, quality=None)
-                                       path None = not enhanced, use the
-                                       original; then `note` says why
-  FrameQuality(sharpness, brightness, dark_share, bright_share, usable,
-               reason=None)            measured on the ORIGINAL; an unusable
-                                       frame must say why
-
-Stage 3 — classify (stories 4.4, 4.6)  class Classifier(Protocol)
-  classify(data, clean, enhanced, ctx) -> ClassifyResult
-  ClassifyResult(images, sensors, features={}, tracks=(), segments=(), events=())
-                                       images: one ImageVerdict per frame, in order
+Stage 2 — classify (story 4.6)         class Classifier(Protocol)
+  classify(data, clean, ctx) -> ClassifyResult
+  ClassifyResult(sensors, features={}, tracks=(), segments=(), events=())
                                        sensors: one Label for the readings
                                        features: names carry units ("temp_max_c")
                                        tracks: per signal, observed and expected
@@ -213,37 +214,31 @@ Stage 3 — classify (stories 4.4, 4.6)  class Classifier(Protocol)
                                          blocks departing the same way (delta,
                                          z, peak, slope, points, mean position
                                          when measured)
-  ImageVerdict(seq, source, label)     source: "original" | "enhanced"
   Label(value, p_faulty, model, reason=None)
                                        value: normal | faulty | unknown
                                        "unknown" MUST have a reason (checked
                                        when the Label is built); p_faulty 0..1
                                        model: "<name>@<version>"
 
-Stage 4 — interpret (Samuel)           class Interpreter(Protocol)
-  interpret(data, clean, enhanced, classified, ctx) -> InterpretResult
+Stage 3 — interpret (Samuel)           class Interpreter(Protocol)
+  interpret(data, clean, classified, ctx) -> InterpretResult
   InterpretResult(points, findings=())  points: ONE PointResult PER
                                        INSPECTION POINT, in ctx.points order
                                        (just "flight" with no mission)
   PointResult(point_id, verdict, reasons, alerts=())
                                        verdict: normal | anomaly | insufficient_data
-  Alert(point_id, severity, reason, evidence_readings, evidence_frames)
+  Alert(point_id, severity, reason, evidence_readings)
   Finding(id, signal, severity, title, sentence, start/end index and time,
-          unit, observed, expected, delta, z, point_ids, x/y/z_m,
-          evidence_frames, image_support, image_note)
+          unit, observed, expected, delta, z, point_ids, x/y/z_m)
                                        severity: info | warning | critical
-                                       image_support: supports | contradicts |
-                                         cannot_tell — the telemetry is the
-                                         evidence, the frames only support it
+                                       the readings are the evidence
 
 The flight's result                    FlightResult, saved as JSON
   flight_id, pipeline_version, stages ({"clean": "name@version", …}),
   created_at, points (one PointResult each), failures (StageFailure: "flight",
-  stage, reason), summary (per point: readings, frames, flags; "_transit":
+  stage, reason), summary (per point: readings, flags; "_transit":
   readings that belonged to no point), session_id, temp_unit, findings,
-  flags (every ReadingFlag), tracks, segments, frames (FrameRecord per frame:
-  seq, t_s, point_id, enhanced path relative to the workdir, method,
-  quality, label)
+  flags (every ReadingFlag), tracks, segments
 
 
 WHAT THE RUNNER DOES WHEN A STAGE GOES WRONG (runner.py)
@@ -255,16 +250,13 @@ the flight goes as far as it honestly can:
   clean fails       nothing is analysed: every point insufficient_data.
                     Analysing readings nobody checked is what cleaning exists
                     to prevent.
-  enhance fails     the original frames are used.
-  classify fails    every label "unknown", with the failure as the reason.
+  classify fails    the sensor label "unknown", with the failure as the reason.
   interpret fails   every point insufficient_data, with the failure as the
                     reason.
 
 A stage that BREAKS THE CONTRACT — a cleaner that edits or drops a reading, an
-enhancer that returns the wrong number of frames or writes outside workdir, a
-classifier that skips a frame, an interpreter that does not give every
-inspection point one verdict in order — is treated exactly like one that
-failed.
+interpreter that does not give every inspection point one verdict in order —
+is treated exactly like one that failed.
 
 Raise StageError("words for the operator") when your stage cannot run at all
 (a missing model file). Any other exception is logged with its traceback.
@@ -278,26 +270,26 @@ RULES EVERY STAGE FOLLOWS
  1. SELF-CONTAINED. Output depends only on the input and your model file. No
     network, no Supabase, no other flights. Never import dronedeck.flight,
     .session, .api, .sync or .camera.                                 [checked]
- 2. ONE OUTPUT PER INPUT, IN ORDER.                                   [checked]
+ 2. (Retired in v3: one output per frame, in order — there are no frames.)
  3. NEVER CHANGE OR DELETE THE INPUT. Cleaning FLAGS; the next stage skips
     what is flagged.                                                  [checked]
- 4. FILES ONLY UNDER ctx.workdir; originals byte-identical after.     [checked]
+ 4. FILES ONLY UNDER ctx.workdir. (No longer checked: no stage writes files
+    since enhance went in v3.)
  5. SAME INPUT, SAME OUTPUT. Fix every random seed.                   [checked]
  6. AN EMPTY POINT IS A RESULT, NOT AN EXCEPTION. Stages are checked on the
     whole flight, on each point's own readings, and on an empty point. [checked]
- 7. FAIL SMALL, SAY WHY: one bad frame gets "unknown" and a reason; a stage
-    that cannot run raises StageError. Never swallow an exception silently.
+ 7. FAIL SMALL, SAY WHY: what cannot be judged gets "unknown" and a reason; a
+    stage that cannot run raises StageError. Never swallow an exception silently.
  8. UNITS: metres, seconds, hPa. Temperatures arrive in ctx.temp_unit —
     convert them yourself, and name converted features with their unit.
  9. VERSION HONESTLY: bump `version` whenever your output could change.
 10. LOGGING: log = logging.getLogger(__name__). No print.
-11. RUNTIME DEPENDENCIES are numpy, Pillow, opencv-python-headless (the
-    contrib build only if a super-resolution model needs dnn_superres) and
+11. RUNTIME DEPENDENCIES are numpy, Pillow, opencv-python-headless and
     onnxruntime — they go into the desktop installer (OpenCV took the frozen
-    agent from 43 to 86 MB, 2026-10-09). Anything else, ask Samuel. Training
+    agent from 43 to 86 MB, 2026-10-09; it stays for the photo classifier). Anything else, ask Samuel. Training
     in ml/ may use anything.
 12. TIME: measure your stage per point on the lab laptop and put it in the PR.
-    Targets: clean < 0.2 s; enhance and classify each < 2 s for 20 frames.
+    Targets: clean < 0.2 s; classify < 2 s.
 
 
 MODEL FILES

@@ -199,7 +199,7 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
         Flight {r.flight_id.slice(0, 8)} · processed {formatTime(r.created_at)} · pipeline {r.pipeline_version}
       </p>
       {placeholder && (
-        <Message tone="idle" text="The pipeline ran, but its classify stage is not built yet (the team's work), so every point reads “insufficient data”. The readings and frames below are real." />
+        <Message tone="idle" text="The pipeline ran, but its classify stage is not built yet (the team's work), so every point reads “insufficient data”. The readings below are real." />
       )}
       <ul className="grid gap-1.5">
         {r.points.map((p) => {
@@ -212,7 +212,7 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
                 <StatusDot tone={v.tone}>{v.text}</StatusDot>
               </span>
               <span className="text-[var(--muted)]">
-                {counts?.readings ?? 0} readings · {counts?.frames ?? 0} frames{p.reasons.length ? ` — ${p.reasons.join("; ")}` : ""}
+                {counts?.readings ?? 0} readings{p.reasons.length ? ` — ${p.reasons.join("; ")}` : ""}
               </span>
             </li>
           );
@@ -232,7 +232,6 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
                     <StatusDot tone={SEVERITY[f.severity].tone}>{SEVERITY[f.severity].text}</StatusDot>
                   </span>
                   <span>{f.sentence}</span>
-                  <span className="text-[var(--muted)]">{f.image_note}</span>
                 </li>
               ))}
             </ul>
@@ -254,7 +253,7 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
 /** The switch and the last flight's result, as one panel. */
 export function DataPipelinePanel({ session, run }: { session: Session; run: Run }) {
   return (
-    <Panel title="Data processing" note="Turns a flight's readings and frames into a verdict per inspection point. The switch is at the top of the page." bodyClassName="grid gap-3 px-4 py-3">
+    <Panel title="Data processing" note="Turns a flight's readings into a verdict per inspection point, once the flight has landed. The switch is at the top of the page." bodyClassName="grid gap-3 px-4 py-3">
       <FlightResults session={session} run={run} />
     </Panel>
   );

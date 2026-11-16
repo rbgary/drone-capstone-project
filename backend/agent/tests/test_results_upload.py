@@ -1,7 +1,7 @@
 """A processed flight reaches the web (sync/results.py, migration
-20261009000016): its result, its findings, its enhanced frames — after the
-flight's own row, replacing on re-process, retracting what a re-process no
-longer finds, and waiting on disk when offline."""
+20261009000016): its result and its findings — after the flight's own row,
+replacing on re-process, retracting what a re-process no longer finds, and
+waiting on disk when offline."""
 
 from __future__ import annotations
 
@@ -63,22 +63,18 @@ def finding(fid: str, severity: str = "warning") -> dict:
     return {"id": fid, "signal": "temperature", "severity": severity, "title": "Warmer",
             "sentence": "From 0:42…", "start_index": 1, "end_index": 30, "t_start_s": 0.1,
             "t_end_s": 3.0, "unit": "C", "observed": 33.0, "expected": 31.0, "delta": 2.0,
-            "z": 9.0, "point_ids": ["P1"], "x_m": None, "y_m": None, "z_m": None,
-            "evidence_frames": [2], "image_support": "cannot_tell", "image_note": "…"}
+            "z": 9.0, "point_ids": ["P1"], "x_m": None, "y_m": None, "z_m": None}
 
 
-def write_result(folder: Path, *, findings: list[dict], frames: int = 2,
+def write_result(folder: Path, *, findings: list[dict],
                  session: str | None = "session-1") -> None:
-    (folder / "work" / "enhanced").mkdir(parents=True, exist_ok=True)
-    for seq in range(1, frames + 1):
-        (folder / "work" / "enhanced" / f"{seq:06d}.png").write_bytes(b"png")
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / results.RESULT_NAME).write_text(json.dumps({
         "flight_id": "flight-1", "session_id": session, "pipeline_version": "2",
         "stages": {"clean": "robust@1"}, "created_at": "2026-10-09T08:00:00+00:00",
         "temp_unit": "C", "points": [{"point_id": "P1", "verdict": "anomaly"}],
         "findings": findings,
         "flags": [{"index": 3, "column": "raw_temp", "kind": "spike", "reason": "a spike"}],
-        "frames": [{"seq": s, "enhanced": f"enhanced/{s:06d}.png"} for s in range(1, frames + 1)],
     }))
 
 
@@ -111,6 +107,17 @@ class TestTheRows:
         assert (row["flight_id"], row["session_id"], row["pipeline_version"]) == \
             ("flight-1", "session-1", "2")
 
+    def test_the_retired_image_columns_are_sent_neutral(self, tmp_path):
+        """The hosted table still requires image_support (migration
+        20261009000016); results carry no frames now, and an older result that
+        did is sent neutral all the same."""
+        old = {**finding("a"), "evidence_frames": [2], "image_support": "supports",
+               "image_note": "the view changed"}
+        write_result(tmp_path, findings=[finding("b"), old])
+        for row in results.finding_rows(results.load(tmp_path)):
+            assert (row["evidence_frames"], row["image_support"], row["image_note"]) == \
+                ([], "cannot_tell", "")
+
     def test_a_file_that_is_not_a_result_says_so(self, tmp_path):
         (tmp_path / results.RESULT_NAME).write_text("{}")
         with pytest.raises(results.ResultUnreadable):
@@ -126,13 +133,12 @@ class TestTheUpload:
         syncer._send_results(cloud)
         assert cloud.results == {} and outbox.count_pending(Kind.RESULTS) == 1
 
-    def test_frames_then_result_then_findings(self, rig):
+    def test_the_result_then_its_findings_and_no_frames(self, rig):
         outbox, cloud, syncer, tmp = rig
         write_result(tmp / "r", findings=[finding("a"), finding("b", "info")])
         queue(outbox, tmp / "r")
         syncer.sync_once()
-        assert sorted(cloud.objects) == ["session-1/enhanced/000001.png",
-                                         "session-1/enhanced/000002.png"]
+        assert cloud.objects == {}
         assert cloud.results["flight-1"]["findings_count"] == 2
         assert set(cloud.findings) == {"a", "b"}
         assert outbox.count_pending(Kind.RESULTS) == 0
@@ -148,25 +154,23 @@ class TestTheUpload:
         assert set(cloud.findings) == {"a"} and cloud.findings["a"]["severity"] == "critical"
         assert cloud.results["flight-1"]["findings_count"] == 1
 
-    def test_offline_everything_waits_and_resumes_after_the_last_frame(self, rig):
+    def test_offline_everything_waits_and_resumes(self, rig):
         outbox, cloud, syncer, tmp = rig
-        write_result(tmp / "r", findings=[finding("a")], frames=3)
+        write_result(tmp / "r", findings=[finding("a")])
         queue(outbox, tmp / "r")
         cloud.fail_with = CloudError("offline")
         syncer.sync_once()
         assert outbox.count_pending(Kind.RESULTS) == 1 and cloud.results == {}
         cloud.fail_with = None
-        outbox.update(Kind.RESULTS, "flight-1", lambda p: p.__setitem__("frames_uploaded", 2))
         syncer.sync_once()
-        assert sorted(cloud.objects) == ["session-1/enhanced/000003.png"]   # resumed
-        assert "flight-1" in cloud.results
+        assert "flight-1" in cloud.results and set(cloud.findings) == {"a"}
 
-    def test_a_flight_with_no_session_uploads_no_frames(self, rig):
+    def test_a_flight_with_no_session_still_uploads_its_result(self, rig):
         outbox, cloud, syncer, tmp = rig
         write_result(tmp / "r", findings=[], session=None)
         queue(outbox, tmp / "r")
         syncer.sync_once()
-        assert cloud.objects == {} and "flight-1" in cloud.results
+        assert "flight-1" in cloud.results
 
     def test_a_missing_result_file_is_dropped_not_retried_forever(self, rig):
         outbox, cloud, syncer, tmp = rig
@@ -185,8 +189,8 @@ def test_processing_a_flight_queues_its_result(tmp_path, monkeypatch, capsys):
     assert record and Path(record["folder"]) == root / "results" / FLIGHT
 
 
-def write_session_result(folder: Path, *, findings: list[dict], frames: int = 1) -> None:
-    write_result(folder, findings=findings, frames=frames, session="session-1")
+def write_session_result(folder: Path, *, findings: list[dict]) -> None:
+    write_result(folder, findings=findings, session="session-1")
     data = json.loads((folder / results.RESULT_NAME).read_text())
     data.update(flight_id="session-1", scope="session",
                 points=[{"point_id": "session", "verdict": "normal"}])
@@ -222,7 +226,7 @@ class TestASessionsOwnResult:
         syncer._send_session_results(cloud)
         assert cloud.session_results["session-1"]["findings_count"] == 1
         assert cloud.findings["s1"]["scope"] == "session"
-        assert "session-1/enhanced/000001.png" in cloud.objects
+        assert cloud.objects == {}
         assert outbox.count_pending(Kind.SESSION_RESULTS) == 0
 
     def test_a_reprocess_retracts_only_the_sessions_own_findings(self, rig):

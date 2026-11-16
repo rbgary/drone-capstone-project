@@ -48,9 +48,9 @@ STATUS  (Last verified: 2026-09-29)
                   room map, progress and the RESULTS after landing;
                   under Start, EVERY reason it cannot start with what to do
                   (GET …/blockers), Reset drone beside a motor lock
-  NOT BUILT  live per-point verdicts while flying (story 4.9 — results arrive
-             after landing); resizing obstacles by dragging in 2-D (3-D and
-             the numbers do it)
+  NOT BUILT  resizing obstacles by dragging in 2-D (3-D and the numbers do it)
+  REMOVED    2026-11-15: live per-point verdicts in Progress (story 4.9). A
+             flight is processed after it lands; its results show then
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS
@@ -374,8 +374,6 @@ depends-on        ../backend/flight-safety.txt
                   `positioned` / position_trusted says it is one
 depends-on        ../../design/layout.txt
                   the standing rule every change here is measured against
-depends-on        ../pipeline/live.txt
-                  each inspection point's verdict in Progress while the mission flies
 consumed-by       mission-playback.txt
                   RoomMap, PlanCanvas and Room3D draw a recorded flight; their
                   `trail` prop (trail.ts) is playback's — the path flown

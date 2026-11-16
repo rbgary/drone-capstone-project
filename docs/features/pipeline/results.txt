@@ -1,7 +1,9 @@
 ================================================================================
-RESULTS ON THE WEB — every processed flight's result, findings and enhanced
-frames uploaded, shown on the session and flight pages, and notified
-Last verified: 2026-10-24 — the manual section, the download and the paged
+RESULTS ON THE WEB — every processed flight's result and findings uploaded,
+shown on the session and flight pages, and notified
+Last verified: 2026-11-15 on feat/no-camera — the agent half only:
+tests/test_results_upload.py (no frames uploaded; the image columns sent
+neutral). The web pages were not re-checked. 2026-10-24 — the manual section, the download and the paged
 listing: web typecheck, lint and build; lib/frame-zip.ts run for real in Node
 against a local server (progress, a missing file reported, the manual name,
 cancel, index.csv, the zip's own CRC check). NOT yet seen in a browser against
@@ -18,7 +20,14 @@ SOURCE: backend/agent/dronedeck/sync/results.py
 --------------------------------------------------------------------------------
 STATUS  (Last verified: 2026-10-09)
 --------------------------------------------------------------------------------
-  agent     BUILT — queued by `dronedeck process`, uploaded by the syncer
+  agent     BUILT — queued by `dronedeck process`, uploaded by the syncer.
+            Since pipeline "4" (2026-11-15) a result carries no frames, so no
+            enhanced copies are uploaded, and every finding is sent with
+            evidence_frames {}, image_support "cannot_tell" and image_note ""
+            — the hosted columns still require them (migration 0016)
+  web       STALE BY DESIGN until Phase 6 of the no-camera work: the frame
+            galleries, Original / Enhanced and the camera note below still
+            render, for older results; new results give them nothing
   database  BUILT — migrations 20261009000015 (owners), 0016 (results), 0017
             (notifications); proved on the local stack, APPLIED to the
             hosted database 2026-10-09 and checked there read-only (tables
@@ -78,9 +87,9 @@ web/app/app/sessions/[id]/page.tsx, web/app/app/flights/[id]/page.tsx
 3. DECISIONS
 --------------------------------------------------------------------------------
 • LAPTOP FIRST, THEN UP (CLAUDE.md invariant 6): result.json is the record;
-  the outbox (Kind.RESULTS) uploads it once the flight's own row is up,
-  enhanced frames from a cursor, then the result, the findings, and the
-  retraction of findings a re-process no longer makes.
+  the outbox (Kind.RESULTS) uploads it once the flight's own row is up: the
+  result, the findings, and the retraction of findings a re-process no
+  longer makes. (Enhanced frames went first until 2026-11-15.)
 • TWO TABLES: pipeline_results (the whole result per flight, replaced on
   re-process) and pipeline_findings (one row each, ids made on the laptop).
 • NOTIFICATIONS ARE ROWS, made by a database trigger per operator for each
@@ -178,8 +187,6 @@ depends-on        data-pipeline.txt
                   result.json, written by `dronedeck process`
 depends-on        interpret.txt
                   the findings uploaded and notified
-depends-on        enhance.txt
-                  the enhanced copies uploaded beside the originals
 depends-on        ../backend/offline-sync.txt
                   the outbox and the order of a sync pass
 depends-on        ../supabase/data-model.txt

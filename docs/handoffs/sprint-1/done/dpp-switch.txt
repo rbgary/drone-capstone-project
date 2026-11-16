@@ -88,8 +88,9 @@ FOLLOW-UPS — OPEN
       meta.json; no page reads it yet), with Process this flight there.
   [ ] Cancel a queued or running job from the page (today: only when the
       agent shuts down).
-  [ ] Live verdicts per point while a mission flies — story 4.9, the live
-      runner (data-pipeline.txt).
+  [x] Live verdicts per point while a mission flies — built 2026-10-09, then
+      REMOVED 2026-11-15: flights are processed after they land, never in
+      the air (data-pipeline.txt, DECISIONS).
   [ ] Results to Supabase and alerts on the web dashboard.
 
 When these are done, write what shipped into the feature docs above and

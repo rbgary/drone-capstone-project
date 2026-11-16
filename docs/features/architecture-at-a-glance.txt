@@ -95,15 +95,15 @@ DESIGNED BUT NOT WIRED
                           the Auto page are built; the controller that walks
                           the points is Hannah's and refuses to fly until it
                           lands (missions/mission-controller.txt)
-  Pipeline                all four stages are built and wired — clean
-                          robust@1, enhance clahe@1, classify blocks@1 (the
-                          sensors), interpret findings@1 — processed when a
-                          flight lands, resumed when the app restarts,
-                          uploaded, shown on the web and notified
-                          (pipeline/data-pipeline.txt). NOT wired: the live
-                          runner (verdicts in the air), an image model
-                          (story 4.4). The hosted database has every
-                          migration (0015–0017 applied 2026-10-09)
+  Pipeline                all three stages are built and wired — clean
+                          robust@1, classify blocks@1 (the sensors),
+                          interpret findings@1 — processed once a flight has
+                          landed (never in the air), resumed when the app
+                          restarts, uploaded, shown on the web and notified
+                          (pipeline/data-pipeline.txt). NOT wired: the photo
+                          classifier (story 4.4, over photos taken by hand).
+                          The hosted database has every migration (0015–0017
+                          applied 2026-10-09)
 
   Web-queued missions     queued_missions() / claim_mission() exist and are
                           never called; Auto runs from the desktop app only

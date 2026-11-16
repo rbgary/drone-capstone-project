@@ -5,18 +5,13 @@ LocalFlightSource reads what the agent already wrote, and nothing else:
 
     flights/<date>/flight_<first 8 of the id>_<time>.csv   the readings
     sessions/<session id>/meta.json                        which session flew it
-    sessions/<session id>/frames.csv, frames/               the camera frames
     sessions/<session id>/missions/<flight id>.json         the plan flown, if any
 
-FRAMES ARE RECORDED PER SESSION, NOT PER FLIGHT — the camera runs for the whole
-session. So a flight's frames are the session's frames taken between its first
-and last reading.
-
-THE WHOLE FLIGHT, TAGGED BY POINT (contract v2). Rows and frames carry point_id
-while the mission controller was holding there (story 3.5); every Reading and
-Frame keeps it. The stages get the whole flight as one PointData ("flight") —
-transit included, since a block can start in transit — and `points` gives the
-per-point view: exactly the rows and frames stamped with each point. A flight
+THE WHOLE FLIGHT, TAGGED BY POINT (contract v2). Rows carry point_id while the
+mission controller was holding there (story 3.5); every Reading keeps it. The
+stages get the whole flight as one PointData ("flight") — transit included,
+since a block can start in transit — and `points` gives the per-point view:
+exactly the rows stamped with each point. A flight
 with no mission has no plan, and its one point is the whole flight.
 
 A later cloud worker gets its own adapter (Supabase Storage in, the same
@@ -37,7 +32,6 @@ from typing import Any, Literal, Protocol
 from dronedeck.pipeline.contracts import (
     WHOLE_FLIGHT,
     WHOLE_SESSION,
-    Frame,
     InspectionPoint,
     PointData,
     Reading,
@@ -64,20 +58,19 @@ class LoadedFlight:
     temp_unit: Literal["C", "F"]
     ground_z_m: float | None
     started_at: datetime
-    #: Every reading and every frame of the flight, as one point ("flight").
+    #: Every reading of the flight, as one point ("flight").
     whole: PointData
     #: The mission's inspection points, in order; () when none was flown.
     plan: tuple[InspectionPoint, ...] = ()
 
     @property
     def points(self) -> tuple[PointData, ...]:
-        """One PointData per inspection point — exactly the readings and frames
-        stamped with it. A flight with no mission is its own single point."""
+        """One PointData per inspection point — exactly the readings stamped
+        with it. A flight with no mission is its own single point."""
         if not self.plan:
             return (self.whole,)
         return tuple(
-            PointData(p, tuple(r for r in self.whole.readings if r.point_id == p.id),
-                      tuple(f for f in self.whole.frames if f.point_id == p.id))
+            PointData(p, tuple(r for r in self.whole.readings if r.point_id == p.id))
             for p in self.plan)
 
     @property
@@ -111,17 +104,12 @@ class LocalFlightSource:
     def __init__(self, data_root: Path) -> None:
         self.root = data_root
 
-    def load(self, flight_id: str, *, partial: bool = False) -> LoadedFlight:
-        """`partial`: the flight is still being recorded (the live runner,
-        story 4.9) — a last row caught half-written is skipped, not an error."""
+    def load(self, flight_id: str) -> LoadedFlight:
         csv_path = self._find_csv(flight_id)
         rows = list(self._rows(csv_path))
-        if partial:
-            rows = [r for r in rows if self._complete(r)]
         if not rows:
             raise FlightNotFound(f"Flight {flight_id} has no readings in {csv_path.name}.")
         started = _time(rows[0]["recorded_at"])
-        ended = _time(rows[-1]["recorded_at"])
         unit = rows[0].get("temp_unit") or "C"
         if unit not in ("C", "F"):
             raise FlightNotFound(f"Flight {flight_id} records temperatures in {unit!r}, "
@@ -129,10 +117,9 @@ class LocalFlightSource:
 
         readings = tuple(self._reading(row, started) for row in rows)
         session = self._find_session(flight_id)
-        frames = tuple(self._frames(session, started, ended)) if session else ()
         plan = (self._plan(session, flight_id) if session else None) or ()
 
-        whole = PointData(InspectionPoint(WHOLE_FLIGHT, None, 0.0, 0.0, 0.0), readings, frames)
+        whole = PointData(InspectionPoint(WHOLE_FLIGHT, None, 0.0, 0.0, 0.0), readings)
         return LoadedFlight(
             flight_id=flight_id, session_id=session.name if session else None,
             temp_unit="F" if unit == "F" else "C", ground_z_m=None, started_at=started,
@@ -158,18 +145,8 @@ class LocalFlightSource:
                 continue
             if any(f.get("id") == flight_id for f in meta.get("flights") or []):
                 return meta_path.parent
-        log.info("flight %s belongs to no session folder here; no frames", flight_id)
+        log.info("flight %s belongs to no session folder here; no plan", flight_id)
         return None
-
-    @staticmethod
-    def _complete(row: dict[str, str]) -> bool:
-        try:
-            int(float(row["index"]))
-            _time(row["recorded_at"])
-        except (KeyError, TypeError, ValueError):
-            return False
-        # csv.DictReader fills the fields a cut-off line never reached with None.
-        return all(v is not None for v in row.values())
 
     @staticmethod
     def _rows(path: Path) -> Iterator[dict[str, str]]:
@@ -186,27 +163,6 @@ class LocalFlightSource:
             point_id=row.get("point_id") or None,
             text={k: row[k] for k in STAGE_TEXT if row.get(k)},
         )
-
-    def _frames(self, session: Path, started: datetime,
-                ended: datetime) -> list[Frame]:
-        index = session / "frames.csv"
-        if not index.exists():
-            return []
-        found: list[Frame] = []
-        for row in self._rows(index):
-            try:
-                at = _time(row["recorded_at"])
-                if not started <= at <= ended:
-                    continue
-                found.append(Frame(
-                    seq=int(row["seq"]), recorded_at=at, t_s=(at - started).total_seconds(),
-                    path=session / row["file"], width=int(row["width"]),
-                    height=int(row["height"]), x_m=_number(row.get("x_m")),
-                    y_m=_number(row.get("y_m")), z_m=_number(row.get("z_m")),
-                    point_id=row.get("point_id") or None))
-            except (KeyError, ValueError):
-                log.warning("skipping an unreadable row of %s", index)
-        return sorted(found, key=lambda frame: frame.seq)
 
     @staticmethod
     def _plan(session: Path, flight_id: str) -> tuple[InspectionPoint, ...] | None:
@@ -231,13 +187,12 @@ class LocalFlightSource:
 # THE OWNER'S ASK: "as long as a session is started we process whatever data
 # comes, not only data in flight" — in Auto and in Manual. A session records
 # its own samples once a second from Start session to End session
-# (samples.csv, the same file the web's session vitals come from) and camera
-# frames throughout. The flights have results of their own at ten times the
-# rate; the session's run covers everything around them.
+# (samples.csv, the same file the web's session vitals come from). The flights
+# have results of their own at ten times the rate; the session's run covers
+# everything around them.
 #
 #   sessions/<id>/samples.csv     one row a second: the stream variables
 #   sessions/<id>/meta.json       its flights' start and end
-#   sessions/<id>/frames.csv      the camera, the whole session
 
 #: A reading this close to a flight's start or end belongs to it (clock skew
 #: between the sample writer and the flight recorder).
@@ -255,9 +210,8 @@ class SessionNotFound(LookupError):
 class LoadedSession:
     session_id: str
     started_at: datetime
-    #: Every sample of the session, and every frame taken outside its flights,
-    #: as one point ("session"). Each reading's text["phase"] says "ground" or
-    #: "flying".
+    #: Every sample of the session, as one point ("session"). Each reading's
+    #: text["phase"] says "ground" or "flying".
     whole: PointData
     #: (start, end) of each flight flown, from the session's history.
     flights: tuple[tuple[datetime, datetime | None], ...] = ()
@@ -300,10 +254,8 @@ class LocalSessionSource:
                 values=values, point_id=None,
                 text={"mode": row.get("mode") or "",
                       "phase": "flying" if self._flying(at, values, flights) else "ground"}))
-        frames = tuple(f for f in self._frames(folder, started)
-                       if not self._flying(f.recorded_at, {}, flights))
         whole = PointData(InspectionPoint(WHOLE_SESSION, "the session", 0.0, 0.0, 0.0),
-                          tuple(readings), frames)
+                          tuple(readings))
         return LoadedSession(session_id, started, whole, flights)
 
     @staticmethod
@@ -338,21 +290,3 @@ class LocalSessionSource:
                     and (at - end).total_seconds() <= FLIGHT_EDGE_S:
                 return True
         return False
-
-    @staticmethod
-    def _frames(folder: Path, started: datetime) -> list[Frame]:
-        index = folder / "frames.csv"
-        if not index.exists():
-            return []
-        found: list[Frame] = []
-        for row in LocalFlightSource._rows(index):
-            try:
-                at = _time(row["recorded_at"])
-                found.append(Frame(
-                    seq=int(row["seq"]), recorded_at=at, t_s=(at - started).total_seconds(),
-                    path=folder / row["file"], width=int(row["width"]),
-                    height=int(row["height"]), x_m=_number(row.get("x_m")),
-                    y_m=_number(row.get("y_m")), z_m=_number(row.get("z_m")), point_id=None))
-            except (KeyError, ValueError):
-                log.warning("skipping an unreadable row of %s", index)
-        return sorted(found, key=lambda frame: frame.seq)

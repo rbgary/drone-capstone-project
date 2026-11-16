@@ -149,10 +149,7 @@ depends-on        ../backend/flight-safety.txt
 consumed-by       ../desktop/auto-control.txt
                   Start mission; progress from the session's `mission`
 consumed-by       ../pipeline/data-pipeline.txt
-                  point_id groups the readings; the plan flown names the points;
-                  POINT_COMPLETE will feed the live runner
-consumed-by       ../pipeline/live.txt
-                  POINT_COMPLETE queues that point's live verdict
+                  point_id groups the readings; the plan flown names the points
 consumed-by       ../desktop/mission-playback.txt
                   the mission report (review.py) and its clock, shown beside a
                   recorded flight played back

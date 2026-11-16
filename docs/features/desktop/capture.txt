@@ -110,8 +110,8 @@ why (first | change | similar | still | point | undecoded | manual), change
   Compared with the LAST CAPTURED frame, never the previous one — a slow
   drift is a series of small steps and would never be captured otherwise.
 • EVERY FRAME STAYS ON DISK; "captured" decides what uploads and is shown. A
-  flight cannot be re-run (CLAUDE.md #6), and the pipeline's scene@1 and the
-  backlog scrubber read them all. Off is the exception: nothing is written.
+  flight cannot be re-run (CLAUDE.md #6), and the backlog scrubber reads them
+  all (the pipeline's scene@1 did too, until contract v3 on 2026-11-15). Off is the exception: nothing is written.
 • MANUAL CAPTURES ARE NEVER PACED and upload whatever the switch says.
 • THE CAPTURE PAGE HAS ITS OWN SESSION (2026-10-24, changed; Samuel: "the
   capture page only cares about taking picture manually and not the rest").
@@ -166,8 +166,6 @@ why (first | change | similar | still | point | undecoded | manual), change
 --------------------------------------------------------------------------------
 depends-on        camera.txt
                   the recording it marks, the window's shared feed it shows
-shares-data-with  ../pipeline/scene.txt
-                  frames.csv — every frame stays on disk for scene@1
 consumed-by       ../pipeline/results.txt
                   frames.csv's source column: the web's "Captured manually"
 depends-on        ../backend/sessions-and-modes.txt

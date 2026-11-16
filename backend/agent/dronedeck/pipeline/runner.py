@@ -1,13 +1,13 @@
 """Runs the stages over one flight.
 
-    clean → enhance → classify → interpret      once, over the whole flight
-    then:                                       one FlightResult, saved by the sink
+    clean → classify → interpret      once, over the whole flight
+    then:                             one FlightResult, saved by the sink
 
 The whole flight goes through each stage once (contract v2): a block of
 unusual readings can start in transit and end at a point, and only a stage
 that sees the whole flight can find it. The inspection points are a view —
 interpret gives each one its verdict, and the summary counts each one's
-readings, flags and frames.
+readings and flags.
 
 A STAGE THAT FAILS NEVER TAKES THE FLIGHT WITH IT. Its failure is recorded
 (StageFailure: which stage, why — point "flight") and the flight carries on as
@@ -16,32 +16,26 @@ far as it honestly can:
     clean fails       nothing is analysed: every point insufficient_data.
                       Analysing readings nobody checked is what cleaning
                       exists to stop.
-    enhance fails     the original frames are used — they always exist.
     classify fails    every label is "unknown", with the failure as the reason.
     interpret fails   every point insufficient_data, with the failure as the
                       reason.
 
-A stage that BREAKS THE CONTRACT — a cleaner that edits a reading, an enhancer
-that returns the wrong number of frames — is treated exactly like one that
-failed. The conformance tests catch this before a pull request lands; the
-runner makes sure a regression in the field still cannot write a verdict on
-data that does not line up.
+A stage that BREAKS THE CONTRACT — a cleaner that edits a reading, an
+interpreter that skips a point — is treated exactly like one that failed. The
+conformance tests catch this before a pull request lands; the runner makes
+sure a regression in the field still cannot write a verdict on data that does
+not line up.
 
-THIS RUNS IN THE CALLER'S PROCESS. The CLI is not flying anything. The live
-runner (story 4.9, run_live_point) runs in a process of its own too — the
-agent starts it as a child at a lower priority when the drone finishes holding
-at a point — never a thread beside the 50 Hz flight loop, which shares one
-interpreter lock.
+THIS RUNS IN THE CALLER'S PROCESS. The CLI is not flying anything. The agent
+runs it as a child process at a lower priority once a flight's data has
+arrived (processing.py) — never a thread beside the 50 Hz flight loop, which
+shares one interpreter lock. Nothing is processed while the drone flies.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-import os
-import tempfile
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from dronedeck.pipeline import PIPELINE_VERSION
@@ -50,12 +44,8 @@ from dronedeck.pipeline.contracts import (
     WHOLE_FLIGHT,
     ClassifyResult,
     CleanResult,
-    EnhancedFrame,
-    EnhanceResult,
     FlightContext,
     FlightResult,
-    FrameRecord,
-    ImageVerdict,
     InspectionPoint,
     InterpretResult,
     Label,
@@ -91,15 +81,13 @@ def _every_point(plan: tuple[InspectionPoint, ...], data: PointData,
 
 def _summary(data: PointData, plan: tuple[InspectionPoint, ...],
              clean: CleanResult | None) -> dict[str, Any]:
-    """Per point: how many readings, flags and frames — the evidence a verdict
-    rests on. Transit readings are counted under "_transit"."""
+    """Per point: how many readings and flags — the evidence a verdict rests
+    on. Transit readings are counted under "_transit"."""
     flagged = {f.index for f in clean.flags} if clean else set()
 
     def count(point_id: str | None) -> dict[str, int]:
         readings = [r for r in data.readings if point_id is None or r.point_id == point_id]
-        out = {"readings": len(readings),
-               "frames": sum(1 for f in data.frames
-                             if point_id is None or f.point_id == point_id)}
+        out = {"readings": len(readings)}
         if clean is not None:
             out["flags"] = sum(1 for r in readings if r.index in flagged)
         return out
@@ -111,23 +99,6 @@ def _summary(data: PointData, plan: tuple[InspectionPoint, ...],
     if transit:
         summary["_transit"] = {"readings": transit}
     return summary
-
-
-def _frames(enhanced: EnhanceResult, classified: ClassifyResult,
-            ctx: FlightContext) -> tuple[FrameRecord, ...]:
-    labels = {v.seq: v.label for v in classified.images}
-    views = {v.seq: v for v in classified.views}
-    records = []
-    for e in enhanced.frames:
-        relative = None
-        if e.path is not None:
-            relative = str(e.path.relative_to(ctx.workdir))
-        label = labels.get(e.frame.seq) or Label("unknown", None, "none@0", "not classified")
-        view = views.get(e.frame.seq)
-        records.append(FrameRecord(e.frame.seq, e.frame.t_s, e.frame.point_id, relative,
-                                   e.method, e.quality, label,
-                                   view.score if view else None, view.note if view else None))
-    return tuple(records)
 
 
 def run_stages(data: PointData, ctx: FlightContext,
@@ -145,7 +116,6 @@ def run_stages(data: PointData, ctx: FlightContext,
         return reason
 
     def result(interpreted: InterpretResult, clean: CleanResult | None,
-               enhanced: EnhanceResult | None = None,
                classified: ClassifyResult | None = None) -> FlightResult:
         return FlightResult(
             flight_id=ctx.flight_id, pipeline_version=PIPELINE_VERSION,
@@ -156,7 +126,6 @@ def run_stages(data: PointData, ctx: FlightContext,
             flags=clean.flags if clean else (),
             tracks=classified.tracks if classified else (),
             segments=classified.segments if classified else (),
-            frames=_frames(enhanced, classified, ctx) if enhanced and classified else (),
             scope=ctx.scope,
         )
 
@@ -171,36 +140,18 @@ def run_stages(data: PointData, ctx: FlightContext,
                                    f"Cleaning failed, so nothing was analysed: {reason}"),
                       None), failures
 
-    # ── enhance ──────────────────────────────────────────────────────────
-    try:
-        enhanced = stages.enhancer.enhance(data, ctx)
-        if tuple(f.frame for f in enhanced.frames) != data.frames:
-            raise ContractBroken("the enhancer did not return one frame per input frame, "
-                                 "in order")
-        for f in enhanced.frames:
-            if f.path is not None and ctx.workdir not in f.path.parents:
-                raise ContractBroken(f"the enhancer wrote {f.path} outside its workdir")
-    except Exception as e:
-        reason = failed("enhance", e)
-        enhanced = EnhanceResult(tuple(
-            EnhancedFrame(f, None, "identity", 1, f"enhancement failed: {reason}")
-            for f in data.frames))
-
     # ── classify ─────────────────────────────────────────────────────────
     try:
-        classified = stages.classifier.classify(data, clean, enhanced, ctx)
-        if tuple(v.seq for v in classified.images) != tuple(f.seq for f in data.frames):
-            raise ContractBroken("the classifier did not label every frame, in order")
+        classified = stages.classifier.classify(data, clean, ctx)
     except Exception as e:
         reason = failed("classify", e)
         model = f"{stages.classifier.name}@{stages.classifier.version}"
-        unknown = Label("unknown", None, model, f"classification failed: {reason}")
         classified = ClassifyResult(
-            tuple(ImageVerdict(f.seq, "original", unknown) for f in data.frames), unknown)
+            sensors=Label("unknown", None, model, f"classification failed: {reason}"))
 
     # ── interpret ────────────────────────────────────────────────────────
     try:
-        interpreted = stages.interpreter.interpret(data, clean, enhanced, classified, ctx)
+        interpreted = stages.interpreter.interpret(data, clean, classified, ctx)
         wanted = tuple(p.id for p in _views(data, plan))
         if tuple(p.point_id for p in interpreted.points) != wanted:
             raise ContractBroken("the interpreter did not give every inspection point one "
@@ -208,7 +159,7 @@ def run_stages(data: PointData, ctx: FlightContext,
     except Exception as e:
         reason = failed("interpret", e)
         interpreted = _every_point(plan, data, f"Interpreting failed: {reason}")
-    return result(interpreted, clean, enhanced, classified), failures
+    return result(interpreted, clean, classified), failures
 
 
 def run_flight(flight_id: str, *, source: FlightSource, sink: ResultSink,
@@ -219,7 +170,7 @@ def run_flight(flight_id: str, *, source: FlightSource, sink: ResultSink,
     ctx = FlightContext(
         flight_id=flight.flight_id, session_id=flight.session_id,
         temp_unit=flight.temp_unit, ground_z_m=flight.ground_z_m,
-        started_at=flight.started_at, workdir=sink.workdir(flight.flight_id), mode="batch",
+        started_at=flight.started_at, workdir=sink.workdir(flight.flight_id),
         points=flight.plan,
     )
     result, _ = run_stages(flight.whole, ctx, stages)
@@ -232,67 +183,15 @@ SESSION_PERIOD_S = 1.0
 
 def run_session(session_id: str, *, source: LocalSessionSource, sink: ResultSink,
                 stages: Stages) -> tuple[FlightResult, str]:
-    """The session around its flights — its one-a-second samples and the frames
-    taken outside its flights — through every stage once. The result carries
+    """The session around its flights — its one-a-second samples — through
+    every stage once. The result carries
     scope "session" and the session's id in flight_id."""
     session = source.load(session_id)
     ctx = FlightContext(
         flight_id=session.session_id, session_id=session.session_id, temp_unit="C",
         ground_z_m=None, started_at=session.started_at,
-        workdir=sink.workdir(session.session_id), mode="batch", points=(),
+        workdir=sink.workdir(session.session_id), points=(),
         scope="session", period_s=SESSION_PERIOD_S,
     )
     result, _ = run_stages(session.whole, ctx, stages)
     return result, sink.save(result)
-
-
-#: <results>/<flight id>/live/<point id>.json — one point's verdict, in flight.
-LIVE_FOLDER = "live"
-
-
-def live_path(results_root: Path, flight_id: str, point_id: str) -> Path:
-    return results_root / flight_id / LIVE_FOLDER / f"{point_id}.json"
-
-
-def run_live_point(flight_id: str, point_id: str, *, source: Any, results_root: Path,
-                   stages: Stages) -> tuple[dict[str, Any], Path]:
-    """Story 4.9: the flight SO FAR — still being recorded — through every stage
-    once, as soon as the drone has finished holding at `point_id`; that point's
-    verdict and the findings that touch it are written to
-    <results>/<flight>/live/<point>.json for the app.
-
-    The whole flight so far, not the point alone: a stretch can start in
-    transit, and the expected curve needs everything flown. The result after
-    landing (run_flight) replaces it; this one is never uploaded."""
-    flight = source.load(flight_id, partial=True)
-    work = results_root / flight_id / LIVE_FOLDER / "work"
-    work.mkdir(parents=True, exist_ok=True)
-    ctx = FlightContext(
-        flight_id=flight.flight_id, session_id=flight.session_id,
-        temp_unit=flight.temp_unit, ground_z_m=flight.ground_z_m,
-        started_at=flight.started_at, workdir=work, mode="live", points=flight.plan,
-    )
-    result, _ = run_stages(flight.whole, ctx, stages)
-    point = next((p for p in result.points if p.point_id == point_id), None)
-    if point is None:
-        raise ValueError(f"{point_id} is not an inspection point of flight {flight_id}")
-    here = [f for f in result.findings if point_id in f.point_ids]
-    readings = sum(1 for r in flight.whole.readings if r.point_id == point_id)
-    out: dict[str, Any] = {
-        "flight_id": flight_id, "point_id": point_id, "verdict": point.verdict,
-        "reasons": list(point.reasons), "readings": readings,
-        "findings": [{"id": f.id, "title": f.title, "severity": f.severity,
-                      "sentence": f.sentence, "signal": f.signal} for f in here],
-        "pipeline_version": result.pipeline_version, "created_at": result.created_at,
-        "failures": [{"stage": x.stage, "reason": x.reason} for x in result.failures],
-    }
-    path = live_path(results_root, flight_id, point_id)
-    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".live.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(out, f, indent=2)
-        os.replace(temp, path)
-    except BaseException:
-        Path(temp).unlink(missing_ok=True)
-        raise
-    return out, path

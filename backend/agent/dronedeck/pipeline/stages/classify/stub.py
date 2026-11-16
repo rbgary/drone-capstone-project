@@ -11,9 +11,7 @@ from __future__ import annotations
 from dronedeck.pipeline.contracts import (
     ClassifyResult,
     CleanResult,
-    EnhanceResult,
     FlightContext,
-    ImageVerdict,
     Label,
     PointData,
 )
@@ -25,13 +23,7 @@ class StubClassifier:
     name = "stub"
     version = "0"
 
-    def classify(self, data: PointData, clean: CleanResult, enhanced: EnhanceResult,
+    def classify(self, data: PointData, clean: CleanResult,
                  ctx: FlightContext) -> ClassifyResult:
         model = f"{self.name}@{self.version}"
-        return ClassifyResult(
-            images=tuple(ImageVerdict(seq=f.seq, source="original",
-                                      label=Label("unknown", None, model, NO_MODEL))
-                         for f in data.frames),
-            sensors=Label("unknown", None, model, NO_MODEL),
-            features={},
-        )
+        return ClassifyResult(sensors=Label("unknown", None, model, NO_MODEL), features={})

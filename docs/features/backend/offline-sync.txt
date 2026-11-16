@@ -44,11 +44,11 @@ Pipeline results go after them for the same reason (migration
 20261009000016). `dronedeck process --flight` queues one record per flight
 once result.json is written (the agent wakes the syncer when a processing job
 finishes); the syncer waits while the flight's own record is still pending,
-then uploads the enhanced frames from a cursor (to flight-frames/<session>/
-enhanced/<seq>.png, replacing), upserts pipeline_results on flight_id, upserts
-pipeline_findings on their ids, and deletes the flight's findings the new
-result no longer makes. Processing a flight again re-queues it, which resets
-the cursor and replaces what was uploaded. Proved against the local stack
+then upserts pipeline_results on flight_id, upserts pipeline_findings on
+their ids, and deletes the flight's findings the new result no longer makes.
+Processing a flight again re-queues it, which replaces what was uploaded.
+(Until 2026-11-15 it first uploaded the enhanced frames from a cursor; a
+result carries no frames since pipeline "4".) Proved against the local stack
 with the real client, 2026-10-09.
 
 Playback goes last of all (migration 20261011000019), for the same reason:
@@ -140,8 +140,8 @@ INVARIANTS
 RELATED
 
 consumed-by       ../pipeline/results.txt
-                  Kind.RESULTS: a processed flight's result, findings and
-                  enhanced frames, uploaded near the end of a pass
+                  Kind.RESULTS: a processed flight's result and findings,
+                  uploaded near the end of a pass
 consumed-by       ../desktop/mission-playback.txt
                   Kind.PLAYBACK: a flight's plan as flown and control trace,
                   last in a pass; queued at flight end and, for flights flown

@@ -389,14 +389,11 @@ class Syncer:
                 self._outbox.mark_sent(Kind.SAMPLES, session_id)
 
     def _send_results(self, cloud: Cloud) -> None:
-        """A processed flight's result, findings and enhanced frames
-        (sync/results.py).
+        """A processed flight's result and findings (sync/results.py).
 
         Waits while the flight's own record is still pending: the result's
-        foreign key needs the flight row. Enhanced frames go first, from a
-        cursor (replacing — a re-process may change them), then the result,
-        then the findings, then the findings this result no longer makes are
-        deleted. Re-processing re-queues the record, which resets the cursor."""
+        foreign key needs the flight row. The result goes first, then the
+        findings, then the findings this result no longer makes are deleted."""
         for record in self._outbox.pending(Kind.RESULTS):
             payload = record.payload
             flight_id = record.id
@@ -411,16 +408,6 @@ class Syncer:
                 self._outbox.mark_sent(Kind.RESULTS, flight_id)
                 continue
             self.status.uploading = f"result {flight_id[:8]}"
-            session_id = result.get("session_id")
-            if session_id:
-                done = int(payload.get("frames_uploaded", 0))
-                for n, (seq, path) in enumerate(results.enhanced_frames(folder, result)):
-                    if n < done:
-                        continue
-                    cloud.upload_frame(results.enhanced_object_path(session_id, seq), path,
-                                       "image/png", replace=True)
-                    self._outbox.update(Kind.RESULTS, flight_id,
-                                        lambda p, n=n: p.__setitem__("frames_uploaded", n + 1))
             cloud.upsert_result(results.result_row(result))
             rows = results.finding_rows(result)
             cloud.upsert_findings(rows)
@@ -482,10 +469,9 @@ class Syncer:
 
     def _send_session_results(self, cloud: Cloud) -> None:
         """A processed session's own result (sync/results.py session_result_row):
-        enhanced frames from a cursor, the result, its findings, and the
-        retraction of session findings a re-process no longer makes. Waits
-        while the session's own record is still pending: the row's foreign key
-        needs the session."""
+        the result, its findings, and the retraction of session findings a
+        re-process no longer makes. Waits while the session's own record is
+        still pending: the row's foreign key needs the session."""
         for record in self._outbox.pending(Kind.SESSION_RESULTS):
             payload = record.payload
             session_id = record.id
@@ -500,14 +486,6 @@ class Syncer:
                 self._outbox.mark_sent(Kind.SESSION_RESULTS, session_id)
                 continue
             self.status.uploading = f"session result {session_id[:8]}"
-            done = int(payload.get("frames_uploaded", 0))
-            for n, (seq, path) in enumerate(results.enhanced_frames(folder, result)):
-                if n < done:
-                    continue
-                cloud.upload_frame(results.enhanced_object_path(session_id, seq), path,
-                                   "image/png", replace=True)
-                self._outbox.update(Kind.SESSION_RESULTS, session_id,
-                                    lambda p, n=n: p.__setitem__("frames_uploaded", n + 1))
             cloud.upsert_session_result(results.session_result_row(result))
             rows = results.finding_rows(result)
             cloud.upsert_findings(rows)
