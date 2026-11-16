@@ -188,11 +188,11 @@ def fit_cooling(t: FloatArray, y: FloatArray) -> Fit:
     t0 = float(t[0])
     floor = _floor(y)
     best: tuple[float, float] | None = None
-    for tau in TAU_GRID:
-        basis = np.column_stack((np.ones_like(t), np.exp(-(t - t0) / tau)))
+    for candidate in TAU_GRID:
+        basis = np.column_stack((np.ones_like(t), np.exp(-(t - t0) / candidate)))
         _, loss = _irls(basis, y, floor, rounds=3)
         if best is None or loss < best[1]:
-            best = (float(tau), loss)
+            best = (float(candidate), loss)
     assert best is not None
     tau = best[0]
     basis = np.column_stack((np.ones_like(t), np.exp(-(t - t0) / tau)))
