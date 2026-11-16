@@ -332,6 +332,10 @@ DECISIONS
 - The desktop app bundles the agent rather than asking for Python. The people
   flying this are not all developers.
 - Installers live at fixed paths in a bucket, so a release needs no redeploy.
+- No camera on the drone, data is processed only after the data arrives, 
+  and we use a classifier over photos uploaded onto the app. This is because of
+  hardware issues with the AI deck, which is also where the drone camera is 
+  attached to. 
 
 
 INVARIANTS
