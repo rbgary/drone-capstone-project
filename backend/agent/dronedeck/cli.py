@@ -776,7 +776,6 @@ SELFTEST_MODULES = (
     "cflib.localization",                               # geometry, config writer
     "cflib.crazyflie.mem.lighthouse_memory",            # geometry
     "cflib.bootloader",                                 # firmware flashing
-    "cflib.cpx",                                        # the AI deck's camera
     "libusb_package",                                   # the radio, and radio.py
     "usb.backend.libusb1",
     "uvicorn",                                          # serve
@@ -840,8 +839,8 @@ def _start_logging(*, verbose: bool) -> None:
             paths.log_file(), maxBytes=2_000_000, backupCount=3, encoding="utf-8"))
     except Exception:                       # a read-only home must not stop a flight
         pass
-    # One line per repeating message (logfilter.py): the 50 Hz flight loop and
-    # the camera watchdog otherwise rotate the useful lines out of the file.
+    # One line per repeating message (logfilter.py): the 50 Hz flight loop
+    # otherwise rotates the useful lines out of the file.
     from dronedeck.logfilter import RepeatFilter
     repeats = RepeatFilter()
     for handler in handlers:

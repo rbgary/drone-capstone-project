@@ -29,7 +29,7 @@ WHERE IT LIVES
 THE ORDER (records reference each other)
 
   audit events -> drones -> sessions -> flights -> telemetry rows -> CSV file
-  -> camera frames -> session vitals (sync/samples.py, Kind.SAMPLES)
+  -> session vitals (sync/samples.py, Kind.SAMPLES)
   -> pipeline results (sync/results.py, Kind.RESULTS)
   -> playback: plan as flown and control trace (LAST: sync/flight_playback.py,
      Kind.PLAYBACK — migration 20261011000019)
@@ -100,12 +100,11 @@ DECISIONS
 
 INVARIANTS
 
-- CAMERA FRAMES: ONE OUTBOX RECORD PER SESSION, WITH A CURSOR (Kind.FRAMES,
-  camera/recording.py). The syncer uploads the frames frames.csv marks
-  upload=1, advancing "uploaded_through" after each, so an interrupted pass
-  resumes where it stopped; frames.csv goes last, once the session has ended,
-  and only then is the record sent. Not one record per frame: this outbox never
-  deletes a sent record, and that would be ~1,200 files per ten minutes.
+- NO CAMERA FRAMES SINCE 2026-11-15. Kind.FRAMES (one record per session, a
+  cursor through frames.csv) went with the camera. A laptop's unsent frames
+  records stay in <outbox>/frames/ on disk, untouched and never read; nothing
+  deletes them, and the frames already uploaded stay in the flight-frames
+  bucket.
 
 - Write the CSV first, then upload. A local write cannot fail; a flight cannot
   be re-run (CLAUDE.md #6).

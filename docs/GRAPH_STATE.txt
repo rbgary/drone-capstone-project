@@ -50,13 +50,15 @@ None recorded.
 WARN  (3)
 --------------------------------------------------------------------------------
 2026-11-15  NO-CAMERA WORK IN PHASES (feat/no-camera). Until it lands whole,
-            docs describe a half-removed camera ON PURPOSE: the pipeline is
-            v3 (no frames), while desktop/camera.txt, capture.txt,
-            drone-wifi.txt, camera-firmware.txt, setup.txt and the web half
-            of pipeline/results.txt still describe the camera, its pages and
-            the frame galleries — each is rewritten or deleted in its phase
-            (Phase 2 agent, 3 desktop, 4 firmware, 6 web). Read the code, not
-            those docs, for anything about frames.
+            docs describe a half-removed camera ON PURPOSE. Done: Phase 1
+            (pipeline v3, no frames) and Phase 2 (the agent's camera, its
+            routes, capture sessions, decks_lost, Kind.FRAMES). Still
+            describing what the DESKTOP has: desktop/camera.txt, capture.txt,
+            drone-wifi.txt (each carries a "REMOVED FROM THE AGENT" banner),
+            camera-firmware.txt, setup.txt, and the web half of
+            pipeline/results.txt — rewritten or deleted in Phase 3 desktop, 4
+            firmware, 6 web. Read the code, not those docs, for anything
+            about frames.
 2026-10-09  DRIFT FOUND AND FIXED: pipeline/data-pipeline.txt still said the
             unit of work was one point and that results never left the
             laptop; desktop/camera.txt still said no whole frame had ever

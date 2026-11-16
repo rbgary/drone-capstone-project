@@ -18,7 +18,11 @@ Four buckets:
                 its frames.csv:
                 <session id>/frames/000001.png, <session id>/frames.csv.
                 Operators insert, read, and update (frames.csv is replaced
-                once at the session's end). See desktop/camera.txt.
+                once at the session's end). NOTHING WRITES IT since 2026-11-15
+                (the drone carries no camera; the agent's frame upload was
+                removed). What is there stays, and the web still reads it.
+                The hand-taken photos are to go here next, under
+                <session id>/photos/ (the no-camera work, Phase 5).
 
 
 WHERE IT LIVES

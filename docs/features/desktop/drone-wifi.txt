@@ -1,6 +1,14 @@
 DRONE WI-FI — the camera joins the operator's network, set over the radio
 =========================================================================
 
+REMOVED FROM THE AGENT 2026-11-15 (feat/no-camera, Phase 2) — the drone
+carries no camera (../architecture.txt, DECISIONS). Everything below that
+lives in backend/agent/ is gone: dronedeck/camera/ (all but flash_gap8.py, kept
+for Set up until the firmware phase), its routes, the session's hooks for it
+and its tests. The desktop half below still exists until Phase 3 (and the drone_wifi firmware until
+Phase 4), which
+deletes this doc. Read it as history, not as what runs.
+
 WHAT IT IS
 
 The operator picks a Wi-Fi network in the app; the drone's AI deck joins it;
@@ -300,10 +308,6 @@ consumed-by       setup.txt
                   step 3 of Set up; main installs drone_wifi
 depends-on        camera.txt
                   the stream this feeds an address to
-depends-on        ../backend/agent-api.txt
-                  /camera/wifi and its token
-depends-on        ../backend/sessions-and-modes.txt
-                  applied when a link opens
 shares-data-with  desktop-app.txt
                   the secure store and Tauri commands
 shares-data-with  pages-and-windows.txt

@@ -105,7 +105,11 @@ WHAT IS NOT FIXED
    firmware/drone-wifi/app-config — a CI build and a reflash, not done).
 2. THRUST HEADROOM. ~81 % to hover leaves the attitude loop nothing when a
    gust or a turn asks for more. Fly without the AI deck, or fit the thrust
-   upgrade; check props and motors after 50 crashes.
+   upgrade; check props and motors after 50 crashes. UPDATE 2026-11-15: the
+   AI deck is OFF the drone (the no-camera decision, ../architecture.txt);
+   the team reports it still flies properly. Its hover thrust without the
+   deck has NOT been measured here yet — re-read it from a trace before
+   calling this fixed.
 3. Everything in UPDATE 5 about geometry still stands once the deck is back.
 
 

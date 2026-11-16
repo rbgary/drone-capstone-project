@@ -1,24 +1,8 @@
-"""The camera path: where frames come from, and what is done with them.
+"""What is left of the camera: the AI deck's flasher, for Set up.
 
-THREE SOURCES, one shape. `NoCamera` (the default), `TestPattern`
-(DRONEDECK_CAMERA=test) and `DeckStream` (DRONEDECK_CAMERA=deck), which
-reads the AI deck's own Wi-Fi image streamer — see deck.py for the wire format
-as measured from the real deck.
-
-NOT OVER THE RADIO. The frames cannot come over CRTP. Usable throughput there is
-a few KB/s and the same link carries the 50 Hz setpoint stream — the Crazyflie
-drops out of the air below about 10 Hz of commands, so congesting it with image
-data risks the drone. That is why the deck carries its own Wi-Fi chip. The radio
-IS enough to ask whether the deck is fitted, which is a param read and is done
-in flight/checks.py.
+The drone carries no camera since 2026-11-15 (docs/features/architecture.txt,
+DECISIONS): the frame source, the deck's Wi-Fi, the recording and the capture
+rule were removed. flash_gap8.py stays only because drone_setup.py still
+installs the AI deck's two chips on a drone that has one; it goes with the
+deck's parts of Set up, in the no-camera work's firmware phase.
 """
-
-from dronedeck.camera.deck import DeckStream
-from dronedeck.camera.source import (
-    CameraStatus,
-    FrameSource,
-    NoCamera,
-    TestPattern,
-)
-
-__all__ = ["CameraStatus", "DeckStream", "FrameSource", "NoCamera", "TestPattern"]

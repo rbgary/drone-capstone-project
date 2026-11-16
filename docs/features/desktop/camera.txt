@@ -1,6 +1,13 @@
 CAMERA — built end to end; the deck delivers whole frames
 =========================================================
 
+REMOVED FROM THE AGENT 2026-11-15 (feat/no-camera, Phase 2) — the drone
+carries no camera (../architecture.txt, DECISIONS). Everything below that
+lives in backend/agent/ is gone: dronedeck/camera/ (all but flash_gap8.py, kept
+for Set up until the firmware phase), its routes, the session's hooks for it
+and its tests. The desktop half below still exists until Phase 3, which
+deletes this doc. Read it as history, not as what runs.
+
 WHAT IT IS
 
 The Control page's Camera tab, and everything behind it: a frame source in the

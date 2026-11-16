@@ -75,8 +75,7 @@ class TestHappyPath:
                             reset_estimator=lambda: resets.append(True))
 
         passed = [s.key for s in steps if s.status is CheckStatus.PASSED]
-        # Every key but CAMERA: that one is a capture session's (run_capture_checks).
-        assert passed == [k for k in CheckKey if k is not CheckKey.CAMERA]
+        assert passed == list(CheckKey)
         assert all(steps[i].status is CheckStatus.RUNNING for i in range(0, len(steps), 2))
         assert report.hardware_id == "cf-002f002a3334471239333335"
         assert report.ground_z_m == pytest.approx(0.012)

@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import Any, get_args, get_type_hints
 
 from dronedeck import playback
-from dronedeck.camera.recording import INDEX_NAME, frames_to_upload
 from dronedeck.paths import data_dir
 from dronedeck.sync import flight_playback, results, samples
 from dronedeck.sync.cloud import Cloud, CloudError, CloudRefused
@@ -213,7 +212,6 @@ class Syncer:
                 self._send_drones(cloud)
                 self._send_sessions(cloud)
                 self._send_flights(cloud)
-                self._send_frames(cloud)
                 # Last: until the database has session_samples (migration
                 # 20261006000013) this one fails, and everything above has
                 # already gone.
@@ -337,35 +335,6 @@ class Syncer:
             else:
                 log.info("flight %s: %s of %s rows uploaded", flight_id,
                          (sent_to or -1) + 1, expected)
-
-    def _send_frames(self, cloud: Cloud) -> None:
-        """A session's recorded frames, from its cursor on (camera/recording.py).
-
-        Only frames frames.csv marks for upload; the cursor advances after each
-        one lands, so an interrupted pass resumes exactly where it stopped. The
-        index goes last, once the session has ended — replacing any earlier
-        copy — and only then is the record sent.
-        """
-        for record in self._outbox.pending(Kind.FRAMES):
-            payload = record.payload
-            session_id = record.id
-            folder = Path(payload.get("folder", ""))
-            if not folder.exists():
-                log.warning("session %s has no frames folder; nothing to upload", session_id)
-                self._outbox.mark_sent(Kind.FRAMES, session_id)
-                continue
-            self.status.uploading = f"frames {session_id[:8]}"
-            cursor = int(payload.get("uploaded_through", 0))
-            for seq, path, content_type in frames_to_upload(folder, cursor):
-                cloud.upload_frame(f"{session_id}/{path.parent.name}/{path.name}",
-                                   path, content_type)
-                self._outbox.update(Kind.FRAMES, session_id,
-                                    lambda p, seq=seq: p.__setitem__("uploaded_through", seq))
-            if not payload.get("ended"):
-                continue        # still recording: more frames will come
-            cloud.upload_frame(f"{session_id}/{INDEX_NAME}", folder / INDEX_NAME, "text/csv",
-                               replace=True)
-            self._outbox.mark_sent(Kind.FRAMES, session_id)
 
     def _send_samples(self, cloud: Cloud) -> None:
         """A session's 1 Hz vitals, from its cursor on (sync/samples.py).

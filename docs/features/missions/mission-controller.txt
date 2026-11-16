@@ -14,7 +14,8 @@ STATUS  (Last verified: 2026-09-28)
   goal       BUILT — ManualController.fly_to(), goal_active, operator_override
   session    BUILT — Session.run_mission(), POST /session/mission, the room's
              fence to the guard, the plan flown kept, events to the app
-  stamping   BUILT — point_id on every telemetry row and frames.csv row
+  stamping   BUILT — point_id on every telemetry row (and frames.csv rows until
+             the camera was removed, 2026-11-15)
   controller BUILT — Samuel's body, built to THE SPEC, BUILT = True; on
              main since 2026-10-10 (#104, with Hannah's #102 merged alongside;
              section 6; ../../handoffs/sprint-1/done/mission-controller.txt).
@@ -37,8 +38,8 @@ before a motor turns, arms the MANUAL FLIGHT SYSTEM (flight/manual.py — the
 tuned 50 Hz loop that flies Manual mode) and hands it, with the mission, to the
 MISSION CONTROLLER. The mission controller flies the mission by giving that
 system goals — hold_at() to take off, fly_to() for each inspection point,
-land() at the end — and holds at each point while the readings and frames are
-stamped with its id. It decides where next and when; never how.
+land() at the end — and holds at each point while the readings are stamped
+with its id. It decides where next and when; never how.
 
 --------------------------------------------------------------------------------
 2. WHERE IT LIVES
@@ -52,7 +53,6 @@ backend/agent/dronedeck/session.py                  run_mission, _do_mission,
                                                       current_point_id
 backend/agent/dronedeck/safety/flight_guard.py      GuardContext.fence
 backend/agent/dronedeck/telemetry/row.py            TelemetryRow.point_id
-backend/agent/dronedeck/camera/recording.py         frames.csv point_id
 backend/agent/dronedeck/sync/cloud.py               without_empty_point_id
 backend/agent/dronedeck/cli.py                      `dronedeck mission`
 backend/supabase/migrations/20260928000012_telemetry_point_id.sql

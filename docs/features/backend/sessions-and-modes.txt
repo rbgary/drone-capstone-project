@@ -115,10 +115,9 @@ reset line at every boot). On the morning of 2026-10-24 restarts were followed
 by fewer deck memories (8 → 5 → 0) and this was read as the restart unpowering
 the decks; that evening 6 radio restarts on a charged battery kept all 8 each
 time — the morning's losses fit a deck stack that also lost contact on hand
-power-ons. The session's `decks_lost` (the AI deck seen on this drone, then
-not) makes the app say to unplug the battery instead of "not fitted". The
-camera recovery uses this reset in a CAPTURE session (drone-wifi.txt). Measured on the lab
-drone: 9.4 s from press to checked. No session open, it is restart_drone.
+power-ons. (The AI deck is off the drone since 2026-11-15; the session no
+longer tracks it — `decks_lost` and capture sessions were removed.) Measured
+on the lab drone: 9.4 s from press to checked. No session open, it is restart_drone.
 Refused while checks run or the session ends. A restart the radio cannot do,
 or a drone that does not answer within RESET_RECONNECT_S (12 s) after the
 settle, leaves checks_failed with retry_required and says to switch it off and
@@ -143,7 +142,8 @@ Closing the window does the same thing rather than vanishing mid-flight.
 STANDBY — THE DRONE CONNECTED WITH NO SESSION (2026-09-24)
 
 Signed in and idle, the agent holds a link to the drone: vitals stream to every
-page and the camera gets its Wi-Fi network (drone-wifi.txt), before any session.
+page before any session. (Until 2026-11-15 the AI deck's camera was also handed
+its Wi-Fi network here; the drone carries no camera now.)
 
   radio.state  off        signed out, or standby not started
                searching  no drone found yet; `message` says why
@@ -155,12 +155,11 @@ dropping), then every 15 s while nothing is found. Home carries Connect /
 Disconnect; POST /drone/connect and /drone/disconnect. DRONEDECK_STANDBY=0
 turns it off.
 
-RESTART OVER THE RADIO (restart_drone). Between sessions only (in a capture
-session the camera uses reset_drone instead — above), the agent can
-power-cycle the drone's electronics through its radio chip; standby waits 4 s
-(RESTART_SETTLE_S — a connect while it boots blocks for its full timeout) and
-reconnects. radio.state reads "restarting" meanwhile. It exists for the camera
-(drone-wifi.txt): it is the one supported way to make the deck rejoin.
+RESTART OVER THE RADIO (restart_drone). Between sessions only, the agent can
+power-cycle the drone's electronics through its radio chip — what Reset drone
+does with no session open; standby waits 4 s (RESTART_SETTLE_S — a connect
+while it boots blocks for its full timeout) and reconnects. radio.state reads
+"restarting" meanwhile.
 
 A session TAKES OVER the standby link rather than opening a second one — and
 runs every check on it exactly as on a link it opened itself. When the session
@@ -178,23 +177,18 @@ DECISIONS
   battery that cannot fly again.
 - Endurance is reported at the start ("about N seconds of flying left") so the
   operator plans the flight instead of discovering the limit in the air.
-- A SESSION HAS A PURPOSE (2026-10-24): "flight" (Control — every check, area
-  confirmed, it can fly) or "capture" (the Capture page — the radio and the
-  camera's deck only, READY at once, never flies; ../desktop/capture.txt).
-  Still one session at a time. The purpose is in Snapshot.purpose, the
-  session's meta.json and the SESSION_START audit detail — NOT in Supabase's
-  sessions table (no migration): on the web it is a session like any other.
-  Every flight action refuses in a capture session (_require_ready,
-  confirm_area), so a page cannot fly one by mistake.
+- ONE KIND OF SESSION (2026-11-15). From 2026-10-24 a session had a purpose,
+  "flight" or "capture" (the Capture page, for the drone's camera, never
+  flying). The camera is gone, so is the purpose: every session runs every
+  check and can fly. Old sessions' meta.json may still say "capture";
+  history reads it, nothing acts on it.
 
 
 INVARIANTS
 
-- STANDBY NEVER ARMS. It opens the link, reads two params (hardware id,
-  deck.bcAI) and publishes telemetry. No flight command runs without a session;
+- STANDBY NEVER ARMS. It opens the link, reads the hardware id and publishes
+  telemetry. No flight command runs without a session;
   can_fly stays false; a test pins that it does not even run the checks.
-- A SESSION RECORDS ITS CAMERA. on_session_open / on_session_close start and
-  stop the frame recording (desktop/camera.txt) in the session's own folder.
 - STANDBY RECORDS NOTHING. Telemetry reaches a file only through a session's
   history, which exists only inside a session. Vitals before a session are
   shown, never stored.
@@ -205,10 +199,9 @@ INVARIANTS
   on its own thread and closing the link inside that callback can deadlock it;
   the close is handed to another thread. A link a SESSION owns is not closed on
   loss — the flight guards own that — only the radio state is updated.
-- A LINK CLOSING TELLS EVERYONE WHO CLAIMED IT WAS UP. The Wi-Fi state returns
-  to "waiting" (drone-wifi.txt) and the window clears its vitals. Measured
-  2026-09-24: with the battery flat, the Wi-Fi page read "Radio: no drone"
-  beside "On VT Open WiFi", and the sensor pages would have kept saying "Live".
+- A LINK CLOSING TELLS EVERYONE WHO CLAIMED IT WAS UP: the window clears its
+  vitals. Measured 2026-09-24: with the battery flat, the sensor pages would
+  have kept saying "Live".
 
 - Every command carries the control token (X-Agent-Token). The agent binds
   localhost, which keeps other machines out but not other programs or web pages
@@ -232,9 +225,10 @@ mission controller (../missions/mission-controller.txt). The snapshot's
 `mission` carries its progress to the app.
 
 
-LAST VERIFIED  2026-10-24 late, the restart and the decks: 6 radio restarts on
-the lab drone kept all 8 deck memories (flight-log.txt); reset_drone as the
-camera's restart in a capture session, test_camera_wifi_recovery.py.
+LAST VERIFIED  2026-11-15 on feat/no-camera — the camera hooks, capture
+sessions and decks_lost removed; tests/test_session.py passing (standby,
+reset, retry). 2026-10-24 late, the restart and the decks: 6 radio restarts on
+the lab drone kept all 8 deck memories (flight-log.txt).
 2026-09-30, Reset drone only: tests/test_session.py
 TestResetDrone (7, the guard race pinned by a test that fails without
 _finish_lock), and Session.reset_drone run against the lab drone — 9.4 s to
@@ -254,12 +248,8 @@ consumed-by       ../desktop/pages-and-windows.txt
 consumed-by       telemetry-stream.txt
                   published on standby, recorded only in a session
 
-consumed-by       ../desktop/drone-wifi.txt
-                  a link that passes its checks sends the deck its network (on_link_ready)
 shares-data-with  ../desktop/setup.txt
                   pauses and resumes standby
 consumed-by       ../pipeline/session.txt
                   End session queues the session's own processing (DPP on)
-consumed-by       ../desktop/capture.txt
-                  the auto-capture switch (Session.capture), reset when a session
-                  ends; a capture needs a session
+

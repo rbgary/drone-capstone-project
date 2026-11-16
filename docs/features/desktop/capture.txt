@@ -1,5 +1,11 @@
 ================================================================================
 CAPTURE — pictures by hand, and which of the camera's frames are kept
+REMOVED FROM THE AGENT 2026-11-15 (feat/no-camera, Phase 2) — the drone
+carries no camera (../architecture.txt, DECISIONS). Everything below that
+lives in backend/agent/ is gone: dronedeck/camera/ (all but flash_gap8.py, kept
+for Set up until the firmware phase), its routes, the session's hooks for it
+and its tests. The desktop half below still exists until Phase 3, which
+deletes this doc. Read it as history, not as what runs.
 Last verified: 2026-10-24 against desktop/camera-capture — agent tests
 (test_camera_capture.py 11, test_capture_switch.py 15, test_recording.py 19,
 all 1 537 passing), the capture threshold measured on the lab laptop's 11
@@ -168,9 +174,5 @@ depends-on        camera.txt
                   the recording it marks, the window's shared feed it shows
 consumed-by       ../pipeline/results.txt
                   frames.csv's source column: the web's "Captured manually"
-depends-on        ../backend/sessions-and-modes.txt
-                  the session a capture belongs to; the switch resets with it
-shares-data-with  ../backend/audit-trail.txt
-                  capture_set and camera_capture
 depends-on        pages-and-windows.txt
                   the sidebar page, the shell, the harness it is measured in

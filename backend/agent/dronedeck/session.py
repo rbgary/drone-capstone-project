@@ -40,7 +40,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
 from dronedeck.audit import Action, AuditLog, Result
@@ -61,7 +60,6 @@ from dronedeck.history import (
     SessionMeta,
     interrupted_flights,
     interrupted_sessions,
-    sessions_dir,
     set_flight_processing,
     set_session_processing,
 )
@@ -94,19 +92,6 @@ from dronedeck.telemetry.row import TempUnit, parse_ambient
 from dronedeck.telemetry.sinks import CsvSink, FanOutSink, LiveUploadSink
 
 log = logging.getLogger(__name__)
-
-#: What a session is for (Snapshot.purpose). A CAPTURE session is the Capture
-#: page's (2026-10-24, Samuel: "the capture page only cares about taking picture
-#: manually and not the rest"): it checks the radio and the camera's deck only
-#: (checks.py run_capture_checks), records only what is captured by hand, and
-#: refuses every flight action — in the agent, not only on the page.
-FLIGHT = "flight"
-CAPTURE_PURPOSE = "capture"
-PURPOSES = (FLIGHT, CAPTURE_PURPOSE)
-CAPTURE_OPEN = ("Capture session open. Take pictures on the Capture page — this session "
-                "does not fly.")
-CAPTURE_NO_FLIGHT = ("This is a capture session: it takes pictures and does not fly. End it "
-                     "on the Capture page, then start a session on Control to fly.")
 
 MANUAL_GUARD_PERIOD_S = 0.1
 #: The lowest height Manual's map counts the stations' reach at, metres above
@@ -233,21 +218,9 @@ class Snapshot:
     assisted: bool = True
     #: Why assistance is unavailable, in words, or None.
     unassisted_reason: str | None = None
-    #: Whether the AI deck — the one carrying the camera — is fitted, as the
-    #: DRONE reports it (deck.bcAI, over the radio during the checks). None
-    #: until a drone has been asked, which is NOT the same as "not fitted".
-    #: Recorded and shown; it gates nothing.
-    ai_deck: bool | None = None
-    #: The drone reported its AI deck earlier in this agent's life and now
-    #: does not: the decks lost power or contact, not a drone without one.
-    #: Only a power-off brings them back (deck detection runs at boot) — the
-    #: app says so instead of "not fitted" (2026-10-24: a restart over the
-    #: radio left the decks unpowered and the page read "no camera on this
-    #: drone").
-    decks_lost: bool = False
     #: The radio, apart from any session. "off" (signed out, or not started),
     #: "searching" (no drone found yet — `message` says why), "connected" (a
-    #: link is open: vitals stream, the camera gets its network), "paused" (the
+    #: link is open: vitals stream), "paused" (the
     #: operator disconnected, to free the radio for another tool), "restarting"
     #: (restarted over the radio on purpose — restart_drone — back in seconds). A session
     #: takes over a connected link rather than opening a second one.
@@ -269,14 +242,6 @@ class Snapshot:
     #: flown with DPP off can still be processed from the page.
     processing: dict[str, Any] = field(default_factory=lambda: {
         "on": True, "chosen": False, "jobs": [], "last_flight_id": None})
-    #: The auto-capture switch (camera/recording.py): `auto` is whether the
-    #: camera's frames are recorded automatically; `chosen` False while it is
-    #: still the default (on). Manual captures are saved either way.
-    capture: dict[str, Any] = field(default_factory=lambda: {"auto": True, "chosen": False})
-    #: What the session is for: "flight" (Control — every check, flying) or
-    #: "capture" (the Capture page — the radio and the camera's deck only, and
-    #: nothing flies). Kept while a session is open; "flight" otherwise.
-    purpose: str = "flight"
     #: Which way the arrow keys move the drone (flight/keyframe.py): the
     #: operator's choice (`key_frame`, "operator" or "room"), their marked
     #: spot (`operator`, room metres, or None for the takeoff spot) and, while
@@ -293,13 +258,10 @@ class Snapshot:
             "checks": self.checks, "health_test": self.health_test, "flight": self.flight,
             "message": self.message, "can_fly": self.can_fly, "restoring": self.restoring,
             "assisted": self.assisted, "unassisted_reason": self.unassisted_reason,
-            "ai_deck": self.ai_deck, "decks_lost": self.decks_lost,
             "radio": self.radio,
             "retry_required": self.retry_required,
             "mission": self.mission,
             "processing": self.processing,
-            "capture": self.capture,
-            "purpose": self.purpose,
             "controls": self.controls,
         }
 
@@ -316,11 +278,6 @@ class Session:
         agent_id: str = "desktop",
         fence_half_extent_m: float = DEFAULT_FENCE_M,
         max_height_m: float = DEFAULT_MAX_HEIGHT_M,
-        on_link_ready: Callable[[Any], object] | None = None,
-        on_link_down: Callable[[], object] | None = None,
-        on_link_no_deck: Callable[[], object] | None = None,
-        on_session_open: Callable[[str, Path], object] | None = None,
-        on_session_close: Callable[[], object] | None = None,
         power_cycle: Callable[[str], None] = _power_cycle,
         plans: PlanStore | None = None,
         mission_controller: Callable[..., Any] = MissionController,
@@ -337,37 +294,16 @@ class Session:
         #: The operator's DPP choice for this session, or None for the mode's
         #: default. Reset when a session ends: the choice is per session.
         self._processing_choice: bool | None = None
-        #: The operator's auto-capture choice for this session, or None for the
-        #: default (on). Reset when a session ends, like the DPP's.
-        self._capture_choice: bool | None = None
         #: Whether the flight recording now is to be processed when it ends —
         #: read as it began, so a switch flipped mid-flight is for the next one.
         self._flight_process = False
         #: The session's most recent flight to land (Snapshot.processing).
         self._last_flight_id: str | None = None
-        #: Story 4.9: each inspection point's verdict while the mission flies —
-        #: {point id: {verdict, reasons, findings, ...}} for the flight in the air.
         #: Rooms and missions on this laptop (mission/plan/store.py).
         self.plans = plans or PlanStore()
         #: Builds the mission controller for a flight. A parameter so tests can
         #: fly the session's mission wiring with a controller of their own.
         self._mission_controller = mission_controller
-        #: Called with the Crazyflie once a link has passed its checks and the
-        #: AI deck is fitted — how the deck is put on the operator's Wi-Fi. It
-        #: runs on its own thread: joining a network takes seconds and must
-        #: never hold up a flight.
-        self._on_link_ready = on_link_ready
-        #: Called whenever the link closes, however — the Wi-Fi state stops
-        #: claiming "joined" for a drone nobody can reach any more.
-        self._on_link_down = on_link_down
-        #: Called when a link opens on a drone that reports NO AI deck: the
-        #: camera cannot be handed the network, and the Wi-Fi page must say
-        #: why instead of "waiting for the drone to connect" (2026-10-24).
-        self._on_link_no_deck = on_link_no_deck
-        #: A session opened (its id and folder) / closed — how camera frames
-        #: get recorded only inside a session (camera/recording.py).
-        self._on_session_open = on_session_open
-        self._on_session_close = on_session_close
         self._power_cycle = power_cycle
         self._outbox = outbox or Outbox()
         self._syncer = syncer
@@ -401,9 +337,6 @@ class Session:
         self._measuring = False
         #: The stations' stored poses for the link that read them (_station_poses).
         self._poses_cache: tuple[Any, list[Any]] | None = None
-        #: Drones (hardware ids) that reported an AI deck since the agent
-        #: started — what makes a later "no deck" a LOST one (decks_lost).
-        self._decks_seen: set[str] = set()
         #: Whether the positioning deck needs its firmware, per link (it can
         #: only change at power-on, which is a new link).
         self._deck_fw_cache: tuple[Any, bool] | None = None
@@ -433,8 +366,6 @@ class Session:
         #: the standby loop, a session start, a retry, an end. Never held while
         #: waiting on anything but the radio itself.
         self._link_lock = threading.RLock()
-        #: The link the Wi-Fi hand-off last ran for, so it runs once per link.
-        self._link_ready_for: int | None = None
         self._standby_wake = threading.Event()
         self._standby_stop = threading.Event()
         self._standby_paused = False
@@ -457,27 +388,11 @@ class Session:
 
     def _set(self, **changes: Any) -> None:
         with self._lock:
-            if "ai_deck" in changes:
-                changes["decks_lost"] = self._decks_lost_locked(changes)
             for key, value in changes.items():
                 setattr(self._snapshot, key, value)
             self._snapshot.can_fly = self._snapshot.state in (State.READY, State.BUSY)
             payload = self._snapshot.to_dict()
         self._emit("session", payload)
-
-    def _decks_lost_locked(self, changes: dict[str, Any]) -> bool:
-        """Every report of the AI deck comes through _set: remember the drones
-        that had one, and call a later "no deck" on the same drone LOST."""
-        fitted = changes["ai_deck"]
-        hardware_id = ((changes.get("radio") or {}).get("hardware_id")
-                       or (changes.get("drone") or {}).get("hardware_id")
-                       or (self._snapshot.radio or {}).get("hardware_id"))
-        if fitted is None or hardware_id is None:
-            return self._snapshot.decks_lost
-        if fitted:
-            self._decks_seen.add(hardware_id)
-            return False
-        return hardware_id in self._decks_seen
 
     # ── auth ─────────────────────────────────────────────────────────────
 
@@ -651,37 +566,6 @@ class Session:
         audit.record(Action.PROCESSING_SET, session_id=self._snapshot.session_id,
                      detail={"on": bool(on), "mode": str(self._snapshot.mode)})
 
-    # ── the camera (the auto-capture switch) ─────────────────────────────
-
-    def capture_auto(self) -> bool:
-        """Whether the camera's frames are recorded automatically: the
-        operator's choice, kept until the session ends, else on. Read by the
-        recording on every frame, so a change takes effect at once. Never in a
-        capture session: it keeps only what is captured by hand."""
-        if self.capturing_only:
-            return False
-        return self._capture_choice if self._capture_choice is not None else True
-
-    def set_capture_auto(self, on: bool) -> None:
-        """Turn auto-capture on or off — before a session or during one, in
-        Auto and in Manual alike. Off keeps the camera live and saves only
-        manual captures (2026-10-24, Samuel)."""
-        _, audit = self._require_operator()
-        if self.capturing_only:
-            raise SessionError("A capture session keeps only the pictures you capture by "
-                               "hand. Auto-capture is for sessions started on Control.")
-        self._capture_choice = bool(on)
-        self._set(capture={"auto": bool(on), "chosen": True})
-        audit.record(Action.CAPTURE_SET, session_id=self._snapshot.session_id,
-                     detail={"auto": bool(on), "mode": str(self._snapshot.mode)})
-
-    def record_capture(self, seq: int) -> None:
-        """A frame was captured by hand: on the audit trail, against the
-        session it belongs to. Never fails the capture — it is already saved."""
-        if self.audit is not None:
-            self.audit.record(Action.CAMERA_CAPTURE, session_id=self._snapshot.session_id,
-                              detail={"seq": seq, "mode": str(self._snapshot.mode)})
-
     def process_flight(self, flight_id: str) -> dict[str, Any]:
         """Process one recorded flight now, whatever the switch said when it
         flew — "Process this flight" on a flight recorded with DPP off."""
@@ -783,12 +667,9 @@ class Session:
 
     # ── start: connect and check ─────────────────────────────────────────
 
-    def start(self, purpose: str = FLIGHT) -> None:
-        """Start a session — for flying (Control, every check) or for taking
-        pictures by hand (the Capture page, CAPTURE_PURPOSE: the radio and the
-        camera's deck only, and nothing flies)."""
-        if purpose not in PURPOSES:
-            raise SessionError(f"A session is for {' or '.join(PURPOSES)}, not {purpose!r}.")
+    def start(self) -> None:
+        """Start a session: connect, run every check, then wait for the area to
+        be confirmed."""
         self._require_operator()
         with self._lock:
             if self._snapshot.state not in (State.IDLE, State.CHECKS_FAILED):
@@ -796,14 +677,8 @@ class Session:
             if self._snapshot.session_id is not None:
                 raise SessionError("This session is still open. Press Retry to check the "
                                    "drone again, or end the session first.")
-        self._set(state=State.STARTING, checks=[], message=None, health_test=None,
-                  purpose=purpose)
+        self._set(state=State.STARTING, checks=[], message=None, health_test=None)
         self._start_worker("start", self._do_start)
-
-    @property
-    def capturing_only(self) -> bool:
-        """A capture session: pictures by hand, nothing flies."""
-        return self._snapshot.purpose == CAPTURE_PURPOSE
 
     def _do_start(self) -> None:
         operator, audit = self._require_operator()
@@ -826,8 +701,7 @@ class Session:
             "started_at": datetime.now(UTC).isoformat(), "ended_at": None,
         })
         audit.record(Action.SESSION_START, session_id=session_id,
-                     drone_hardware_id=report.hardware_id,
-                     detail={"purpose": self._snapshot.purpose})
+                     drone_hardware_id=report.hardware_id)
         self._height_reference = report.ground_z_m if report.assisted else None
         try:
             self.history = SessionLog(
@@ -836,7 +710,6 @@ class Session:
                     operator_name=operator.full_name, drone_hardware_id=report.hardware_id,
                     mode=str(self.snapshot().mode), assisted=report.assisted,
                     unassisted_reason=None if report.assisted else report.unassisted_reason,
-                    purpose=self._snapshot.purpose,
                     started_at=datetime.now(UTC).isoformat(),
                 ),
                 height_reference=lambda: self._height_reference,
@@ -850,35 +723,19 @@ class Session:
         except OSError:
             log.exception("could not open the session history; flying without it")
             self.history = None
-        if self._on_session_open is not None:
-            folder = (self.history.folder if self.history is not None
-                      else sessions_dir() / session_id)
-            try:
-                self._on_session_open(session_id, folder)
-            except Exception:
-                log.exception("session-open hook failed; the session carries on")
-        if self.capturing_only:
-            # Nothing to confirm: confirming the area is for flying.
-            self._set(state=State.READY, session_id=session_id,
-                      drone={"hardware_id": report.hardware_id,
-                             "battery_v": round(report.vbat, 2), "endurance_s": 0},
-                      assisted=True, unassisted_reason=None, ai_deck=report.ai_deck,
-                      message=CAPTURE_OPEN)
-        else:
-            self._set(
-                state=State.AWAITING_CONFIRMATION, session_id=session_id,
-                drone={"hardware_id": report.hardware_id, "battery_v": round(report.vbat, 2),
-                       "endurance_s": round(report.endurance_s)},
-                assisted=report.assisted,
-                unassisted_reason=report.unassisted_reason,
-                ai_deck=report.ai_deck,
-                message=(
-                    "Put the drone on a flat, clear surface, then confirm."
-                    if report.assisted else
-                    "The drone cannot hold a height by itself right now. Put it on a flat, "
-                    "clear surface, then confirm to fly it by hand."
-                ),
-            )
+        self._set(
+            state=State.AWAITING_CONFIRMATION, session_id=session_id,
+            drone={"hardware_id": report.hardware_id, "battery_v": round(report.vbat, 2),
+                   "endurance_s": round(report.endurance_s)},
+            assisted=report.assisted,
+            unassisted_reason=report.unassisted_reason,
+            message=(
+                "Put the drone on a flat, clear surface, then confirm."
+                if report.assisted else
+                "The drone cannot hold a height by itself right now. Put it on a flat, "
+                "clear surface, then confirm to fly it by hand."
+            ),
+        )
         if self._syncer is not None:
             self._syncer.trigger()
 
@@ -914,10 +771,7 @@ class Session:
                     return None
 
         try:
-            # A capture session checks only what pictures need (checks.py
-            # run_capture_checks): a drone that cannot arm can still capture.
-            report = collect(link.capture_checks() if self.capturing_only else link.checks(),
-                             on_step)
+            report = collect(link.checks(), on_step)
         except ChecksFailed as e:
             audit.record(Action.CHECKS, Result.REFUSED, session_id=self._snapshot.session_id,
                          detail={"check": str(e.result.key), "reason": e.result.detail})
@@ -930,7 +784,7 @@ class Session:
         # Unassisted there is no origin and no fence — those coordinates are the
         # accelerometer integrating — so there is nothing to compare against.
         x, y = report.takeoff_xy
-        if not self.capturing_only and report.assisted and max(abs(x), abs(y)) > self._fence:
+        if report.assisted and max(abs(x), abs(y)) > self._fence:
             message = (
                 f"The drone is at ({x:+.2f}, {y:+.2f}) m, outside the {self._fence:.1f} m "
                 f"flight area. Move it nearer the middle of the room."
@@ -942,7 +796,6 @@ class Session:
             return None
         self._set(radio={"state": "connected", "hardware_id": report.hardware_id,
                          "message": None})
-        self._link_ready(link, report.ai_deck)
         return report
 
     def _open_link_locked(self) -> DroneLink:
@@ -955,33 +808,6 @@ class Session:
         if link.stream is not None:
             self._unsubscribe_telemetry = link.stream.subscribe(self._publish_telemetry)
         return link
-
-    def _link_ready(self, link: DroneLink, ai_deck: bool | None) -> None:
-        """Hand the link to the Wi-Fi hand-off, once per link."""
-        hook = self._on_link_ready
-        if ai_deck is False and self._on_link_no_deck is not None \
-                and self._link_ready_for != id(link):
-            self._link_ready_for = id(link)
-            try:
-                self._on_link_no_deck()
-            except Exception:
-                log.exception("no-deck hook failed")
-            return
-        if hook is None or not ai_deck or self._link_ready_for == id(link):
-            return
-        camera_cf = getattr(link, "camera_cf", None)
-        cf = camera_cf() if camera_cf is not None else None
-        if cf is None:
-            return
-        self._link_ready_for = id(link)
-
-        def run() -> None:
-            try:
-                hook(cf)
-            except Exception:
-                log.exception("link-ready hook failed")
-
-        threading.Thread(target=run, name="link-ready", daemon=True).start()
 
     # ── retry ────────────────────────────────────────────────────────────
 
@@ -1017,16 +843,8 @@ class Session:
 
     def _checked_again(self, report: ReadyReport, lead: str) -> None:
         """The checks passed again in this session: back to confirming the area,
-        exactly where a new session stands after its first checks — or, in a
-        capture session, straight back to capturing."""
+        exactly where a new session stands after its first checks."""
         self.report = report
-        if self.capturing_only:
-            self._set(state=State.READY, retry_required=False, activity=None,
-                      drone={"hardware_id": report.hardware_id,
-                             "battery_v": round(report.vbat, 2), "endurance_s": 0},
-                      assisted=True, unassisted_reason=None, ai_deck=report.ai_deck,
-                      message=f"{lead} {CAPTURE_OPEN}")
-            return
         self._height_reference = report.ground_z_m if report.assisted else None
         if self.history is not None:
             self.history.set_positioning(report.assisted, report.unassisted_reason)
@@ -1035,7 +853,6 @@ class Session:
             drone={"hardware_id": report.hardware_id, "battery_v": round(report.vbat, 2),
                    "endurance_s": round(report.endurance_s)},
             assisted=report.assisted, unassisted_reason=report.unassisted_reason,
-            ai_deck=report.ai_deck,
             message=(
                 f"{lead} Put the drone on a flat, clear surface, then confirm."
                 if report.assisted else
@@ -1189,8 +1006,6 @@ class Session:
         standing over the drone gets to decide that, having been told it.
         """
         _, audit = self._require_operator()
-        if self.capturing_only:
-            raise SessionError(CAPTURE_NO_FLIGHT)
         with self._lock:
             if self._snapshot.state is not State.AWAITING_CONFIRMATION:
                 raise SessionError("Run the checks first.")
@@ -1817,7 +1632,7 @@ class Session:
 
     def current_point_id(self) -> str | None:
         """The inspection point being held right now, or None. Asked on every
-        telemetry row and every camera frame (story 3.5)."""
+        telemetry row (story 3.5)."""
         flying = self.mission
         if flying is None:
             return None
@@ -2211,11 +2026,6 @@ class Session:
                 process_session = ended_id
             self._outbox.update(Kind.SAMPLES, ended_id, lambda p: p.__setitem__("ended", True))
             self.history = None
-        if self._on_session_close is not None:
-            try:
-                self._on_session_close()
-            except Exception:
-                log.exception("session-close hook failed")
         if process_session is not None:
             try:
                 self.processing.submit(process_session, on_change=self._processing_changed,
@@ -2244,8 +2054,6 @@ class Session:
         self._processing_choice = None
         self._last_flight_id = None
         self._refresh_processing()
-        self._capture_choice = None
-        self._set(capture={"auto": True, "chosen": False}, purpose=FLIGHT)
 
     def position(self) -> tuple[float, float, float] | None:
         """The drone's position now, or None when it has none it can stand
@@ -2270,7 +2078,7 @@ class Session:
     # ── standby: the drone connected with no session ─────────────────────
     #
     # Signed in and idle, the agent holds a link to the drone so the operator
-    # sees its vitals and its camera before starting anything. A standby link
+    # sees its vitals before starting anything. A standby link
     # NEVER arms: nothing here commands the motors, every flight command still
     # requires a session, and a session that takes the link over runs every
     # check exactly as if it had opened the link itself. Nothing is recorded:
@@ -2315,12 +2123,10 @@ class Session:
     def restart_drone(self, *, reason: str) -> None:
         """Restart the drone's electronics over the radio — BETWEEN SESSIONS ONLY.
 
-        The one supported way to make the AI deck rejoin Wi-Fi and announce its
-        address again. Resetting only the deck was tried and does not work: the
-        STM32's UART link to the ESP32 syncs once, at boot ("There's no support
-        for re-initializing the UART transport" — cpx_uart_transport.c). A
-        restart runs that boot, and standby reconnects: measured 2026-09-24 at
-        4.6 s to the radio, 12.1 s to the first frame.
+        What Reset drone does when no session is open (reset_drone). Standby
+        reconnects after it: measured 2026-09-24 at 4.6 s to the radio. (Until
+        2026-11-15 it was also how the AI deck's camera was made to rejoin
+        Wi-Fi; the drone carries no camera now.)
 
         Refused unless idle: a session's checks describe the drone as it is, and
         a restart in the air drops it.
@@ -2392,15 +2198,13 @@ class Session:
             if link.stream is not None:
                 self._unsubscribe_telemetry = link.stream.subscribe(self._publish_telemetry)
         try:
-            hardware_id, ai_deck = link.identify()
+            hardware_id: str | None = link.identify()
         except Exception:
             log.warning("standby: could not identify the drone")
-            hardware_id, ai_deck = None, None
+            hardware_id = None
         link.on_lost(lambda reason: self._standby_lost(link, reason))
-        self._set(ai_deck=ai_deck, radio={"state": "connected", "hardware_id": hardware_id,
-                                          "message": None})
+        self._set(radio={"state": "connected", "hardware_id": hardware_id, "message": None})
         log.info("standby: connected to %s", hardware_id or link.uri)
-        self._link_ready(link, ai_deck)
 
     def _standby_lost(self, link: DroneLink, reason: str) -> None:
         """cflib's thread: record it, and let another thread close the link."""
@@ -2504,8 +2308,6 @@ class Session:
 
     def _require_ready(self, what: str) -> None:
         self._require_operator()
-        if self.capturing_only:
-            raise SessionError(CAPTURE_NO_FLIGHT)
         with self._lock:
             state = self._snapshot.state
         if state is State.BUSY:
@@ -2542,12 +2344,6 @@ class Session:
                 except Exception:
                     log.exception("closing the link failed")
                 self.link = None
-                self._link_ready_for = None
-                if self._on_link_down is not None:
-                    try:
-                        self._on_link_down()
-                    except Exception:
-                        log.exception("link-down hook failed")
         # Whatever closed it, the radio is free: look for the drone again soon
         # (the standby loop decides whether it may — not during a session).
         self._wake_standby(STANDBY_SOON_S)
