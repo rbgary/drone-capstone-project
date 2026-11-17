@@ -121,6 +121,8 @@ are the only thing that survives a session.
 
 [plans/2026-10-09-pipeline-completion.txt](plans/2026-10-09-pipeline-completion.txt) — the pipeline completed: the session processed too, the camera's part (scene@1), live verdicts, calibration, the marks and the error table — and what is still owed.
 
+[plans/2026-11-16-no-camera-phases-5-7.txt](plans/2026-11-16-no-camera-phases-5-7.txt) — **what is next for the no-camera work**: where Phases 0–4 stand on feat/no-camera, what Reagan hands over before Phase 5 (the photo classifier), then photos in the desktop app (5), on the web (6) and the docs sweep (7).
+
 ## Handoffs — work orders given to teammates
 
 [handoffs/](handoffs/README.txt) — one ticket per piece of work, filed by sprint: `sprint-1/done/` holds every sprint-1 ticket — the mission planner, mission start, the mission controller and its proof (the lab rungs still open), the DPP switch and contract, the pipeline's clean, enhance and classify stages (4.4's image model still Reagan's), the Control layout; only follow-ups left. `sprint-1/undone/` is empty. We are in sprint 1. Not feature docs: a ticket moves to `done/` when its work is on main, and is deleted once its follow-ups are closed and what shipped is written into `features/`.
