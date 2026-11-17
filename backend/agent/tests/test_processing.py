@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -77,6 +78,37 @@ class TestTheQueue:
             q.submit(fid)
         assert q.wait_idle()
         assert order == ["a", "b", "c"]
+
+    def test_closing_starts_nothing_that_was_still_waiting(self):
+        """The agent shutting down (rest.py lifespan) closes the queue while a
+        job runs: that one is stopped and NOTHING queued behind it starts — a
+        job started then would outlive the agent, and its result would never be
+        recorded, so the next start would run it again. Until 2026-11-16 the
+        stop was a FIFO entry and every waiting job ran after close()."""
+        started: list[str] = []
+
+        def records(flight_id: str) -> list[str]:
+            started.append(flight_id)
+            return hangs(flight_id)
+
+        q = ProcessingQueue(command=records, timeout_s=30)
+        for fid in ("a", "b", "c"):
+            q.submit(fid)
+        assert wait_for(lambda: q.job("a").state == JobState.RUNNING)
+        q.close()
+        time.sleep(1.0)                       # long enough for b to have started
+        assert started == ["a"]
+        assert q.job("a").state == JobState.FAILED          # stopped, not left running
+        assert {q.job("b").state, q.job("c").state} == {JobState.QUEUED}
+
+    def test_a_close_while_the_child_is_starting_still_stops_it(self):
+        """close() can land after the child process exists but before the queue
+        has recorded it — the one moment close() could not see it to kill it.
+        The command factory runs inside that window, so closing from it hits
+        the window every time."""
+        q = ProcessingQueue(command=lambda fid: (q.close(), hangs(fid))[1], timeout_s=30)
+        q.submit("a")
+        assert wait_for(lambda: q.job("a").state == JobState.FAILED, timeout=5.0)
 
     def test_queuing_one_already_waiting_changes_nothing(self):
         q = ProcessingQueue(command=hangs, timeout_s=5)

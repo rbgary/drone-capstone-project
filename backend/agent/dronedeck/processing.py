@@ -128,7 +128,9 @@ class ProcessingQueue:
         self._jobs: dict[str, Job] = {}
         self._listeners: dict[str, Callable[[Job], None]] = {}
         self._lock = threading.Lock()
-        #: Keys in the order submitted; None stops the worker.
+        #: Keys in the order submitted; None wakes the worker to stop. Closing
+        #: is decided by `_closed`, never by where None sits in the line: a
+        #: job still waiting when the queue closes must not start (see close).
         self._waiting: queue.Queue[str | None] = queue.Queue()
         self._running: subprocess.Popen[bytes] | None = None
         self._worker: threading.Thread | None = None
@@ -175,9 +177,17 @@ class ProcessingQueue:
             return [j.to_dict() for j in reversed(self._jobs.values())]
 
     def close(self) -> None:
-        """Stop taking work and end the flight being processed. Called when the
-        agent shuts down; a flight not finished is simply processed again the
-        next time someone asks."""
+        """Stop taking work, end the flight being processed, and start nothing
+        that is still waiting. Called when the agent shuts down; a flight not
+        finished is simply processed again the next time someone asks.
+
+        NOTHING WAITING STARTS AFTER THIS (2026-11-16). A job started now
+        would outlive the agent — its child process is not the agent's to
+        stop once the agent has exited — and its result would never be
+        recorded, so the next start would run it again. When the stop marker
+        became a plain FIFO entry (Phase 1 of the no-camera work), every job
+        queued behind it ran after close(), session.end()'s own job included.
+        """
         with self._lock:
             self._closed = True
             running = self._running
@@ -204,9 +214,9 @@ class ProcessingQueue:
     def _work(self) -> None:
         while True:
             key = self._waiting.get()
-            if key is None:
-                return
             with self._lock:
+                if key is None or self._closed:
+                    return
                 job = self._jobs.get(key)
                 if job is None or job.state != JobState.QUEUED:
                     continue
@@ -236,7 +246,15 @@ class ProcessingQueue:
         except OSError as e:
             return f"The pipeline could not be started: {e.strerror or e}."
         with self._lock:
-            self._running = process
+            # close() may have run after Popen but before this line, when it
+            # could not see the child to kill it: stop it here instead.
+            closing = self._closed
+            self._running = None if closing else process
+        if closing:
+            with contextlib.suppress(Exception):
+                process.kill()
+            process.communicate()
+            return "The agent shut down before the pipeline could run."
         _lower_priority(process)
         try:
             out, err = process.communicate(timeout=self._timeout_s)

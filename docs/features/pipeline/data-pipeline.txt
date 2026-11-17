@@ -149,6 +149,14 @@ backend/agent/tests/pipeline/                      fixture, conformance, tests
 --------------------------------------------------------------------------------
 • Nothing is processed while the drone flies: processing.py has two kinds of
   job, "flight" and "session", both queued after the data has arrived.
+• CLOSING THE QUEUE STARTS NOTHING THAT WAS WAITING (ProcessingQueue.close,
+  the agent's shutdown). A job started then outlives the agent and its result
+  is never recorded, so the next start runs it again. Decided by `_closed`,
+  not by where the stop marker sits: on feat/no-camera the marker became a
+  FIFO entry and every waiting job — session.end()'s own included — ran after
+  close() (found and fixed 2026-11-16; test_processing.py
+  test_closing_starts_nothing_that_was_still_waiting, and the child started
+  during close() is stopped too).
 • The pipeline imports nothing from flight, session, api, sync or camera —
   tests/pipeline/test_conformance.py rule 1, per implementation. (safety is
   allowed: the cleaner imports the flight guard's speed limit, one number.)
