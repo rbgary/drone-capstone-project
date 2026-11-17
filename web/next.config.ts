@@ -5,7 +5,7 @@ const supabaseHost = (() => {
   try {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname;
   } catch {
-    return "fuwojlqpavvfgmqardfo.supabase.co";
+    return "tmswmgwomoabvftdreeb.supabase.co";
   }
 })();
 
