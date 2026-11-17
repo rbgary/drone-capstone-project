@@ -28,6 +28,15 @@ STATUS  (Last verified: 2026-10-09)
   web       STALE BY DESIGN until Phase 6 of the no-camera work: the frame
             galleries, Original / Enhanced and the camera note below still
             render, for older results; new results give them nothing
+  ACCEPTED  REPROCESSING CLEARS A FLIGHT'S CAMERA EVIDENCE ON THE WEB
+            (decided 2026-11-16, the team: old camera evidence is NOT to stay
+            on the website). Processing an older flight again — `process
+            --all` after PIPELINE_VERSION "4", Process again, a resume —
+            upserts a result with frames [] and findings with the neutral
+            image columns, so that flight's gallery and camera links go
+            before Phase 6 removes them for every flight. Not a bug: do not
+            make the upload keep old image fields. The images stay in the
+            bucket.
   database  BUILT — migrations 20261009000015 (owners), 0016 (results), 0017
             (notifications); proved on the local stack, APPLIED to the
             hosted database 2026-10-09 and checked there read-only (tables

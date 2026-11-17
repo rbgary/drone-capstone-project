@@ -36,7 +36,9 @@ WHERE IT STANDS — Phases 0–4, done on feat/no-camera (NOT merged to main)
       image_support "cannot_tell", image_note "": the hosted
       pipeline_findings still requires image_support (migration 0016).
     - the web's frame galleries and Original / Enhanced views still render,
-      for older results; new results give them nothing.
+      for older results; new results give them nothing. Reprocessing an
+      older flight clears its camera evidence early — ACCEPTED 2026-11-16:
+      old camera evidence is not to stay on the website (results.txt).
 
 --------------------------------------------------------------------------------
 BEFORE PHASE 5 — WHAT REAGAN HANDS OVER (the gate; expected in a few days)
