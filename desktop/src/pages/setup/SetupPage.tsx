@@ -12,15 +12,12 @@
  * install what is missing, reinstall one part (--reinstall), and read only
  * (--check) — this machine's exact command from GET /setup/command. DroneDeck
  * is quit first: the radio has one owner, and while the app is open its agent
- * holds it. The engine reads what the drone already has (never assumes),
- * writes drone firmware, the positioning deck, camera and camera Wi-Fi in that
- * order, asks for the battery unplug the camera needs, and calls it done only
- * once the camera has started. The page's one button, Read what is installed,
- * changes nothing.
+ * holds it. The engine reads what the drone already has (never assumes) and
+ * writes the drone firmware, then the positioning deck. The page's one
+ * button, Read what is installed, changes nothing.
  *
  * Step 2 leads the list only while reading, after a failed read, or with parts
- * missing; its button opens it any time. A replaced AI deck is told apart by
- * its factory serial and reads as not installed (setup.txt).
+ * missing; its button opens it any time.
  *
  * Step 1 says why the drone cannot be reached in the agent's words, with the
  * three fixes in the order they work; standby keeps trying by itself.
@@ -35,9 +32,9 @@
  * Control › Auto › ② Position, where the operator already is (2026-10-05 —
  * it sat here as step 4 and could not be found).
  *
- * "Connect the camera to Wi-Fi" was step 4 until 2026-11-15: the drone carries
- * no camera now. Step 2 still installs the AI deck's parts on a drone that has
- * one — that goes in the no-camera work's firmware phase.
+ * THE AI DECK IS GONE (2026-11-15): the drone carries no camera. Step 2 no
+ * longer installs the deck's camera and Wi-Fi chips, and "Connect the camera
+ * to Wi-Fi" was step 4 until then.
  */
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -94,7 +91,7 @@ export function SetupPage({ session, setup, run, onGo }: {
             an install button, and the commands hid behind it. The commands are
             on the page whatever step is current. */}
         <Item n={2} title="Install drone software — from Terminal" done={done("install")} open
-              summary="Drone firmware, positioning deck, camera and camera Wi-Fi installed">
+              summary="Drone firmware and positioning deck installed">
           <Install setup={setup} run={run} busy={inSession} />
         </Item>
 
@@ -185,14 +182,10 @@ function Connect({ session }: { session: Session | null }) {
   );
 }
 
-/** Reinstalling one part: what it is, and the --reinstall set that writes it.
- *  The AI deck's two chips are one bundle (drone_setup.reinstall_set), so
- *  they are one line. */
+/** Reinstalling one part: what it is, and the --reinstall set that writes it. */
 const REINSTALL: { label: string; parts: string; note: string }[] = [
-  { label: "Drone firmware", parts: "main", note: "The drone's own software. No battery unplug." },
+  { label: "Drone firmware", parts: "main", note: "The drone's own software." },
   { label: "Positioning deck", parts: "lighthouse", note: "The Lighthouse deck's image." },
-  { label: "Camera and camera Wi-Fi", parts: "camera,wifi",
-    note: "Both chips on the AI deck. It asks you to unplug the battery once." },
 ];
 
 /**
@@ -219,7 +212,7 @@ export function Install({ setup, run, busy, command }: {
       <ol className="grid gap-1 text-sm">
         <li><strong>1.</strong> Quit DroneDeck (⌘Q) — while it is open it holds the radio.</li>
         <li><strong>2.</strong> Open Terminal (on Windows, PowerShell), paste a line below and press Return.</li>
-        <li><strong>3.</strong> Keep the drone on. When it says so, unplug the battery for 10 seconds.</li>
+        <li><strong>3.</strong> Keep the drone on and the dongle plugged in until it says it is done.</li>
         <li><strong>4.</strong> Open DroneDeck again and press Check what&apos;s on the drone.</li>
       </ol>
 
@@ -256,10 +249,6 @@ export function Install({ setup, run, busy, command }: {
         <p className="text-xs">Only reads — it never writes to the drone.</p>
         {busy && <Message tone="warning" text="End the session first — reading the drone needs the radio." />}
         {checking && <Spinner label={setup?.message ?? "Reading the drone…"} />}
-        {phase === "ready" && setup?.facts?.deck_unrecorded && (
-          <Message tone="warning"
-                   text="This AI deck is not recorded on this drone — a new deck, or one set up before decks were recorded. Install what is missing puts its camera and Wi-Fi software on it." />
-        )}
         {read && !checking && (
           <ul className="grid border border-[var(--border)]">
             {setup.order.map((part) => (

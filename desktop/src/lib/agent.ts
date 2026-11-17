@@ -791,20 +791,14 @@ export type FlightPlayback = {
 };
 
 /** Set up: installing the drone's software (drone_setup.py). */
-export type SetupPart = "main" | "lighthouse" | "camera" | "wifi";
+export type SetupPart = "main" | "lighthouse";
 /** GET /setup/command — the exact line for this machine, ready to paste. */
 export type SetupCommand = { command: string; check: string };
 
 export type SetupState = {
-  phase: "idle" | "checking" | "ready" | "installing" | "unplug" | "verifying" | "done" | "failed";
+  phase: "idle" | "checking" | "ready" | "installing" | "done" | "failed";
   message: string | null;
-  facts: {
-    battery_v: number | null;
-    ai_deck: boolean | null;
-    /** The camera software is on record, but not for the AI deck fitted now
-     *  — a replaced deck, or a drone from before decks were recorded. */
-    deck_unrecorded?: boolean;
-  } | null;
+  facts: { battery_v: number | null } | null;
   parts: Partial<Record<SetupPart, "installed" | "needed" | "installing" | "done" | "absent">>;
   current: SetupPart | null;
   progress: number;

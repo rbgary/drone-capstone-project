@@ -473,21 +473,21 @@ const control = (label: string, override: Partial<Session>, autoStart?: FlowStar
   </Shell>
 );
 
-/** Set up step 2: the drone as it reads after its AI deck was swapped, and a
- *  fully installed drone opened to reinstall a part. */
+/** Set up step 2: a new drone that needs both parts, and a fully installed
+ *  drone opened to reinstall a part. */
 const setupBase: Omit<SetupState, "phase" | "parts" | "facts" | "message"> = {
-  current: null, progress: 0, order: ["main", "lighthouse", "camera", "wifi"],
-  labels: { main: "Drone firmware", lighthouse: "Positioning deck", camera: "Camera", wifi: "Camera Wi-Fi" },
+  current: null, progress: 0, order: ["main", "lighthouse"],
+  labels: { main: "Drone firmware", lighthouse: "Positioning deck" },
 };
-const setupSwapped: SetupState = {
+const setupNew: SetupState = {
   ...setupBase, phase: "ready", message: null,
-  facts: { battery_v: 4.12, ai_deck: true, deck_unrecorded: true },
-  parts: { main: "installed", lighthouse: "installed", camera: "needed", wifi: "needed" },
+  facts: { battery_v: 4.12 },
+  parts: { main: "needed", lighthouse: "needed" },
 };
 const setupDone: SetupState = {
   ...setupBase, phase: "done", message: "This drone's software is already installed.",
-  facts: { battery_v: 4.12, ai_deck: true, deck_unrecorded: false },
-  parts: { main: "installed", lighthouse: "installed", camera: "installed", wifi: "installed" },
+  facts: { battery_v: 4.12 },
+  parts: { main: "installed", lighthouse: "installed" },
 };
 const setupCommand = {
   command: "/Applications/DroneDeck.app/Contents/MacOS/dronedeck-agent setup",
@@ -501,11 +501,11 @@ createRoot(document.getElementById("root")!).render(
     <Shell label="Control · Auto page while a Manual session is open">
       <ModeLock session={{ ...session, mode: "manual", state: "ready" }} looking="auto" onBack={() => {}} />
     </Shell>
-    <Shell label="Set up · new AI deck">
-      <SetupPage session={setupSession} setup={setupSwapped} run={runHere} onGo={() => {}} />
+    <Shell label="Set up · new drone">
+      <SetupPage session={setupSession} setup={setupNew} run={runHere} onGo={() => {}} />
     </Shell>
     <Shell label="Set up · install by command">
-      <Install setup={setupSwapped} run={runHere} busy={false} onClose={() => {}} command={setupCommand} />
+      <Install setup={setupNew} run={runHere} busy={false} onClose={() => {}} command={setupCommand} />
     </Shell>
     <Shell label="Set up · installed, reinstall">
       <Install setup={setupDone} run={runHere} busy={false} onClose={() => {}} command={setupCommand} />

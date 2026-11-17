@@ -31,12 +31,12 @@ def run(*argv: str) -> int:
 
 
 class TestCommand:
-    def test_a_new_drone_gets_everything_and_is_told_to_unplug(self, rig, capsys):
+    def test_a_new_drone_gets_both_parts_and_no_unplug(self, rig, capsys):
         r = rig(FRESH)
         assert run() == 0
-        assert r.flashed == ["main", "lighthouse", "camera", "wifi"]
+        assert r.flashed == ["main", "lighthouse"]
         out = capsys.readouterr().out
-        assert "UNPLUG THE DRONE'S BATTERY NOW" in out
+        assert "UNPLUG" not in out                      # that was the AI deck's
         assert "Installing drone firmware" in out
 
     def test_check_only_writes_nothing(self, rig, capsys):
@@ -53,8 +53,14 @@ class TestCommand:
 
     def test_reinstall_writes_the_parts_asked_for(self, rig):
         r = rig(DONE)
-        assert run("--reinstall", "camera") == 0
-        assert r.flashed == ["camera", "wifi"]          # one deck part brings the other
+        assert run("--reinstall", "lighthouse") == 0
+        assert r.flashed == ["lighthouse"]
+
+    def test_the_ai_decks_old_parts_are_refused_with_the_reason(self, rig, capsys):
+        r = rig(DONE)
+        assert run("--reinstall", "camera") == 1
+        assert r.flashed == []
+        assert "no camera" in capsys.readouterr().out
 
     def test_an_unknown_part_is_refused_by_name(self, rig, capsys):
         r = rig(DONE)

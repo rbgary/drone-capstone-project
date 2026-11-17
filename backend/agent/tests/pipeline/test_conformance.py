@@ -22,7 +22,7 @@ from tests.pipeline.conformance import CLASSIFIERS, CLEANERS
 
 FIXTURE = Path(__file__).parent / "fixtures" / "data"
 FORBIDDEN = ("dronedeck.flight", "dronedeck.session", "dronedeck.api",
-             "dronedeck.sync", "dronedeck.camera")
+             "dronedeck.sync")
 
 
 @pytest.fixture(scope="module")

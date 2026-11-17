@@ -54,10 +54,11 @@ WARN  (3)
             (pipeline v3, no frames), Phase 2 (the agent's camera, its
             routes, capture sessions, decks_lost, Kind.FRAMES) and Phase 3
             (the desktop's Camera tab, Capture and Drone Wi-Fi pages, the
-            Rust Wi-Fi module; camera.txt and capture.txt deleted). Still
-            describing what is left: drone-wifi.txt and camera-firmware.txt
-            (the firmware Set up installs), setup.txt step 2, and the web
-            half of pipeline/results.txt — Phase 4 firmware, 6 web.
+            Rust Wi-Fi module; camera.txt and capture.txt deleted) and Phase
+            4 (Set up: two parts, no AI deck; camera-firmware.txt deleted,
+            drone-wifi.txt rewritten — Option A kept, Option C written up).
+            Still describing what is left: the web half of
+            pipeline/results.txt — Phase 6.
 2026-10-09  DRIFT FOUND AND FIXED: pipeline/data-pipeline.txt still said the
             unit of work was one point and that results never left the
             laptop; desktop/camera.txt still said no whole frame had ever

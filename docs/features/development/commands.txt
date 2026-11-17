@@ -38,7 +38,7 @@ AGENT CLI — the `dronedeck` command (motors only where noted)
                                     the app has no install button or route.
                                     QUIT DroneDeck first (it holds the radio).
                                     --check (read only), --reinstall
-                                    main|lighthouse|camera,wifi. Installed app:
+                                    main|lighthouse. Installed app:
                                     …/DroneDeck.app/Contents/MacOS/
                                     dronedeck-agent setup — Set up step 2 shows
                                     this machine's exact line to copy.
@@ -171,7 +171,8 @@ RLS / DATABASE CHECKS — prove the policies against a running database
   python backend/supabase/checks/playback_check.py        flight_plans + playback.
   python backend/supabase/checks/notifications_check.py   Notifications: one each.
 
-FIRMWARE — the Crazyflie app (drone_wifi) on the drone's STM32
+FIRMWARE — the Crazyflie app (drone_wifi) on the drone's STM32 — kept as is
+  for its cwsetup.fw marker; its Wi-Fi is dead code (../desktop/drone-wifi.txt)
   cd firmware/drone-wifi
 
   ./build.sh                        Run the wire test, then build the stock

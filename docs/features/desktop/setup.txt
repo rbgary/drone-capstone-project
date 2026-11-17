@@ -16,17 +16,14 @@ The Set up page (sidebar). One list, one step open at a time:
 
 "Connect the camera to Wi-Fi" was step 4 until 2026-11-15: the AI deck is off
 the drone (../architecture.txt, DECISIONS), and the Drone Wi-Fi page went with
-it. STEP 2 STILL INSTALLS THE DECK'S PARTS, AND IS BROKEN FOR A DRONE WITHOUT
-ONE: drone_setup.py (_facts) raises "This drone has no AI deck, so there is no
-camera to set up" before installing anything — main and lighthouse included.
-A set-up drone flies regardless; a NEW drone cannot be set up until the
-no-camera work's firmware phase changes step 2. Found 2026-11-15, not fixed.
+it. Step 2 installs two parts now, the drone firmware and the positioning
+deck; the AI deck's camera and Wi-Fi chips are no longer installed. FIXED THE
+SAME DAY: drone_setup.py had refused any drone without an AI deck ("This drone
+has no AI deck, so there is no camera to set up") before installing anything,
+main and lighthouse included — a new drone could not be set up at all.
 
-Step 2 puts on a new drone exactly what the first drone was given by hand —
-and on a new AI deck too: a replaced deck is told apart by its factory serial
-and gets its camera and Wi-Fi software without being asked. Any installed
-part can be written again with its own line ("Install or reinstall" reopens
-the step).
+Step 2 puts on a new drone exactly what the first drone was given by hand.
+Any installed part can be written again with its own line.
 Step 3 puts every base station on its own channel, so the drone can decode
 their sweeps. Telling the drone where the station stands is part of flying,
 not set-up: Control › Auto › ② Position (auto-control.txt) — it was step 4
@@ -36,18 +33,17 @@ here until 2026-10-05, where the operator could not find it.
 WHERE IT LIVES
 
   desktop/src/pages/setup/SetupPage.tsx              the page
-  backend/agent/dronedeck/drone_setup.py           check, install, unplug, verify
+  backend/agent/dronedeck/drone_setup.py           check, install
   backend/agent/dronedeck/setup_cli.py             `dronedeck setup` — the install command
   backend/agent/tests/test_setup_cli.py
-  backend/agent/dronedeck/firmware_bundle/         the three files + manifest.json
-  backend/agent/dronedeck/flash_firmware.py        STM32 flasher (progress added)
-  backend/agent/dronedeck/camera/flash_gap8.py     AI-deck flasher, gap8 | esp
+  backend/agent/tests/test_drone_setup.py
+  backend/agent/dronedeck/firmware_bundle/         cf2.bin, lighthouse.bin + manifest.json
+  backend/agent/dronedeck/flash_firmware.py        STM32 and Lighthouse-deck flasher
   backend/agent/packaging/dronedeck-agent.spec     bundles firmware_bundle/
-  firmware/drone-wifi/src/drone_wifi.c               the cwsetup.fw / .deck / .deckid params
-  desktop/src/harness.tsx                            "Set up · new AI deck", "… reinstall"
+  firmware/drone-wifi/src/drone_wifi.c               cwsetup.fw, the "main is ours" marker
+  desktop/src/harness.tsx                            "Set up · new drone", "… reinstall"
   GET /setup · POST /setup/check · GET /setup/command (this machine's line)
-  — read-only; there is NO install route (removed 2026-10-24)
-  · event "setup" (facts.deck_unrecorded: the deck fitted is not the one on record)
+  — read-only; there is NO install route (removed 2026-10-24) · event "setup"
 
   step 3:
   backend/agent/dronedeck/flight/basestation.py    find, set_channel (pyserial)
@@ -65,13 +61,11 @@ THE BUNDLE (manifest.json, sha256 each — a mismatch refuses to flash)
   lighthouse  lighthouse.bin   Bitcraze crazyflie-release 2025.12.1's deck image
                                (lighthouse-fpga V6, 104 093 bytes, crc32
                                288081812 — what 2025.12.1 asks the deck for)
-  camera      aideck_gap8.bin  Bitcraze aideck-gap8-examples 2025.02, official
-                           wifi_img_streamer_with_ap
-  wifi        aideck_esp.bin   Bitcraze aideck-esp-firmware 2025.02 + four
-                           firmware/aideck-esp/ patches (camera-firmware.txt;
-                           bundle 3 on lab: + wifi-link.patch)
-Updating one: rebuild it (firmware/*/build.sh), copy it in, regenerate the
-sha256, bump "bundle" (deck parts) or "drone_wifi" (main) so drones update.
+Updating main: rebuild it (firmware/drone-wifi/build.sh), copy it in,
+regenerate its sha256 and bump "drone_wifi" so drones update. (Until
+2026-11-15 the bundle also held the AI deck's aideck_gap8.bin and
+aideck_esp.bin, raised by a "bundle" number; both went with the camera.)
+WHY MAIN IS STILL drone_wifi, AND THE CLEANUP THAT IS OWED: drone-wifi.txt.
 
 
 DECISIONS
@@ -83,10 +77,11 @@ DECISIONS
 
       dronedeck setup                          check, then install what is needed
       dronedeck setup --check                  check only; change nothing
-      dronedeck setup --reinstall camera,wifi  write those parts again too
+      dronedeck setup --reinstall lighthouse   write that part again too
 
-  It is the same engine (DroneSetup) — same order, battery floor, unplug,
-  verification and marker — printing each step and a boxed UNPLUG prompt.
+  It is the same engine (DroneSetup) — same order, same battery floor —
+  printing each step. (--reinstall camera or wifi says they were the AI
+  deck's and are gone.)
   Exit 0 done, 1 failed, 2 DroneDeck open.
   THE APP IS QUIT FIRST: the radio has one owner, and DroneDeck's agent holds
   it while the app is open, so a second program would read "no drone". The
@@ -99,36 +94,23 @@ DECISIONS
   `& "…" setup` on Windows; a developer's venv `dronedeck setup`). The agent
   computes it (setup_cli.command_line), never the page, so it is the real path.
 - WHAT A DRONE HAS IS READ, NOT ASSUMED. cwsetup.fw (present only in our
-  firmware) says whether main is ours and which version; cwsetup.deck, stored
-  PERSISTENTLY on the drone after a verified install, says which deck bundle it
-  carries — the deck's own chips cannot report their firmware over the radio.
-  Only what is missing or older is flashed; a set-up drone is told so.
-- The deck's two parts install together: they were tested together, and the
-  marker records them as one bundle. A tick on either reinstalls both.
-- A REPLACED AI DECK IS TOLD APART BY ITS FACTORY SERIAL (2026-10-15). The
-  marker lives on the drone, so before this a new deck on a set-up drone read
-  "installed" and got nothing. Every deck carries a 1-wire memory with a
-  unique serial, which cflib reads before the link opens (OWElement.addr; the
-  AI deck is vid 0xBC pid 0x12, crazyflie-firmware aideck.c). Its CRC-32
-  (never 0) is saved as cwsetup.deckid beside cwsetup.deck after a verified
-  install; a different serial lists camera and Wi-Fi as to install, and the
-  page says why. The serial saved is the one read AFTER the unplug — the deck
-  that actually started the camera. Kept on the drone, not the laptop, so a
-  second laptop reads the same record.
-  Rejected: keeping it on the laptop (no firmware change, but a second laptop
-  would not know). Uncaught by design: the same deck reflashed elsewhere keeps
-  its serial — that is what Reinstall is for.
-- A SERIAL THAT CANNOT BE READ leaves cwsetup.deck alone to decide, and is
-  saved as 0. Reinstalling on every check instead would loop: nothing could
-  ever record that it was done.
+  firmware) says whether main is ours and which version; the positioning
+  deck says itself whether it needs its image. Only what is missing or older
+  is flashed; a set-up drone is told so.
+- THE AI DECK'S PARTS AND MARKERS WENT 2026-11-15. cwsetup.deck (the deck
+  bundle) and cwsetup.deckid (which deck, by a CRC-32 of its 1-wire serial)
+  told a replaced deck apart and recorded a verified camera install after a
+  battery unplug. Nothing reads them now; a drone may still store them, and
+  they are harmless. A drone that still has an AI deck fitted is set up like
+  any other: nothing is written to the deck.
 - NO BUTTON WRITES TO THE DRONE (2026-10-24, Samuel: "i dont want people
   accidentally pressing a button to reinstall a firmware"). Step 2 is lines
   to copy: install what is missing; reinstall ONE part — drone firmware
-  (--reinstall main), positioning deck (lighthouse), camera and camera Wi-Fi
-  (camera,wifi: one bundle); and read only (--check). Its one button, Read
+  (--reinstall main) or positioning deck (lighthouse); and read only
+  (--check). Its one button, Read
   what is installed, changes nothing. The reinstall ticks that built the line
   (2026-10-15) are gone with the Install button: a part per line, not one
-  line for everything — rewriting the drone firmware to fix a camera adds
+  line for everything — rewriting the drone firmware to fix one part adds
   minutes and risk. Reinstalling still refuses a low battery, keeps the
   order, and a deck that is not fitted is not written.
 - The agent's engine does the flashing, run ONLY by the command in its own
@@ -193,7 +175,7 @@ DECISIONS
   Check the drone again each run — and that hid the measuring step from an operator whose
   drone was fully installed: the station was never measured and ② Check
   showed the drone "92 m from the start". Step 2 now leads only while
-  checking, installing, unplugging, failed, or with parts to install; its
+  checking, installing, failed, or with parts to install; its
   "Check" button opens it any time. Every step reopens by its button.
 - AN UNMOVED DRONE IS NAMED, NOT CALLED A DISAGREEMENT in the terminal's
   two-record walk (`dronedeck geometry`; NOT_MOVED_M 0.10 m, 2026-10-05): two records whose station positions match are the same place.
@@ -202,15 +184,14 @@ DECISIONS
   The guard also exposed a test (test_geometry.py, the mirror test) that had
   been feeding one sample twice since it was written.
 - The page cannot tell a Crazyflie 2.1 from a 2.1 Brushless (the radio does not
-  say; cflib's bootloader reports both as "cf2"). It is for the 2.1 + AI deck.
+  say; cflib's bootloader reports both as "cf2"). It is for the 2.1, with or
+  without an AI deck fitted.
 
 
 RELATED
 
 depends-on        drone-wifi.txt
                   drone_wifi is what "main" installs
-depends-on        camera-firmware.txt
-                  the deck firmware bundled for step 2, and when its bundle is raised
 shares-data-with  ../backend/sessions-and-modes.txt
                   pauses and resumes standby
 consumed-by       auto-control.txt
@@ -222,9 +203,12 @@ depends-on        ../backend/flight-safety.txt
                   rule that decides when it is done
 
 
-LAST VERIFIED  2026-11-15 on feat/no-camera, step 4's removal only: `pnpm
-build`; the no-deck refusal read in drone_setup.py (_facts), not run on a
-drone. 2026-10-24 (the command): tests/test_setup_cli.py (new drone,
+LAST VERIFIED  2026-11-15 on feat/no-camera — two parts, no AI deck:
+tests/test_drone_setup.py (a drone without an AI deck is not refused, both
+parts in order, the deck asked again after main, retired part names refused
+with the reason) and test_setup_cli.py; ruff, mypy; desktop build. NOT YET on
+the lab drone: `dronedeck setup --check` should read main and the positioning
+deck installed and list nothing else — nothing is flashed by it. 2026-10-24 (the command): tests/test_setup_cli.py (new drone,
 --check, set-up drone, --reinstall, unknown part, no drone, refused while
 DroneDeck runs, the line on macOS/Linux/Windows/dev); ruff, mypy; desktop
 build; harness "Set up · install by command" light and dark. NOT YET on a

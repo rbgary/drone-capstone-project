@@ -31,9 +31,8 @@ Feature docs are plain `.txt`, grouped by the surface they describe.
 | Doc | What it covers |
 |---|---|
 | [features/desktop/desktop-app.txt](features/desktop/desktop-app.txt) | The shell, the bundled agent sidecar, installers and CI |
-| [features/desktop/camera-firmware.txt](features/desktop/camera-firmware.txt) | The AI deck's two chips: the wire format, why the feed is slow and stalls, the ESP32 throughput patch and the JPEG streamer (built, lab pending) |
-| [features/desktop/setup.txt](features/desktop/setup.txt) | The Set up page: install the drone's software on a new drone, base station channels, then a session — **step 2 refuses a drone with no AI deck** (firmware phase) |
-| [features/desktop/drone-wifi.txt](features/desktop/drone-wifi.txt) | **Mostly removed** (no camera): what is left is the drone_wifi firmware Set up still installs, until the firmware phase |
+| [features/desktop/setup.txt](features/desktop/setup.txt) | The Set up page: the drone firmware and positioning deck on a new drone (no AI deck), base station channels, then a session |
+| [features/desktop/drone-wifi.txt](features/desktop/drone-wifi.txt) | drone_wifi, the firmware app kept only for Set up's "main is installed" marker — why it stays (Option A), and the cleanup to stock firmware (Option C) |
 | [features/desktop/pages-and-windows.txt](features/desktop/pages-and-windows.txt) | The sidebar shell, Control's two columns and its console, the five live sensor windows, and how the layout is measured |
 | [features/desktop/manual-room-map.txt](features/desktop/manual-room-map.txt) | Manual's room drawn from the two base stations, the drone in it, F/B/L/R where the keys move it, stations heard |
 | [features/desktop/auto-control.txt](features/desktop/auto-control.txt) | Control in Auto: ① Mission (plan, edit, pick) → ② Check → ③ Fly, the monitor on the right |
