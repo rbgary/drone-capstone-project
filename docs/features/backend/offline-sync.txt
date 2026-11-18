@@ -24,6 +24,8 @@ WHERE IT LIVES
   backend/agent/dronedeck/paths.py         where the data dir is
   backend/agent/dronedeck/telemetry/sinks.py  CSV first, then cloud
   backend/agent/tests/test_outbox.py, test_syncer.py
+  backend/agent/tests/test_storage_full.py  a full bucket holds back no rows
+  desktop/src/pages/home/HomePage.tsx      the storage message on Home
 
 
 THE ORDER (records reference each other)
@@ -68,6 +70,45 @@ wait for a flight row that may not exist yet.
 The sync runs during a flight, when a flight ends, at sign-in, and every minute
 while anything is unsent. The window shows what is pending and will not report
 "all data synced" until the outbox is empty.
+
+
+FILE STORAGE NEVER HOLDS BACK THE ROWS (2026-11-11)
+
+File storage (the flight-frames and flight-logs buckets) and the database are
+separate resources with separate quotas: the free plan has 1 GB of files and
+500 MB of database. Before this, the pass ran in order and one error ended it,
+so a full bucket stopped vitals, results, findings and playback reaching
+Supabase too, and the dashboard quietly stopped updating (found 2026-11-08).
+
+Now every file upload goes through Syncer._store. The first one that storage
+refuses (a StorageError from cloud.py) skips every other file upload for the
+rest of that pass, and the database rows go on without them:
+
+  frames, frames.csv   the cursor stays where it is; the record stays pending
+  enhanced frames      the result and findings go ONCE (`_rows_sent` on the
+                       record); the record waits for its frames
+  the flight's CSV     the telemetry rows go; the flight is marked `_rows_sent`
+                       and stays pending (counted in "flights to upload", shown
+                       as "uploading") until the log file is up
+  results, playback    wait for the flight's rows (`_rows_sent` or `_sent`),
+                       not for its log file
+
+The next pass tries storage once more, so uploads resume by themselves once
+space is freed, from their cursors, with nothing sent twice. Re-processing a
+flight replaces its record, clearing `_rows_sent`, so the new result's rows go.
+
+The window says so: the sync status carries `storage_error` (a sentence) and
+`storage_full`, and Home shows it under the last upload attempt. `last_error`
+stays empty when every row went. "Full" is a guess at the wording, because
+Supabase does not document the refusal and it has not happened here: a 402, or
+"quota" in the error (cloud.storage_quota_refused; a 413 is one file over the
+size limit, not full). Anything else reads "Photos and flight logs did not
+upload". The raw refusal is logged once, when storage starts refusing, so the
+first real one shows what it looks like. A database error still ends the pass
+as before.
+
+Verified 2026-11-11 by tests/test_storage_full.py (14 tests; 5 of them fail
+against the old behaviour), not against a real full bucket.
 
 
 CSV AND SERVER-SIDE BACKFILL
@@ -149,3 +190,7 @@ consumed-by       ../desktop/mission-playback.txt
 consumed-by       ../pipeline/session.txt
                   Kind.SESSION_RESULTS: a session's own result, after the
                   session's row, last in a pass
+shares-data-with  ../supabase/storage-and-backfill.txt
+                  the flight's gzipped CSV in flight-logs and the frames in
+                  flight-frames — one storage quota; when it refuses, the
+                  files wait here and the rows go on

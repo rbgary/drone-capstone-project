@@ -49,6 +49,10 @@ DECISIONS
 
 - CSV first, always. A local write cannot fail; a flight cannot be re-run. The
   upload is best-effort and retried, never in the critical path (CLAUDE.md #6).
+  Nor in the rows' path: when storage refuses the CSV (a full bucket), the
+  telemetry rows have already gone and the file waits on the laptop for a
+  later pass (../backend/offline-sync.txt, FILE STORAGE NEVER HOLDS BACK THE
+  ROWS). Both buckets share the project's one storage quota.
 - The import is idempotent: it upserts on (flight_id, index) with
   ignore-duplicates, so a CSV already partly uploaded row by row costs nothing
   to re-import, and a CSV already in storage counts as success.
@@ -84,3 +88,10 @@ INVARIANTS
   is unknown — until migration 20260928000012 is applied, a backfill that sends
   point_id would be refused. Apply the migration, and put the function's source
   under backend/supabase/functions/.
+
+
+RELATED
+
+shares-data-with  ../backend/offline-sync.txt
+                  the syncer uploads the flight CSV and the frames into these
+                  buckets; a full quota holds back only the files, never the rows

@@ -429,6 +429,11 @@ export type SyncStatus = {
   uploading: string | null;
   last_error: string | null;
   everything_sent: boolean;
+  /** Set while Supabase file storage refuses uploads: photos and flight logs
+   *  wait on this computer while readings and results still go (sync/syncer.py). */
+  storage_error: string | null;
+  /** True when that refusal looked like the storage quota being used up. */
+  storage_full: boolean;
 };
 
 export type Telemetry = {

@@ -80,7 +80,11 @@ web/app/app/sessions/[id]/page.tsx, web/app/app/flights/[id]/page.tsx
 • LAPTOP FIRST, THEN UP (CLAUDE.md invariant 6): result.json is the record;
   the outbox (Kind.RESULTS) uploads it once the flight's own row is up,
   enhanced frames from a cursor, then the result, the findings, and the
-  retraction of findings a re-process no longer makes.
+  retraction of findings a re-process no longer makes. When file storage
+  refuses an enhanced frame (a full bucket), the rows go anyway and the
+  frames wait (../backend/offline-sync.txt, FILE STORAGE NEVER HOLDS BACK THE
+  ROWS); the web lists what is in the bucket, so a missing frame is absent,
+  never broken.
 • TWO TABLES: pipeline_results (the whole result per flight, replaced on
   re-process) and pipeline_findings (one row each, ids made on the laptop).
 • NOTIFICATIONS ARE ROWS, made by a database trigger per operator for each

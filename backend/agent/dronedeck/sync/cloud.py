@@ -57,6 +57,31 @@ class CloudRefused(CloudError):
     it (e.g. a plan for a flight another account flew)."""
 
 
+class StorageError(CloudError):
+    """A file upload (a frame, an index, a flight log) failed — storage, not
+    the database. The syncer skips the rest of that pass's file uploads and
+    lets the database rows through: a full bucket used to stall every row
+    behind it (found 2026-11-08). `full` is True when it looked like the
+    project's storage quota rather than the network."""
+
+    def __init__(self, message: str, *, full: bool = False) -> None:
+        super().__init__(message)
+        self.full = full
+
+
+def storage_quota_refused(error: Exception) -> bool:
+    """Whether a storage refusal looks like the quota being used up.
+
+    Not documented by Supabase and not yet seen on this project (the bucket
+    was half full on 2026-11-08): reported refusals name the quota, and a
+    restricted project answers 402. A 413 is NOT counted — that is one file
+    over the per-file size limit. Only the wording of the message depends on
+    this; every storage failure is isolated from the rows either way."""
+    status = str(getattr(error, "status", "") or getattr(error, "status_code", ""))
+    text = f"{getattr(error, 'code', '')} {getattr(error, 'message', '')} {error}".lower()
+    return status == "402" or "quota" in text
+
+
 class AuthError(RuntimeError):
     """Sign-in failed. Never carries the password or the raw provider error."""
 
@@ -468,7 +493,8 @@ class SupabaseCloud:
             if "Duplicate" in str(e) or "already exists" in str(e):
                 log.info("flight log %s already uploaded", object_path)
                 return
-            raise CloudError(f"could not upload the flight log: {type(e).__name__}") from e
+            raise StorageError(f"could not upload the flight log: {type(e).__name__}",
+                               full=storage_quota_refused(e)) from e
 
     # ── camera frames ────────────────────────────────────────────────────
 
@@ -490,7 +516,8 @@ class SupabaseCloud:
         except Exception as e:
             if "Duplicate" in str(e) or "already exists" in str(e):
                 return
-            raise CloudError(f"could not upload a camera frame: {type(e).__name__}") from e
+            raise StorageError(f"could not upload a camera frame: {type(e).__name__}",
+                               full=storage_quota_refused(e)) from e
 
     # ── the data pipeline's results ──────────────────────────────────────
 
