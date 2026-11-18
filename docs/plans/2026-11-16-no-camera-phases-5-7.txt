@@ -35,14 +35,20 @@ WHERE IT STANDS — Phases 0–4, done on feat/no-camera (NOT merged to main)
       deck read installed, nothing else listed. Reads only.
     - hover thrust without the deck, from a trace (flight-status.txt item 2).
 
-  STILL IN THE CODE ON PURPOSE, until Phase 6:
-    - sync/results.py sends every finding with evidence_frames {},
-      image_support "cannot_tell", image_note "": the hosted
-      pipeline_findings still requires image_support (migration 0016).
-    - the web's frame galleries and Original / Enhanced views still render,
-      for older results; new results give them nothing. Reprocessing an
-      older flight clears its camera evidence early — ACCEPTED 2026-11-16:
-      old camera evidence is not to stay on the website (results.txt).
+  PHASE 6a, done 2026-11-18 (needs no photos, so not held for Phase 5):
+    - migration 20261118000020: pipeline_findings.image_support optional,
+      its check dropped; the three image columns stay until a later
+      migration drops them
+    - sync/results.py sends no image columns
+    - the web: every camera frame, Original / Enhanced, the camera note,
+      the Frames row and the chart click removed; FrameGallery.tsx,
+      lib/frame-zip.ts, the frame queries and fflate deleted
+    Gates: agent ruff, mypy, pytest 1416 passed; web typecheck, lint, build.
+    OWED: `cd backend && supabase db reset` + the checks on the local stack
+    (Docker Desktop was not reachable from WSL that day); the pages in a
+    browser; then 20261118000020 APPLIED TO THE HOSTED PROJECT BEFORE this
+    agent ships — until then the hosted table refuses every finding and the
+    results wait in the outbox.
 
 --------------------------------------------------------------------------------
 BEFORE PHASE 5 — WHAT REAGAN HANDS OVER (the gate; expected in a few days)
@@ -146,7 +152,7 @@ DONE WHEN
   shown.
 
 --------------------------------------------------------------------------------
-PHASE 6 — THE WEBSITE AND SUPABASE
+PHASE 6b — PHOTOS ON THE WEBSITE AND IN SUPABASE (6a is done, above)
 --------------------------------------------------------------------------------
   - STORAGE: photos go into the existing private flight-frames bucket under
     <session id>/photos/. Its policies (migration 0011) already let
@@ -157,21 +163,18 @@ PHASE 6 — THE WEBSITE AND SUPABASE
                        RLS like pipeline_findings — every signed-in user
                        reads, operators write; explicit grants ("a policy
                        without a grant is a 403", rls-and-grants.txt)
-      pipeline_findings  image_support made NULLABLE and its check dropped,
-                       so the agent can stop sending the neutral values; the
-                       columns themselves are dropped in a LATER migration,
-                       once nothing reads them. Never edit 0016 — migrations
-                       are only added to.
+      (pipeline_findings' image_support was made optional in 6a; the
+      columns are dropped in a LATER migration, once no laptop runs an
+      agent that sends them.)
   - SYNC: Kind.PHOTOS — each photo (from a cursor, "already exists" is
-    success), then its row. Then remove the neutral image columns from
-    sync/results.py. Waits for the session's own row, like the others.
+    success), then its row. Waits for the session's own row, like the
+    others.
   - WEB: the session page gets a Photos section with each verdict, adapted
-    from components/flight/FrameGallery.tsx (keeping "Select to download",
-    lib/frame-zip.ts). Removed: the Original / Enhanced views, the frame
-    marks and the camera note on findings (pipeline.ts, processed/[id],
-    flights/[id]); the old camera frames are no longer shown (they stay in
-    the bucket). types/database.ts regenerated. All reads through
-    lib/queries.ts.
+    with /copy-adapt from the camera's gallery, deleted in 6a — `git show
+    4a3c6f4:web/components/flight/FrameGallery.tsx`, and for "Select to
+    download" `4a3c6f4:web/lib/frame-zip.ts` (pnpm add fflate) with the
+    paged listAll / signAll from that commit's lib/queries.ts.
+    types/database.ts regenerated. All reads through lib/queries.ts.
   - The rls checks extended with session_photos (backend/supabase/checks/).
 
 DONE WHEN

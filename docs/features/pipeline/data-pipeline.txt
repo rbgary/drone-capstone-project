@@ -52,9 +52,11 @@ STATUS  (Last verified: 2026-11-15)
             origin/feat/image-model-stage): photos taken by hand, uploaded in
             the desktop app, each with its own verdict — outside this
             pipeline, Phase 5 of the no-camera work
-  DATA      the hosted pipeline_findings still has evidence_frames,
-            image_support and image_note; sync sends them neutral until a
-            migration drops them (sync/results.py)
+  DATA      pipeline_findings still has evidence_frames, image_support and
+            image_note, retired: migration 20261118000020 makes image_support
+            optional and sync sends none of them (sync/results.py). NOT YET
+            applied to the hosted project — until it is, findings wait in
+            the outbox (results.txt)
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS

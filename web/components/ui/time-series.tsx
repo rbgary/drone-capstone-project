@@ -8,7 +8,6 @@ import {
   Line,
   LineChart,
   ReferenceArea,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -225,8 +224,6 @@ export function TimeSeries({
   digits = 2,
   xFormat = "raw",
   bands = [],
-  onPick,
-  marker = null,
 }: {
   rows: Row[];
   series: Series[];
@@ -237,11 +234,6 @@ export function TimeSeries({
   digits?: number;
   xFormat?: XFormat;
   bands?: Band[];
-  /** A click on the chart hands back the x of the reading under the cursor
-   *  (numeric x only). The chart turns a pointer while it can be clicked. */
-  onPick?: (x: number) => void;
-  /** An x to mark with a dashed line — what was picked. */
-  marker?: number | null;
 }) {
   const client = useIsClient();
   const series = rawSeries.map((s) =>
@@ -273,11 +265,6 @@ export function TimeSeries({
           <LineChart
             data={rows}
             margin={{ top: 8, right: directLabels ? 96 : 16, bottom: 16, left: 0 }}
-            style={onPick ? { cursor: "pointer" } : undefined}
-            onClick={onPick ? (state) => {
-              const x = rows[Number(state.activeTooltipIndex)]?.[xKey];
-              if (typeof x === "number") onPick(x);
-            } : undefined}
           >
             {/* Furniture recedes: the data is the only thing at full strength. */}
             <CartesianGrid stroke="var(--grid)" vertical={false} />
@@ -362,9 +349,6 @@ export function TimeSeries({
                 ifOverflow="extendDomain"
               />
             ))}
-            {xFormat === "seconds" && typeof marker === "number" && (
-              <ReferenceLine x={marker} stroke="var(--foreground)" strokeDasharray="4 3" ifOverflow="extendDomain" />
-            )}
             {series.map((s) => (
               <Line
                 key={s.key}

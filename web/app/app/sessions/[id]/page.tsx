@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  getEnhancedFrames,
   getFindings,
   getFlightsTelemetry,
   getPipelineResults,
@@ -9,16 +8,14 @@ import {
   getSessionEvents,
   getSessionFlights,
   getSessionFindings,
-  getSessionFrames,
   getSessionResult,
   getSessionSamples,
   getZones,
 } from "@/lib/queries";
 import { ErrorTable } from "@/components/processing/error-table";
-import { FindingsList, type FrameLinks } from "@/components/processing/findings";
+import { FindingsList } from "@/components/processing/findings";
 import { FlightProcessing } from "@/components/processing/flight-processing";
-import { SEVERITY, excerptsFor, frameMarks, marksOf, readFlags, readTracks, severityOf } from "@/lib/pipeline";
-import { FrameGallery } from "@/components/flight/FrameGallery";
+import { SEVERITY, excerptsFor, marksOf, readFlags, readTracks, severityOf } from "@/lib/pipeline";
 import { Stat, StatusBadge } from "@/components/ui/states";
 import { PageHeader } from "@/components/ui/page-header";
 import { TimeSeries } from "@/components/ui/time-series";
@@ -40,8 +37,7 @@ export const metadata = { title: "Session" };
  * One session — EVERYTHING in it (the owner, 2026-10-09: "the session is a
  * superset of the flight page"): what the data pipeline found in any of its
  * flights, each flight's processing (raw vs clean, expected, the stretches
- * that departed), its flights, every camera frame (original and enhanced), the
- * session's own vitals (session_samples: one a second, Start to End session,
+ * that departed), its flights, the session's own vitals (session_samples: one a second, Start to End session,
  * flying or not), its events, and the raw rows of the session AND of every
  * flight in it.
  *
@@ -67,31 +63,23 @@ export default async function SessionPage(props: PageProps<"/app/sessions/[id]">
   // A malformed id is a missing page, not a database error.
   if (!UUID.test(id)) notFound();
 
-  const [session, samples, flights, events, zones, frames] = await Promise.all([
+  const [session, samples, flights, events, zones] = await Promise.all([
     getSession(id),
     getSessionSamples(id, SAMPLE_CAP),
     getSessionFlights(id),
     getSessionEvents(id),
     getZones(),
-    getSessionFrames(id),
   ]);
   if (!session) notFound();
   const flightIds = flights.map((f) => f.id);
-  // Pictures taken by hand on the desktop's Capture page (frames.csv source).
-  const manual = frames.filter((f) => f.source === "manual");
-  // The zip's name: the session's day and the start of its id.
-  const zipBase = `dronedeck-session-${session?.started_at?.slice(0, 10) ?? "unknown"}-${id.slice(0, 8)}`;
-  const [results, findings, enhanced, telemetry, own, ownFindings] = await Promise.all([
+  const [results, findings, telemetry, own, ownFindings] = await Promise.all([
     getPipelineResults(flightIds),
     getFindings(flightIds),
-    getEnhancedFrames(id),
     getFlightsTelemetry(flightIds),
     getSessionResult(id),
     getSessionFindings(id),
   ]);
   const resultOf = new Map(results.rows.map((r) => [r.flight_id, r]));
-  const frameLinks: FrameLinks = Object.fromEntries(
-    frames.map((f) => [f.seq, { original: f.url, enhanced: enhanced[f.seq] }]));
   const flightNumber = new Map(flights.map((f, i) => [f.id, i + 1]));
   const flightOf = (flightId: string) => flightNumber.has(flightId)
     ? { label: `Flight ${flightNumber.get(flightId)} of the session`, href: `${FLIGHTS}/${flightId}` }
@@ -100,7 +88,6 @@ export default async function SessionPage(props: PageProps<"/app/sessions/[id]">
   const rows = samples.rows;
   // The session's own result: its samples around the flights (scope "session").
   const ownRows = ownFindings.rows;
-  const marks = frameMarks([...findings.rows, ...ownRows]);
   const sampleRows = rows.map((r) => ({ ...r, index: r.seq }));
   const excerpts = excerptsFor([...findings.rows, ...ownRows],
     (key) => key === id ? readTracks(own.row?.tracks ?? []) : readTracks(resultOf.get(key)?.tracks ?? []),
@@ -169,8 +156,6 @@ export default async function SessionPage(props: PageProps<"/app/sessions/[id]">
         <Stat label="Duration" value={flightDuration(session.started_at, session.ended_at)} />
         <Stat label="Flights" value={String(session.flight_count)} />
         <Stat label="Vitals" value={rows.length.toLocaleString()} hint="one sample a second" />
-        <Stat label="Camera frames" value={frames.length.toLocaleString()}
-              hint={manual.length ? `${manual.length} captured manually` : undefined} />
         <OwnerStat label="Run by" who={session} />
         <Stat label="Drone" value={session.drone} />
         <Stat label="Mode at start" value={session.mode_at_start} />
@@ -208,15 +193,15 @@ export default async function SessionPage(props: PageProps<"/app/sessions/[id]">
               {findings.rows.length} finding{findings.rows.length === 1 ? "" : "s"} in {processed} processed
               flight{processed === 1 ? "" : "s"}{processed < flights.length
                 ? ` — ${flights.length - processed} not processed yet` : ""}. The readings are the
-              evidence; the frames show what the camera saw then.
+              evidence.
             </p>
-            <FindingsList findings={findings.rows} frames={frameLinks} flightOf={flightOf} excerpts={excerpts} />
+            <FindingsList findings={findings.rows} flightOf={flightOf} excerpts={excerpts} />
           </>
         )}
         {ownRows.length > 0 && (
           <>
             <h3 className="text-base font-semibold">On the ground, around the flights</h3>
-            <FindingsList findings={ownRows} frames={frameLinks} excerpts={excerpts} />
+            <FindingsList findings={ownRows} excerpts={excerpts} />
           </>
         )}
         {(processed > 0 || own.row) && (
@@ -245,8 +230,7 @@ export default async function SessionPage(props: PageProps<"/app/sessions/[id]">
                 </span>
               </h3>
               <FlightProcessing result={resultOf.get(f.id)!} telemetry={telemetry[f.id] ?? []}
-                                findings={findings.rows.filter((x) => x.flight_id === f.id)}
-                                frameLinks={frameLinks} />
+                                findings={findings.rows.filter((x) => x.flight_id === f.id)} />
             </section>
           ))}
         </section>
@@ -355,22 +339,6 @@ export default async function SessionPage(props: PageProps<"/app/sessions/[id]">
           </div>
         )}
       </section>
-
-      {manual.length > 0 && (
-        <section aria-labelledby="manual-heading" className="space-y-3">
-          <h2 id="manual-heading" className="text-lg font-semibold text-[var(--heading)]">Captured manually</h2>
-          <p className="max-w-3xl text-sm text-[var(--muted)]">
-            Pictures the operator took by hand during this session, on the desktop app&apos;s Capture page.
-          </p>
-          <FrameGallery frames={manual} enhanced={enhanced} marks={marks} downloadName={`${zipBase}-manual`} />
-        </section>
-      )}
-
-      <section aria-labelledby="camera-heading" className="space-y-3">
-        <h2 id="camera-heading" className="text-lg font-semibold text-[var(--heading)]">Camera</h2>
-        <FrameGallery frames={frames} enhanced={enhanced} marks={marks} downloadName={zipBase} />
-      </section>
-
 
       <section aria-labelledby="events-heading" className="space-y-3">
         <h2 id="events-heading" className="text-lg font-semibold text-[var(--heading)]">What happened</h2>

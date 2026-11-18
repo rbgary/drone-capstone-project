@@ -7,12 +7,12 @@ syncer turns that file into the two tables' rows:
     pipeline_results    one row per flight: the whole result as written
     pipeline_findings   one row per finding, for the pages and notifications
 
-THE IMAGE COLUMNS, UNTIL THEY ARE RETIRED. Results carry no frames since
-pipeline "4" (contract v3, no camera), but the hosted pipeline_findings still
-has evidence_frames, image_support (NOT NULL, checked) and image_note
-(migration 20261009000016). Every finding is sent with their neutral values —
-no frames, "cannot_tell", no note — so an upload is never refused, until a
-migration drops them and this goes with it.
+NO IMAGE COLUMNS. Results carry no frames since pipeline "4" (contract v3,
+no camera). pipeline_findings still has evidence_frames, image_support and
+image_note, retired: migration 20261118000020 made image_support optional, so
+a finding is sent without any of them — the database fills in its defaults —
+and an older result that had them does not carry them up. The columns are
+dropped by a later migration.
 
 Re-processing a flight re-queues it: the result row is replaced (upsert on
 flight_id), every finding upserted on its id (a stretch keeps its id), and the
@@ -77,9 +77,6 @@ def result_row(result: Mapping[str, Any]) -> dict[str, Any]:
 FINDING_COLUMNS = ("id", "signal", "severity", "title", "sentence", "start_index",
                    "end_index", "t_start_s", "t_end_s", "unit", "observed", "expected",
                    "delta", "z", "point_ids", "x_m", "y_m", "z_m")
-#: The image columns' neutral values (see the module docstring);
-#: evidence_frames is sent as an empty list beside them.
-RETIRED_IMAGE_COLUMNS = {"image_support": "cannot_tell", "image_note": ""}
 
 
 def is_session(result: Mapping[str, Any]) -> bool:
@@ -100,8 +97,8 @@ def finding_rows(result: Mapping[str, Any]) -> list[dict[str, Any]]:
     """public.pipeline_findings ← result.json's findings. A session's findings
     belong to the session (scope "session") and to no flight."""
     session = is_session(result)
-    return [{**{c: f.get(c) for c in FINDING_COLUMNS}, **RETIRED_IMAGE_COLUMNS,
-             "evidence_frames": [], "point_ids": list(f.get("point_ids") or []),
+    return [{**{c: f.get(c) for c in FINDING_COLUMNS},
+             "point_ids": list(f.get("point_ids") or []),
              "flight_id": None if session else result["flight_id"],
              "session_id": (result.get("session_id") or result["flight_id"]) if session
              else result.get("session_id"),

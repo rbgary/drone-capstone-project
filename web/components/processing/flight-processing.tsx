@@ -1,7 +1,7 @@
 import type { FindingRow, PipelineResultRow } from "@/lib/queries";
 
 /** The result fields this reads — a flight's, or a session's own (same shape). */
-type Processed = Pick<PipelineResultRow, "tracks" | "flags" | "frames" | "points" | "stages"
+type Processed = Pick<PipelineResultRow, "tracks" | "flags" | "points" | "stages"
   | "failures" | "created_at" | "pipeline_version">;
 /** A reading as the charts need it: a flight's row, or a session sample with
  *  its seq as the index. */
@@ -10,15 +10,13 @@ type Reading = { index: number; recorded_at: string; raw_temp: number | null;
 import type { Band } from "@/components/ui/time-series";
 import { StatusBadge } from "@/components/ui/states";
 import { LocalTime } from "@/components/ui/local-time";
-import { SignalPanel, type PanelFrame } from "@/components/processing/signal-panel";
-import type { FrameLinks } from "@/components/processing/findings";
+import { SignalPanel } from "@/components/processing/signal-panel";
 import { elapsedSeconds } from "@/lib/flight-format";
 import {
   SEVERITY,
   SHADE,
   groupColor,
   readFlags,
-  readFrames,
   readPoints,
   readTracks,
   severityOf,
@@ -27,8 +25,8 @@ import {
 
 /**
  * One flight's data processing: what ran, a verdict per inspection point, what
- * the cleaner took out, how the frames fared, and the two signals raw vs
- * clean against what was expected — the same on the flight page and, once
+ * the cleaner took out, and the two signals raw vs clean against what was
+ * expected — the same on the flight page and, once
  * per flight, on its session's page.
  */
 
@@ -49,19 +47,15 @@ export function FlightProcessing({
   telemetry,
   findings,
   over = "flight",
-  frameLinks = {},
 }: {
   /** "session" for a session's own result: its charts count session time. */
   over?: string;
   result: Processed;
   telemetry: Reading[];
   findings: FindingRow[];
-  /** The session's frame links: a click on a chart shows the frame then. */
-  frameLinks?: FrameLinks;
 }) {
   const tracks = readTracks(result.tracks);
   const flags = readFlags(result.flags);
-  const frames = readFrames(result.frames);
   const points = readPoints(result.points);
   const stages = Object.entries((result.stages ?? {}) as Record<string, string>);
   const failures = Array.isArray(result.failures) ? result.failures : [];
@@ -89,18 +83,6 @@ export function FlightProcessing({
       .map((f) => f.index)).size;
   const unmeasured = rowsOf("untrusted");
   const jumps = rowsOf("implausible");
-  const unusable = frames.filter((f) => f.quality && !f.quality.usable);
-  const enhanced = frames.filter((f) => f.enhanced);
-  // The result's frames are on the charts' clock (seconds since the first
-  // reading); only those with a link can be shown.
-  const panelFrames: PanelFrame[] = frames
-    .filter((f) => frameLinks[f.seq]?.original || frameLinks[f.seq]?.enhanced)
-    .sort((a, b) => a.t_s - b.t_s)
-    .map((f) => ({
-      seq: f.seq, t_s: f.t_s, ...frameLinks[f.seq],
-      note: f.quality && !f.quality.usable ? `Hard to read: ${f.quality.reason ?? "outside the quality limits"}.`
-        : f.view_note,
-    }));
 
   return (
     <div className="space-y-6">
@@ -154,13 +136,6 @@ export function FlightProcessing({
             </dd>
           </>
         )}
-        <dt className="text-[var(--muted)]">Frames</dt>
-        <dd>
-          {frames.length === 0 ? "No camera frames in this flight." : `${frames.length} taken · ${
-            enhanced.length} enhanced · ${unusable.length} unreadable${unusable.length ? ` (${
-            countBy(unusable, (f) => (f.quality?.reason ?? "").split(":")[0]).map(([why, n]) =>
-              `${why} ${n}`).join(", ")})` : ""}.`}
-        </dd>
         {failures.length > 0 && (
           <>
             <dt className="text-[var(--muted)]">Failed</dt>
@@ -176,11 +151,10 @@ export function FlightProcessing({
 
       <div className="grid gap-10 xl:grid-cols-2">
         <SignalPanel title="Temperature" track={tracks.find((x) => x.signal === "temperature") ?? null}
-                     raw={raw("raw_temp")} flags={flagsOn("raw_temp")} bands={bandsFor("temperature")} over={over}
-                     frames={panelFrames} />
+                     raw={raw("raw_temp")} flags={flagsOn("raw_temp")} bands={bandsFor("temperature")} over={over} />
         <SignalPanel title="Pressure" track={tracks.find((x) => x.signal === "pressure") ?? null}
                      raw={raw("station_pressure_hpa")} flags={flagsOn("station_pressure_hpa")}
-                     bands={bandsFor("pressure")} over={over} frames={panelFrames} />
+                     bands={bandsFor("pressure")} over={over} />
       </div>
     </div>
   );

@@ -1,13 +1,11 @@
 import Link from "next/link";
 import {
-  getFrameLinks,
   getPipelineResults,
   getProcessedOverview,
   getSessionResult,
   getStretchReadings,
-  type FindingRow,
 } from "@/lib/queries";
-import { FindingsList, type FrameLinks } from "@/components/processing/findings";
+import { FindingsList } from "@/components/processing/findings";
 import { EmptyState, Stat, StatusBadge } from "@/components/ui/states";
 import { PageHeader } from "@/components/ui/page-header";
 import { LocalTime } from "@/components/ui/local-time";
@@ -20,8 +18,8 @@ export const metadata = { title: "Processed data" };
 /**
  * Processed data — what the data pipeline made of every flight (the owner,
  * 2026-10-09: "a separate processed data page for all this"): every anomaly
- * it found, each with its readings, the frames taken then (original and
- * enhanced) and what it means; then every session with processed flights,
+ * it found, each with its readings and what it means; then every session
+ * with processed flights,
  * each opening onto that session's processed data
  * (app/app/processed/[id]/page.tsx).
  *
@@ -60,8 +58,7 @@ function WhatCounts() {
         <p>
           A flight where nothing departed that far is processed and normal — on a calm flight that
           is the expected answer. Severity grows with the size of the departure: slight, then a
-          warning at twice the minimum, critical at five times. The images never make an anomaly on
-          their own; they show what the camera saw while the readings departed.
+          warning at twice the minimum, critical at five times.
         </p>
       </div>
     </details>
@@ -98,22 +95,14 @@ export default async function ProcessedPage() {
     );
   }
 
-  // The evidence for each anomaly shown: its readings, its flight's tracks
-  // (what was expected), and the frames taken during it.
+  // The evidence for each anomaly shown: its readings and its flight's
+  // tracks (what was expected).
   const flightIds = [...new Set(findings.map((f) => f.flight_id).filter((x): x is string => !!x))];
   const ownSessions = [...new Set(findings.filter((f) => f.scope === "session" && f.session_id)
     .map((f) => f.session_id as string))];
-  const bySession = new Map<string, FindingRow[]>();
-  for (const f of findings) {
-    if (f.session_id) bySession.set(f.session_id, [...(bySession.get(f.session_id) ?? []), f]);
-  }
-  const [readings, results, frameLinks, owns] = await Promise.all([
+  const [readings, results, owns] = await Promise.all([
     getStretchReadings(findings),
     getPipelineResults(flightIds),
-    Promise.all([...bySession.entries()].map(async ([sessionId, list]) => [
-      sessionId,
-      await getFrameLinks(sessionId, [...new Set(list.flatMap((f) => f.evidence_frames.slice(0, 4)))]),
-    ] as const)),
     Promise.all(ownSessions.map((sid) => getSessionResult(sid))),
   ]);
   // A flight's tracks by flight id; a session's own by session id.
@@ -122,7 +111,6 @@ export default async function ProcessedPage() {
     ...owns.flatMap((o) => (o.row ? [[o.row.session_id, readTracks(o.row.tracks)] as const] : [])),
   ]);
   const excerpts = excerptsFor(findings, (id) => tracks.get(id) ?? [], readings);
-  const framesOf = new Map<string, FrameLinks>(frameLinks);
 
   const count = (severity: string) => findings.filter((f) => severityOf(f.severity) === severity).length;
   const sessionOf = new Map(sessions.map((s) => [s.id, s]));
@@ -131,7 +119,7 @@ export default async function ProcessedPage() {
     <div className="space-y-10">
       <PageHeader
         title="Processed data"
-        description="What the data pipeline made of every flight: cleaned readings, enhanced images, and each stretch that departed from what was expected — with what it means."
+        description="What the data pipeline made of every flight: cleaned readings and each stretch that departed from what was expected — with what it means."
       />
 
       <section aria-label="Summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -150,19 +138,16 @@ export default async function ProcessedPage() {
           <Note>
             None of the {flights.length.toLocaleString()} processed flight{flights.length === 1 ? "" : "s"}{" "}
             departed from what was expected. Every one is processed — open a session below for its
-            cleaned readings, its enhanced images and the expected curves its readings were checked
-            against.
+            cleaned readings and the expected curves they were checked against.
           </Note>
         ) : (
           <>
             <p className="text-sm text-[var(--muted)]">
-              Worst first. The readings are the evidence; the frames show what the camera saw while
-              they departed.
+              Worst first. The readings are the evidence.
               {findingsTotal > findings.length && ` Showing ${findings.length} of ${findingsTotal}.`}
             </p>
             <FindingsList
               findings={findings}
-              frames={(f) => (f.session_id ? framesOf.get(f.session_id) ?? {} : {})}
               excerpts={excerpts}
               flightOf={(id) => ({ label: "Open the flight", href: `${FLIGHTS}/${id}` })}
               moreOf={(f) => f.session_id

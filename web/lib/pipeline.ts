@@ -28,27 +28,6 @@ export type Track = {
 /** [reading index, column (null = whole row), kind, reason] */
 export type Flag = { index: number; column: string | null; kind: string; reason: string };
 
-export type FrameQuality = {
-  sharpness: number;
-  brightness: number;
-  usable: boolean;
-  reason: string | null;
-};
-
-export type FrameRecord = {
-  seq: number;
-  t_s: number;
-  point_id: string | null;
-  enhanced: string | null;
-  method: string;
-  quality: FrameQuality | null;
-  label: { value: string; reason: string | null; model: string };
-  /** scene@1: how much the view changed from the frame before (null = not
-   *  comparable), and in words. */
-  view_change: number | null;
-  view_note: string | null;
-};
-
 export type PointVerdict = {
   point_id: string;
   verdict: "normal" | "anomaly" | "insufficient_data";
@@ -80,33 +59,6 @@ export function readFlags(value: Json): Flag[] {
       ? [{ index: f[0], column: typeof f[1] === "string" ? f[1] : null, kind: f[2],
            reason: typeof f[3] === "string" ? f[3] : "" }]
       : []);
-}
-
-export function readFrames(value: Json): FrameRecord[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((f) => {
-    if (!isObject(f) || typeof f.seq !== "number") return [];
-    const q = isObject(f.quality) ? f.quality : null;
-    const label = isObject(f.label) ? f.label : {};
-    return [{
-      seq: f.seq,
-      t_s: typeof f.t_s === "number" ? f.t_s : 0,
-      point_id: typeof f.point_id === "string" ? f.point_id : null,
-      enhanced: typeof f.enhanced === "string" ? f.enhanced : null,
-      method: typeof f.method === "string" ? f.method : "identity",
-      quality: q && typeof q.sharpness === "number" && typeof q.brightness === "number"
-        ? { sharpness: q.sharpness, brightness: q.brightness, usable: q.usable !== false,
-            reason: typeof q.reason === "string" ? q.reason : null }
-        : null,
-      view_change: typeof f.view_change === "number" ? f.view_change : null,
-      view_note: typeof f.view_note === "string" ? f.view_note : null,
-      label: {
-        value: typeof label.value === "string" ? label.value : "unknown",
-        reason: typeof label.reason === "string" ? label.reason : null,
-        model: typeof label.model === "string" ? label.model : "",
-      },
-    }];
-  });
 }
 
 export function readPoints(value: Json): PointVerdict[] {
@@ -200,7 +152,7 @@ export type Mark = {
 
 type FindingLike = {
   id: string; signal: string; severity: string; start_index: number; end_index: number;
-  t_start_s: number; t_end_s: number; title: string; sentence: string; evidence_frames: number[];
+  t_start_s: number; t_end_s: number; title: string; sentence: string;
 };
 
 /** The columns each signal's anomaly tints. */
@@ -321,21 +273,6 @@ export function marksAt(marks: readonly Mark[], index: number): Mark[] {
 export function worstMark(marks: readonly Mark[]): Mark | undefined {
   return [...marks].sort((a, b) => SEVERITY[b.severity].rank - SEVERITY[a.severity].rank
     || (a.kind === b.kind ? 0 : a.kind === "anomaly" ? -1 : 1))[0];
-}
-
-/** Frame seq → the anomalies it was taken during, worst first. */
-export function frameMarks(findings: readonly FindingLike[]): Record<number, Mark[]> {
-  const out: Record<number, Mark[]> = {};
-  const all = anomalyMarks(findings);
-  findings.forEach((f) => {
-    const m = all.find((x) => x.id === f.id);
-    if (!m) return;
-    for (const seq of f.evidence_frames) (out[seq] ??= []).push(m);
-  });
-  for (const list of Object.values(out)) {
-    list.sort((a, b) => SEVERITY[b.severity].rank - SEVERITY[a.severity].rank);
-  }
-  return out;
 }
 
 /** One reading of an anomalous stretch: the stored value, and what the

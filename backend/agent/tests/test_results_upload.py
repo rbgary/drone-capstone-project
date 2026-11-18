@@ -107,16 +107,15 @@ class TestTheRows:
         assert (row["flight_id"], row["session_id"], row["pipeline_version"]) == \
             ("flight-1", "session-1", "2")
 
-    def test_the_retired_image_columns_are_sent_neutral(self, tmp_path):
-        """The hosted table still requires image_support (migration
-        20261009000016); results carry no frames now, and an older result that
-        did is sent neutral all the same."""
+    def test_the_retired_image_columns_are_not_sent(self, tmp_path):
+        """Migration 20261118000020 made image_support optional: no finding
+        carries the image columns up, not even an older result that had them."""
         old = {**finding("a"), "evidence_frames": [2], "image_support": "supports",
                "image_note": "the view changed"}
         write_result(tmp_path, findings=[finding("b"), old])
+        retired = {"evidence_frames", "image_support", "image_note"}
         for row in results.finding_rows(results.load(tmp_path)):
-            assert (row["evidence_frames"], row["image_support"], row["image_note"]) == \
-                ([], "cannot_tell", "")
+            assert retired.isdisjoint(row)
 
     def test_a_file_that_is_not_a_result_says_so(self, tmp_path):
         (tmp_path / results.RESULT_NAME).write_text("{}")

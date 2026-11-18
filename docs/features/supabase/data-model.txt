@@ -23,6 +23,12 @@ WHERE IT LIVES
   backend/supabase/checks/owner_check.py                     its proof (10 checks)
   backend/supabase/migrations/20261011000019_flight_playback.sql  plans, traces
   backend/supabase/checks/playback_check.py                  its proof (20 checks)
+  backend/supabase/migrations/20261118000020_findings_without_camera.sql
+                                                             image_support optional
+                                                             (no camera); NOT YET
+                                                             applied to the hosted
+                                                             project, NOT YET run on
+                                                             the local stack
   web/types/database.ts                                      generated types —
                                                              regenerated 2026-10-09
                                                              with `supabase gen types
@@ -74,12 +80,17 @@ THE TABLES
   pipeline_results  ONE ROW PER PROCESSED FLIGHT (migration 20261009000016):
                 the whole result.json — verdicts per point, the cleaner's
                 flags [index, column, kind, reason], the tracks (observed and
-                expected per reading), the blocks, every frame's enhanced
-                copy, quality and label — plus findings_count and
+                expected per reading), the blocks — plus findings_count and
                 worst_severity. Replaced when the flight is processed again.
+                Its frames column is empty since pipeline "4" (no camera) and
+                the web no longer reads it.
   pipeline_findings  ONE ROW PER FINDING: signal, severity, title, sentence,
                 start/end, observed/expected/delta/z, point_ids, position,
-                evidence_frames, image_support. The id is made on the laptop
+                and three RETIRED columns (no camera, 2026-11-15):
+                evidence_frames, image_support, image_note — image_support
+                made optional by 20261118000020, so the agent sends none of
+                them; dropped by a later migration once no laptop runs an
+                older agent. The id is made on the laptop
                 from the flight and the stretch, so a re-process upserts.
                 Both: signed-in read; operators write (findings also delete —
                 a re-process retracts what it no longer finds); anon nothing.
