@@ -65,10 +65,12 @@ trigger and bucket of 0001–0019 is there and every public table has RLS
 (all true); then `migration repair --status applied` for 0001–0019, a dry
 run listing only 0020, and `db push`. `migration list` now shows all 20 on
 both sides; 0020 checked read-only after (image_support nullable, its check
-gone, the retired comment on). CONNECT THROUGH THE SESSION POOLER
-(Dashboard › Connect › Session pooler, port 5432, user
-postgres.<project ref>): the direct host db.<ref>.supabase.co is IPv6 only
-and WSL has no IPv6 route, so it is refused.
+gone, the retired comment on). WHICH CONNECTION STRING: the direct one
+(db.<ref>.supabase.co) is IPv6 only. It works for the teammates on macOS or
+Windows whose network has IPv6. From WSL, which has no IPv6 route (Kevin's
+machine), it is refused (ECONNREFUSED to a 2600:… address): use the Session
+pooler instead (Dashboard › Connect › Session pooler, port 5432, user
+postgres.<project ref>). Either works with every `supabase` command here.
 
 Applied to the old hosted project (fuwojlqpavvfgmqardfo) through 0019 (this line
 said 0017 until 2026-10-11 — drift: 0018 was already live). 0015–0017
