@@ -275,6 +275,11 @@ export function HomePage({ session, telemetry, sync, connected, run, onGo }: Pro
           <StatusDot tone="warning">Last upload attempt: {sync.last_error}</StatusDot>
         </p>
       )}
+      {sync?.storage_error && (
+        <p className="text-xs text-[var(--muted)]">
+          <StatusDot tone="warning">{sync.storage_error}</StatusDot>
+        </p>
+      )}
     </div>
   );
 }

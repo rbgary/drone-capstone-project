@@ -96,9 +96,12 @@ web/app/app/sessions/[id]/page.tsx, web/app/app/flights/[id]/page.tsx
 3. DECISIONS
 --------------------------------------------------------------------------------
 • LAPTOP FIRST, THEN UP (CLAUDE.md invariant 6): result.json is the record;
-  the outbox (Kind.RESULTS) uploads it once the flight's own row is up: the
+  the outbox (Kind.RESULTS) uploads it once the flight's own rows are up —
+  not its log file, which may be waiting on file storage
+  (../backend/offline-sync.txt, FILE STORAGE NEVER HOLDS BACK THE ROWS): the
   result, the findings, and the retraction of findings a re-process no
-  longer makes. (Enhanced frames went first until 2026-11-15.)
+  longer makes. (Enhanced frames went first until 2026-11-15; a result
+  carries none since pipeline "4", so nothing here waits on storage.)
 • TWO TABLES: pipeline_results (the whole result per flight, replaced on
   re-process) and pipeline_findings (one row each, ids made on the laptop).
 • NOTIFICATIONS ARE ROWS, made by a database trigger per operator for each

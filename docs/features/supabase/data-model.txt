@@ -37,7 +37,20 @@ storage-and-backfill.txt). Verified read-only on hosted: RLS on for both, the
 four policies, grants select + insert to authenticated and nothing to anon.
 Proven before that on the local stack (playback_check.py 20/20).
 
-Applied to the hosted project (fuwojlqpavvfgmqardfo) through 0019 (this line
+THE HOSTED PROJECT MOVED (2026-11-16): the live database is now
+tmswmgwomoabvftdreeb, owned by Kevin; fuwojlqpavvfgmqardfo (Samuel's, below)
+is no longer reachable, so the move could not be compared against it.
+Probed read-only with the publishable key that day: auth answers; all 22
+tables of 0001–0019 exist (the operator tables refuse anonymous, HTTP 401, as
+designed); the public content came across (projects 8, project_members 30,
+team_members 5, site_pages 2, gallery_albums 5, gallery_items 35, their
+stored links already on the new project); installers/latest/manifest.json is
+there. ONE FILE IS MISSING: portfolio-images/gallery/in-the-greenhouse/06.jpg
+(31 of 32 gallery files load). NOT checked: the migration history table, the
+operator data (sessions, flights, telemetry, results — anonymous cannot read
+them) and auth.users (whether the accounts came across).
+
+Applied to the old hosted project (fuwojlqpavvfgmqardfo) through 0019 (this line
 said 0017 until 2026-10-11 — drift: 0018 was already live). 0015–0017
 on 2026-10-09 (`supabase db push --db-url` from .env.team's SUPABASE_DB_URL;
 the live list showed 0001–0014 already there). Verified read-only as the

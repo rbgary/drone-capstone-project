@@ -39,8 +39,8 @@ const AGENT_PORT: u16 = 8765;
 /// The publishable key is public by design — every table is behind RLS and the
 /// agent signs in as a real operator account (`sync/cloud.py`). **The secret
 /// key must never appear here**: this binary ships inside an installer.
-const SUPABASE_URL: &str = "https://fuwojlqpavvfgmqardfo.supabase.co";
-const SUPABASE_ANON_KEY: &str = "sb_publishable_FKtbEKeHIuSOcPNDBGUfwQ_U74hme33";
+const SUPABASE_URL: &str = "https://tmswmgwomoabvftdreeb.supabase.co";
+const SUPABASE_ANON_KEY: &str = "sb_publishable_cD47iXvjPbhUYH8SiYF97g_SzjUcPGw";
 
 /// The compiled-in default, unless this machine sets one — which is how a
 /// developer points the app at a local Supabase without a rebuild.
