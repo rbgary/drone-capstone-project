@@ -3,9 +3,9 @@ RESULTS ON THE WEB — every processed flight's result and findings uploaded,
 shown on the session and flight pages, and notified
 Last verified: 2026-11-18 on feat/no-camera — the camera removed from the
 web (Phase 6a): web typecheck, lint and build; tests/test_results_upload.py
-(no image columns sent). NOT seen in a browser; migration 20261118000020 NOT
-yet run on the local stack (Docker was not reachable) nor applied to the
-hosted project. 2026-11-15 — the agent half: no frames uploaded.
+(no image columns sent); migration 20261118000020 APPLIED to the hosted
+project and checked there read-only. NOT seen in a browser; 0020 NOT yet run
+on the local stack (Docker was not reachable). 2026-11-15 — the agent half: no frames uploaded.
 2026-10-24 — the manual section, the download and the paged listing: web typecheck, lint and build; lib/frame-zip.ts run for real in Node
 against a local server (progress, a missing file reported, the manual name,
 cancel, index.csv, the zip's own CRC check). NOT yet seen in a browser against
@@ -26,10 +26,10 @@ STATUS  (Last verified: 2026-10-09)
             Since pipeline "4" (2026-11-15) a result carries no frames; since
             2026-11-18 a finding is sent without the retired image columns
             (evidence_frames, image_support, image_note)
-  ORDER     MIGRATION 20261118000020 GOES TO THE HOSTED PROJECT FIRST (or
-            with this agent): before it, image_support is NOT NULL and the
-            database refuses every finding — the results wait in the outbox,
-            nothing lost, nothing on the web until it is applied
+  database  migration 20261118000020 (image_support optional) APPLIED to
+            the hosted project 2026-11-18 — the agent that sends no image
+            columns is safe to ship. A database WITHOUT it refuses every
+            finding from this agent (the results wait in the outbox)
   web       NO CAMERA (2026-11-18): no frames, no Original / Enhanced, no
             camera note, for old results as for new — old camera evidence is
             not to stay on the website (the team, 2026-11-16). The images

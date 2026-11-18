@@ -54,9 +54,8 @@ STATUS  (Last verified: 2026-11-15)
             pipeline, Phase 5 of the no-camera work
   DATA      pipeline_findings still has evidence_frames, image_support and
             image_note, retired: migration 20261118000020 makes image_support
-            optional and sync sends none of them (sync/results.py). NOT YET
-            applied to the hosted project — until it is, findings wait in
-            the outbox (results.txt)
+            optional and sync sends none of them (sync/results.py). Applied to
+            the hosted project 2026-11-18 (results.txt)
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS

@@ -30,6 +30,15 @@ WHERE IT STANDS — Phases 0–4, done on feat/no-camera (NOT merged to main)
   Gates at 20fd531: agent ruff, mypy, pytest 1400 passed; desktop pnpm build;
   cargo test 10 passed.
 
+  DECIDED 2026-11-18 (Kevin):
+    - The public project pages MARK the camera stories as removed (1.5
+      live camera feed, 3.2 greyscale images, the kit's "AI deck (camera)"):
+      backend/supabase/seed/dronedeck_projects.py, then the hosted rows —
+      a write to the hosted database, so on the owner's go.
+    - The old camera frames STAY in the flight-frames bucket for now (there
+      is plenty of storage). If storage runs short, they are the FIRST
+      thing deleted.
+
   OWED ON THE LAB DRONE (none needs Phase 5):
     - `dronedeck setup --check` with the deck off: main and the positioning
       deck read installed, nothing else listed. Reads only.
@@ -44,11 +53,12 @@ WHERE IT STANDS — Phases 0–4, done on feat/no-camera (NOT merged to main)
       the Frames row and the chart click removed; FrameGallery.tsx,
       lib/frame-zip.ts, the frame queries and fflate deleted
     Gates: agent ruff, mypy, pytest 1416 passed; web typecheck, lint, build.
+    20261118000020 APPLIED to the hosted project 2026-11-18 (its migration
+    history rebuilt first — supabase/data-model.txt), so this agent is safe
+    to ship.
     OWED: `cd backend && supabase db reset` + the checks on the local stack
     (Docker Desktop was not reachable from WSL that day); the pages in a
-    browser; then 20261118000020 APPLIED TO THE HOSTED PROJECT BEFORE this
-    agent ships — until then the hosted table refuses every finding and the
-    results wait in the outbox.
+    browser.
 
 --------------------------------------------------------------------------------
 BEFORE PHASE 5 — WHAT REAGAN HANDS OVER (the gate; expected in a few days)

@@ -25,10 +25,12 @@ WHERE IT LIVES
   backend/supabase/checks/playback_check.py                  its proof (20 checks)
   backend/supabase/migrations/20261118000020_findings_without_camera.sql
                                                              image_support optional
-                                                             (no camera); NOT YET
-                                                             applied to the hosted
-                                                             project, NOT YET run on
-                                                             the local stack
+                                                             (no camera); APPLIED to
+                                                             the hosted project
+                                                             2026-11-18; NOT YET run
+                                                             on the local stack
+  backend/supabase/checks/hosted_schema_check.sql            read-only: does a database
+                                                             hold what 0001–0019 make
   web/types/database.ts                                      generated types —
                                                              regenerated 2026-10-09
                                                              with `supabase gen types
@@ -52,9 +54,21 @@ designed); the public content came across (projects 8, project_members 30,
 team_members 5, site_pages 2, gallery_albums 5, gallery_items 35, their
 stored links already on the new project); installers/latest/manifest.json is
 there. ONE FILE IS MISSING: portfolio-images/gallery/in-the-greenhouse/06.jpg
-(31 of 32 gallery files load). NOT checked: the migration history table, the
-operator data (sessions, flights, telemetry, results — anonymous cannot read
+(31 of 32 gallery files load). NOT checked: the operator data (sessions, flights, telemetry, results — anonymous cannot read
 them) and auth.users (whether the accounts came across).
+
+THE MIGRATION HISTORY DID NOT MOVE (found 2026-11-18): the schema came
+across, but `migration list` showed every migration local only, so `db push`
+would have run 0001–0019 again. hosted_schema_check.sql (beside the other
+checks) confirmed in the SQL Editor that every table, key column, function,
+trigger and bucket of 0001–0019 is there and every public table has RLS
+(all true); then `migration repair --status applied` for 0001–0019, a dry
+run listing only 0020, and `db push`. `migration list` now shows all 20 on
+both sides; 0020 checked read-only after (image_support nullable, its check
+gone, the retired comment on). CONNECT THROUGH THE SESSION POOLER
+(Dashboard › Connect › Session pooler, port 5432, user
+postgres.<project ref>): the direct host db.<ref>.supabase.co is IPv6 only
+and WSL has no IPv6 route, so it is refused.
 
 Applied to the old hosted project (fuwojlqpavvfgmqardfo) through 0019 (this line
 said 0017 until 2026-10-11 — drift: 0018 was already live). 0015–0017
