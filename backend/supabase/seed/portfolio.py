@@ -61,7 +61,7 @@ def li(text: str) -> dict[str, Any]:
 
 PROJECTS: list[dict[str, Any]] = [
     {
-        "slug": "dronedeck",
+        "slug": "cropwatcher",  # as created; "dronedeck" is the overview (dronedeck_projects.py)
         "title": "CropWatcher",
         "subtitle": "Autonomous indoor crop-health scouting on a Crazyflie 2.1",
         "summary": "A palm-sized drone that flies a greenhouse, records position-tagged "
