@@ -1,6 +1,6 @@
 ================================================================================
 COMMANDS — every command in the project, where to run it, and what it does
-Last verified: 2026-10-24 against experiment/samuel (lab) — backend/agent/dronedeck/cli.py,
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against `dronedeck --help`: the same twelve commands, setup --reinstall main|lighthouse, process --flight|--fixture|--session|--all. Before that, 2026-10-24 against experiment/samuel (lab) — backend/agent/dronedeck/cli.py,
 web/package.json, desktop/package.json, scripts/, backend/supabase/ (migrations
 + checks/), firmware/drone-wifi/build.sh, and the gates in CLAUDE.md "Commands".
 SOURCE: backend/agent/dronedeck/cli.py

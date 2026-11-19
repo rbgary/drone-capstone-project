@@ -1,6 +1,6 @@
 ================================================================================
 THE MISSION CONTROLLER — how a saved mission is flown
-Last verified: 2026-10-11 — re-read after .github/workflows/agent-tests.yml changed for mission playback; it runs this doc's tests in CI, as section 6 says. Before that:
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/cli.py (mission, mission-report unchanged by the camera removal). Before that, 2026-10-11 — re-read after .github/workflows/agent-tests.yml changed for mission playback; it runs this doc's tests in CI, as section 6 says. Before that:
 2026-10-10 against integrate/public (experiment/samuel with
 #101, #102, #103 merged) — tests/mission/ and the whole agent suite: 1438
 passed; review.py's planned time and what_happened re-read against the code.

@@ -1,7 +1,7 @@
 ================================================================================
 THE DATA PIPELINE — a recorded flight in; findings, and a verdict per inspection
 point, out — on the laptop, then on the web
-Last verified: 2026-11-15 on feat/no-camera — contract v3 (no frames, no
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/cli.py after f406443 (cv2 out of SELFTEST_MODULES; numpy the only runtime dependency, as RUNTIME DEPENDENCIES says). Before that, 2026-11-15 on feat/no-camera — contract v3 (no frames, no
 enhance, no live run) against agent pytest (1 618 passing; the one failure is
 test_recording's chmod check run as root, removed with the camera in Phase 2),
 ruff, mypy, `dronedeck process --fixture`, and the desktop build. 2026-10-11 —

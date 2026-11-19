@@ -1,6 +1,6 @@
 ================================================================================
 CONTROL IN AUTO — plan a mission, check the drone, fly it
-Last verified: 2026-10-25 for the number boxes and edit → save → reopen (real
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against desktop/src/lib/agent.ts after Phases 1–3 (FlightResult has no frames; api.playback, api.flights as named); the Fly step's verdict line corrected to after landing. Before that, 2026-10-25 for the number boxes and edit → save → reopen (real
 editor on the agent, headless Chrome, 17 checks). 2026-10-24 for the tripods on the map (harness, both views and
 themes, screenshots; the layout at five widths 10 PASS) and ② Position's two stations only (every station from
 one press, per-station rows), against agent/two-base-stations — test_geometry.py,
@@ -62,7 +62,8 @@ it is, one press from where it sits; ③ Flyable space — the green, predicted
 from the base station or walked; ④ Auto-correct — a copy of the plan fitted
 into the green beside the plan as drawn, which is never changed; ⑤ Fly — start
 the session, the checks, confirm the area, then Start mission, the mission on
-the room map, the points ticking off, and each point's verdict once it lands. The whole left
+the room map, the points ticking off, and each point's verdict once the flight
+has landed and been processed (never in the air, since 2026-11-15). The whole left
 section can go full screen. The right column is the monitor: the vitals, keys
 and actions (FlightDeck), then the console's Vitals (its Camera tab went
 with the AI deck, 2026-11-15). Manual is unchanged

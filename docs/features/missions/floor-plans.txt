@@ -1,6 +1,6 @@
 ================================================================================
 FLOOR PLANS AND MISSIONS — what the drone flies, checked before it can fly
-Last verified: 2026-10-25 for the 2 s hold: tests/mission (358) and a saved
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/api/rest.py after 53186d2, MIN_HOLD_S 2.0; DRIFT FIXED: the 2 s hold still counted ~7 camera frames. Before that, 2026-10-25 for the 2 s hold: tests/mission (358) and a saved
 mission edited, saved and reopened in the real editor on the agent. 2026-10-11 — re-read after rest.py changed for mission playback; its room and mission routes are unchanged. Before that:
 2026-10-09 against docs/pipeline-v2 — re-checked after
 api/rest.py moved (the processing resume in the lifespan): no room or mission
@@ -168,8 +168,10 @@ desktop/src/pages/control/auto/FlightPlanCheck.tsx    ② the two plans, the sur
 • Holds are at least 2 s (MIN_HOLD_S), at most 300 s. 5 s until 2026-10-25 for
   story 3.4 ("at least 10 frames and 5 seconds of readings … for every
   inspection point"); the owner relaxed it — "the drone is spending too much
-  time at each point". At 2 s a point keeps ~20 readings and ~7 frames. New
-  points start at the minimum; saved missions keep their own holds.
+  time at each point". At 2 s a point keeps ~20 readings (the ~7 camera
+  frames it also kept went with the camera, 2026-11-15; 3.4 now asks for
+  readings only). New points start at the minimum; saved missions keep their
+  own holds.
 • VALIDATION RETURNS PROBLEMS, NOT AN EXCEPTION — every one, with where it is
   (a point id, "home", a leg "P1 → P2"). Errors block flying; warnings
   ("coverage not measured") are said and do not. The editor asks the agent

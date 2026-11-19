@@ -1,6 +1,6 @@
 ================================================================================
 INTERPRET — findings@1: each event judged, put into words, pinned to its point
-Last verified: 2026-11-15 on feat/no-camera — contract v3: no frames on a
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against desktop/src/pages/control/DataPipeline.tsx after 6dfe230 (no camera wording left). Before that, 2026-11-15 on feat/no-camera — contract v3: no frames on a
 finding; tests/pipeline/test_interpret.py passing. Before that, 2026-10-09
 against docs/pipeline-v2 — tests/pipeline/
 test_interpret.py, the end-to-end test of a warm patch on the fixture flight.

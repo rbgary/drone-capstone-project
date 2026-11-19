@@ -1,6 +1,6 @@
 DEVELOPMENT SKILLS — /feature, /copy-adapt, /preflight and /adapt
 ==================================================================
-Last verified: 2026-09-28 — the install.mjs line re-read after the DroneDeck
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against scripts/install.mjs after the 2026-10-25 rename (paths and names only). Before that, 2026-09-28 — the install.mjs line re-read after the DroneDeck
 rename (still: every machine builds from main with it). Before that, 2026-09-27 against chore/project-skills-and-feature-docs — the
 kit's 11 tests pass from .claude/feature-kit/; the SessionStart hook installs
 it into an empty $HOME and leaves an existing one alone.
