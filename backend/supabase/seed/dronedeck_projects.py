@@ -8,6 +8,10 @@ The six parts are the six our Project Management Planning document divides
 the work into (web/public/docs/dronedeck-project-management-planning.pdf):
 every user story, owner, estimate and acceptance criterion below is from it,
 and every "built" is something in this repository today (2026-09-28).
+Updated 2026-11-19 for the no-camera scope (2026-11-15): the drone carries no
+camera and flights are processed after landing, so 1.5, 3.2, 4.3 and 4.9 are
+marked removed — the plan's own words kept, with why — and 3.4 records
+readings only.
 
 What it writes, and nothing else:
 
@@ -153,17 +157,17 @@ OVERVIEW: dict[str, Any] = {
         p("DroneDeck is an inspection system built around a Crazyflie 2.1 — a palm-sized "
           "quadcopter — for indoor spaces full of equipment worth watching: a plant room, a "
           "warehouse, a lab. Deployed there, it takes off by itself, flies a planned route from "
-          "one inspection point to the next, records temperature, pressure and a greyscale image "
+          "one inspection point to the next, records temperature and pressure "
           "at each, and lands where it started. A pipeline then compares what it recorded against "
-          "normal operating limits and against images of healthy equipment, and anything that "
-          "looks wrong is flagged on a dashboard with the reason."),
+          "normal operating limits, an image classifier judges the photos a person takes of the "
+          "equipment, and anything that looks wrong is flagged on a dashboard with the reason."),
         p("Two apps carry it. The ", b("desktop app"), " runs on the laptop the radio is "
           "plugged into and is the only thing that flies the drone — manually from the keyboard, "
           "or through an autonomous mission. The ", b("website"), " is the record: public pages "
-          "about the project, and a signed-in dashboard with every flight, its readings and "
-          "images, comparisons over time, and a mission planner."),
+          "about the project, and a signed-in dashboard with every flight, its readings, "
+          "comparisons over time, and a mission planner."),
         img("/brand/drone-hero.webp", "DroneDeck's mark. The drone the team flies is a Crazyflie 2.1 with a "
-                                      "Lighthouse positioning deck and an AI deck camera."),
+                                      "Lighthouse positioning deck. It carries no camera."),
         h2("The constraint everything follows from"),
         p("The Crazyflie is commanded through the Crazyradio, a USB dongle. Only the computer it "
           "is plugged into can talk to the drone — no website or cloud service can reach it. So "
@@ -172,7 +176,7 @@ OVERVIEW: dict[str, Any] = {
           "agent writes every flight to disk first and uploads it to the database afterwards, "
           "where the website reads it."),
         table(["Piece", "Built with", "Runs on"], [
-            ["Drone", "Crazyflie 2.1 · Lighthouse deck · AI deck (camera)", "The flight area"],
+            ["Drone", "Crazyflie 2.1 · Lighthouse deck", "The flight area"],
             ["Flight agent", "Python 3.11 · FastAPI · cflib", "The laptop with the Crazyradio"],
             ["Desktop app", "Tauri v2 · React 19 · TypeScript", "The same laptop"],
             ["Website and dashboard", "Next.js 16 · React 19 · Tailwind v4", "Vercel"],
@@ -183,16 +187,16 @@ OVERVIEW: dict[str, Any] = {
           "it does, every user story in it with its owner and estimate, how it was built or how "
           "we will build it, and what is left:"),
         li(link("1 · Apps, manual flight and live view", "/projects/apps-and-manual-flight"),
-           " — built: the desktop app and the website, sign-in, keyboard flight, live sensors and "
-           "camera, flight history, pre-flight checks, a one-command install."),
+           " — built: the desktop app and the website, sign-in, keyboard flight, live sensors, "
+           "flight history, pre-flight checks, a one-command install."),
         li(link("2 · Autonomous flight and navigation", "/projects/autonomous-flight"),
            " — in progress: the virtual fence and route planner are built; the first autonomous "
            "flights are Sprint 1."),
         li(link("3 · Data collection", "/projects/data-collection"),
-           " — in progress: readings and images are recorded and uploaded; capture at each "
+           " — in progress: readings are recorded and uploaded; capture at each "
            "inspection point comes next."),
         li(link("4 · Anomaly detection and alerts", "/projects/anomaly-detection"),
-           " — in progress: training data, data cleaning, image enhancement and the first "
+           " — in progress: training data, data cleaning and the first "
            "classifier start in Sprint 1."),
         li(link("5 · Documentation", "/projects/documentation"),
            " — in progress: the setup guide is on this site; the operating and waypoint guides follow."),
@@ -244,7 +248,7 @@ APPS: dict[str, Any] = {
     "title": "Apps, manual flight and live view",
     "subtitle": "Part 1 · The desktop app that flies the drone and the website that shows what it found",
     "summary": "A desktop app and a website with one sign-in, keyboard flight that holds its "
-               "position, live sensors and camera, every flight saved for comparison, pre-flight "
+               "position, live sensors, every flight saved for comparison, pre-flight "
                "checks, and a one-command install on macOS, Windows and Linux.",
     "category": "Software",
     "date_label": "Built 16–27 Sep 2026",
@@ -263,7 +267,7 @@ APPS: dict[str, Any] = {
             ["1.2", "One account; only operators see data or fly", "MVP", "Samuel", "2 h", "Built"],
             ["1.3", "Manual flight with smooth, stable control", "MVP", "Samuel", "12 h", "Built"],
             ["1.4", "Live sensor readings", "MVP", "Samuel", "6 h", "Built"],
-            ["1.5", "Live camera feed", "MVP", "Samuel", "6 h", "Built"],
+            ["1.5", "Live camera feed", "MVP", "Samuel", "6 h", "Removed — no camera (15 Nov)"],
             ["1.6", "Past flights saved and comparable", "MVP", "Samuel", "3 h", "Built"],
             ["1.7", "Checks before every flight", "MVP", "Samuel", "2 h", "Built"],
             ["1.8", "Install with one command on any OS", "MVP", "Samuel", "8 h", "Built"],
@@ -326,17 +330,17 @@ APPS: dict[str, Any] = {
                       "the windows, the safety guards, the recorder — so there is one version of the truth. "
                       "The desktop Control page shows the live windows beside the keys; the website's Live "
                       "page shows the same readings.")]),
-        *story("1.5", "The drone's camera, live", kind="MVP", owner="Samuel", estimate="6 h", status="Built",
+        *story("1.5", "The drone's camera, live", kind="MVP", owner="Samuel", estimate="6 h", status="Removed — no camera (15 Nov)",
                want="As an operator, I want to see the camera feed live, so that I can see what the drone sees.",
                tasks=[("A Camera tab in the desktop app; the Set Up page installs the camera software on a "
                       "newly connected drone and joins it to the Wi-Fi.")],
                accept=[("The camera tab shows the drone's current view while it is connected — still frames "
                        "at about 3.7 a second is acceptable at a minimum.")],
-               how=[p("The AI deck's GAP8 processor runs Bitcraze's image streamer, which the app flashes onto a "
-                      "new drone over the radio. A small firmware addition lets the deck join the operator's "
-                      "own Wi-Fi, configured over the radio too. Frames arrive as raw 324×244 greyscale; over "
-                      "the university network at a weak signal it delivered 74 frames in 20 seconds — about "
-                      "3.7 a second. When the deck's sender stalls, the app reconnects by itself.")]),
+               how=[p("Removed on 15 November. It was built and worked — the AI deck's 324×244 greyscale "
+                      "feed in a Camera tab, about 3.7 frames a second over Wi-Fi — but the deck's Wi-Fi chip "
+                      "stopped answering on 24 October, and a person with a real camera takes far better "
+                      "pictures. The deck is off the drone and the Camera tab is gone; photos are taken by "
+                      "hand and uploaded in the desktop app instead.")]),
         *story("1.6", "Every flight saved, and comparable", kind="MVP", owner="Samuel", estimate="2 h + 1 h",
                status="Built",
                want="As an inspector, I want past flight sessions saved and made comparable (e.g., previous "
@@ -380,7 +384,7 @@ APPS: dict[str, Any] = {
                accept=["Flagged equipment stands out on the dashboard, with its alert.",
                        "Opening an alert shows the sensor reading or image, and the reason for the flag."],
                how=[p("How we will build it: the pipeline (Part 4) writes one verdict per inspection point per "
-                      "flight, with its reason and the reading or frame behind it. The dashboard's Zones map "
+                      "flight, with its reason and the reading behind it. The dashboard's Zones map "
                       "already shades each area by its latest result; flagged points will be marked there and "
                       "listed, newest first, each opening to the evidence.")]),
         *story("1.10", "Commands in plain English", kind="Stretch", owner="Samuel, Reagan",
@@ -550,8 +554,8 @@ FLIGHT: dict[str, Any] = {
 DATA: dict[str, Any] = {
     "slug": "data-collection",
     "title": "Data collection",
-    "subtitle": "Part 3 · Temperature, pressure, position and images — recorded, tagged and kept safe",
-    "summary": "Every reading ten times a second and greyscale images from the drone's camera, "
+    "subtitle": "Part 3 · Temperature, pressure and position — recorded, tagged and kept safe",
+    "summary": "Every reading ten times a second, "
                "written to the laptop first and uploaded after. Next: capturing at each inspection "
                "point, and tagging every reading with the point it belongs to.",
     "category": "Sensing",
@@ -567,7 +571,7 @@ DATA: dict[str, Any] = {
           "record the same way at every inspection point, and labelling each reading with that point."),
         table(STORY_HEADER, [
             ["3.1", "Temperature and pressure through every flight", "MVP", "Samuel", "2 h", "Built"],
-            ["3.2", "Greyscale images from the camera", "MVP", "Samuel", "2 h", "Built"],
+            ["3.2", "Greyscale images from the camera", "MVP", "Samuel", "2 h", "Removed — no camera (15 Nov)"],
             ["3.3", "Data sent off the drone and stored safely", "MVP", "Samuel", "2 h", "Built"],
             ["3.4", "Capture at each inspection point", "MVP", "Kevin", "16 h", "Sprint 2"],
             ["3.5", "Every reading tagged with time and point", "MVP", "Samuel, Kevin", "3 h + 6 h", "Time built · point ID Sprint 2"],
@@ -586,14 +590,15 @@ DATA: dict[str, Any] = {
                       "metres internally everywhere; the temperature is stored in the unit the operator chose, "
                       "with the unit recorded in the row.")]),
         *story("3.2", "Greyscale images from the drone's camera", kind="MVP", owner="Samuel", estimate="2 h",
-               status="Built",
+               status="Removed — no camera (15 Nov)",
                want="As an inspector, I want greyscale images of inspected equipment from the drone's camera, "
                     "so that equipment can be checked visually.",
                tasks=[("The AI deck camera sends 324×244 greyscale frames over Wi-Fi (about 3.7 a second); the "
                       "frames are saved to disk and uploaded.")],
                accept=["A session's frames are saved on the laptop and can be viewed later on the website."],
-               how=[p("About two frames a second are written to disk during a session, with an index of when "
-                      "each was taken, and uploaded to private storage afterwards. The website shows them per flight.")]),
+               how=[p("Removed on 15 November with the camera (story 1.5). The frames already uploaded are "
+                      "kept in storage but no longer shown; equipment is checked visually from photos a "
+                      "person takes and uploads, each attached to a session and, optionally, an inspection point.")]),
         *story("3.3", "Data sent off the drone and stored safely", kind="MVP", owner="Samuel", estimate="2 h",
                status="Built",
                want="As an inspector, I want the collected data wirelessly sent off the drone to an external "
@@ -610,10 +615,13 @@ DATA: dict[str, Any] = {
                want="As an inspector, I want the drone to capture images and readings while it holds at each "
                     "inspection point, so that every piece of equipment is recorded the same way.",
                tasks=["Trigger a consistent capture of images and readings during the hold at each inspection point."],
-               accept=["At least 10 frames and 5 seconds of readings are saved for every inspection point on the route."],
+               accept=["At least 5 seconds of readings are saved for every inspection point on the route."],
                how=[p("How we will build it: the mission already holds at each waypoint for a set time. The "
                       "capture opens with the hold and closes with it, and a point that comes back short is "
-                      "marked incomplete rather than silently accepted.")]),
+                      "marked incomplete rather than silently accepted."),
+                    p("Changed on 15 November: the plan also asked for at least 10 camera frames per point. "
+                      "The drone carries no camera now, so the capture is the readings; the pictures of each "
+                      "point are photos taken by hand and uploaded against it.")]),
         *story("3.5", "Every reading tagged with its time and point", kind="MVP", owner="Samuel, Kevin",
                estimate="3 h + 6 h", status="Time and position built · point ID Sprint 2",
                want="As an inspector, I want every collected reading and image tagged with a timestamp and "
@@ -638,7 +646,7 @@ ANOMALY: dict[str, Any] = {
     "slug": "anomaly-detection",
     "title": "Anomaly detection and alerts",
     "subtitle": "Part 4 · From a recorded flight to a verdict for every piece of equipment",
-    "summary": "One pipeline per flight — clean the readings, sharpen the images, classify, interpret — "
+    "summary": "One pipeline per flight — clean the readings, classify, interpret — "
                "ending in a verdict for each inspection point and an alert with its reason. Training "
                "data, data cleaning and the first classifier start in Sprint 1.",
     "category": "Data",
@@ -648,9 +656,10 @@ ANOMALY: dict[str, Any] = {
     "members": [REAGAN, KEVIN, HANNAH, YORDANOS, SAMUEL],
     "content": [
         h2("What this part is"),
-        p("This is where a recording becomes a finding. Every flight's readings and images go through "
-          "one pipeline — clean, enhance, classify, interpret — and come out as a verdict for each "
-          "inspection point: normal, or flagged, with the reason. The flags become alerts on the "
+        p("This is where a recording becomes a finding. Every flight's readings go through "
+          "one pipeline — clean, classify, interpret — once the flight has landed, and come out as a "
+          "verdict for each inspection point: normal, or flagged, with the reason. Each photo taken by "
+          "hand gets its own verdict from the image classifier. The flags become alerts on the "
           "dashboard (Part 1, story 1.9)."),
         p("It starts this sprint. The previous team's model cannot be reused: 1,280 of its 1,291 "
           "inputs are an image embedding of that team's own photographs, and most of the rest are "
@@ -658,22 +667,21 @@ ANOMALY: dict[str, Any] = {
         table(STORY_HEADER, [
             ["4.1", "Labelled images of normal and faulty equipment", "MVP", "Hannah, Yordanos", "2 h + 5 h", "Sprint 1"],
             ["4.2", "Bad sensor readings removed", "MVP", "Kevin", "8 h", "Sprint 1"],
-            ["4.3", "Clearer images", "MVP", "Kevin, Reagan", "12 h each + 10 h", "Sprint 1"],
+            ["4.3", "Clearer images", "MVP", "Kevin, Reagan", "12 h each + 10 h", "Removed — no camera (15 Nov)"],
             ["4.4", "An image classifier: faulty or not", "MVP", "Reagan", "12 h", "Sprint 1"],
             ["4.5", "One pipeline per flight", "MVP", "Kevin, Reagan", "10 h each", "Sprint 2"],
             ["4.6", "Readings against normal limits, with alerts", "MVP", "Kevin, Reagan", "4 h + 14 h", "Sprint 2"],
             ["4.7", "Change against a baseline image", "Stretch", "Reagan, Kevin, Samuel", "14 h each", "Sprint 4"],
             ["4.8", "Images, readings and history together", "Stretch", "Reagan, Samuel", "12 h each", "Sprint 5"],
-            ["4.9", "Anomalies flagged during the flight", "Stretch", "Samuel, Reagan, Kevin", "12 + 12 + 15 h", "Sprint 4"],
+            ["4.9", "Anomalies flagged during the flight", "Stretch", "Samuel, Reagan, Kevin", "12 + 12 + 15 h", "Removed — processed after landing (15 Nov)"],
             ["4.10", "A second, closer pass over a flagged point", "Stretch", "Yordanos, Hannah", "10 h + 12 h", "Sprint 5"],
         ]),
         h2("The pipeline, end to end"),
-        p("Its input already exists: every flight's readings file and camera frames are in storage, "
+        p("Its input already exists: every flight's readings file is in storage, "
           "uploaded by Part 3, each reading with its time and position. The pipeline:"),
-        li(b("Load"), " a flight's readings and frames from storage."),
+        li(b("Load"), " a flight's readings from storage."),
         li(b("Clean"), " — mark and remove readings from a misbehaving sensor (4.2)."),
-        li(b("Enhance"), " — raise the resolution of the 324×244 frames, and colourise them (4.3)."),
-        li(b("Classify"), " — an image model (4.4) and a sensor model against normal limits (4.6)."),
+        li(b("Classify"), " — a sensor model against normal limits (4.6), and an image model (4.4) over the uploaded photos."),
         li(b("Interpret"), " — one verdict per inspection point, with the reason, saved for the dashboard (4.5)."),
         img("/projects/data-processing.webp", "Each flight ends in a verdict per point, not a spreadsheet. (Stock photograph.)"),
         h2("The user stories"),
@@ -692,13 +700,15 @@ ANOMALY: dict[str, Any] = {
                how=[p("Tested the way the acceptance criterion says: plant known-bad values in a real flight file "
                       "and check exactly those, and nothing else, are flagged.")]),
         *story("4.3", "Clearer images", kind="MVP", owner="Kevin, Reagan", estimate="12 h each; colour 10 h (Kevin)",
-               status="Sprint 1",
+               status="Removed — no camera (15 Nov)",
                want="As an inspector, I want clearer images, so that even small defects are visible.",
                tasks=["A model or program that raises the quality and resolution of the 324×244 greyscale frames.",
                       "A model or program that colourises them after the fact (low priority)."],
                accept=["Before-and-after on real frames from the drone shows visibly more detail.",
                        "Greyscale images show the colour of objects accurately."],
-               how=[p("Judged on the drone's own frames, not sample images — the camera's quirks are the problem being solved.")]),
+               how=[p("Removed on 15 November. This story existed to rescue the drone camera's small greyscale "
+                      "frames; with no camera on the drone, the photos are taken by hand on a real camera and "
+                      "need no enhancing.")]),
         *story("4.4", "An image classifier: faulty or not", kind="MVP", owner="Reagan", estimate="12 h",
                status="Sprint 1",
                want="As an inspector, I want a model that looks at an image and can define it as faulty or "
@@ -714,7 +724,8 @@ ANOMALY: dict[str, Any] = {
                     "for each piece of equipment without manual steps.",
                tasks=["One command that loads a flight's readings and frames from storage, runs the steps in order, and saves the result."],
                accept=["A single command turns a recorded flight into a verdict for each inspection point."],
-               how=[p("The steps above, in order, keyed by the inspection-point IDs Part 3 adds.")]),
+               how=[p("The steps above, in order, keyed by the inspection-point IDs Part 3 adds. The plan's "
+                      "enhance step went with the camera on 15 November; the pipeline is clean, classify, interpret.")]),
         *story("4.6", "Readings against normal limits, with alerts", kind="MVP", owner="Kevin, Reagan",
                estimate="4 h (Kevin) + 14 h (Reagan)", status="Sprint 2",
                want="As an inspector, I want an external program to compare sensor readings against defined "
@@ -738,13 +749,13 @@ ANOMALY: dict[str, Any] = {
                tasks=["Combine the image and sensor models with past readings for the same equipment."],
                accept=["The combined model is at least as accurate as either model alone on the test set."], how=[]),
         *story("4.9", "Anomalies flagged during the flight", kind="Stretch", owner="Samuel, Reagan, Kevin",
-               estimate="12 h + 12 h + 15 h", status="Sprint 4",
+               estimate="12 h + 12 h + 15 h", status="Removed — processed after landing (15 Nov)",
                want="As an operator, I want anomalies flagged during the flight, not after it, so that the "
                     "mission can react right away.",
                tasks=["Run the classifier on live data as it arrives."],
                accept=["An alert appears while the drone is still at that point — a heated box flagged in real time."],
-               how=[p("The live readings are already on the laptop at 10 Hz (Part 1, story 1.4); this runs the "
-                      "model on them as they arrive.")]),
+               how=[p("Removed on 15 November: a flight is processed once its data has arrived, never in the "
+                      "air. The live readings still show at 10 Hz (Part 1, story 1.4); the verdicts come after landing.")]),
         *story("4.10", "A second, closer pass over a flagged point", kind="Stretch", owner="Yordanos, Hannah",
                estimate="10 h + 12 h", status="Sprint 5",
                want="As a user, I want the drone to alter its mission in real time and inspect a flagged point "
