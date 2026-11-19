@@ -195,6 +195,18 @@ DONE WHEN
 --------------------------------------------------------------------------------
 PHASE 7 — THE DOCS SWEEP
 --------------------------------------------------------------------------------
+  THE PHOTO-FREE PART DONE 2026-11-19 on docs/no-camera: architecture.txt
+  and architecture-at-a-glance.txt (no AI deck; crop-health's reason
+  reworded), CLAUDE.md's Out of scope and the hosted project's owner, the
+  profile (firmware row, the repo move, each teammate's commit identity),
+  the ROADMAP's phase 11, the leftover camera comments (styles.css,
+  .gitignore), the project seed (1.5, 3.2, 4.3, 4.9 marked removed; 3.4
+  readings only — the HOSTED rows still need the seed run with --apply,
+  frontend/portfolio.txt), and the 16 STALE docs re-read (STALE 0).
+  rls-and-grants.txt needed no change: 0020 touched no policy or grant.
+  CLAUDE.md's layout table needed none either (firmware/ was already
+  described as drone_wifi). WAITING ON PHASE 5: photos.txt, results.txt's
+  photo half.
   - New: docs/features/pipeline/photos.txt from docs/_templates/feature.txt,
     a line in the router, typed edges both ways (classify, results,
     session-history, data-model, storage-and-backfill).
