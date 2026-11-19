@@ -56,12 +56,12 @@ camera (15 Nov)", 4.9 (flagged during the flight) "Removed — processed after
 landing"; each keeps the plan's own want, tasks and acceptance, with its "how"
 replaced by why it went. 3.4 asks for readings only, the 10-frame half noted
 as dropped. The kit row, the overview and the Part 1/3/4 summaries no longer
-promise a camera or an enhance step. ON THE WEBSITE IN PART (2026-11-19):
-the first --apply on the new project (tmswmgwomoabvftdreeb — its secret key
-is Kevin's) wrote dronedeck, apps-and-manual-flight, autonomous-flight and
-data-collection, then lost its connection on anomaly-detection; that page and
-testing still have the old text (read back with the publishable key, teams
-intact). Re-run it whole — it is idempotent.
+promise a camera or an enhance step. ON THE WEBSITE since 2026-11-19: applied
+to the new project (tmswmgwomoabvftdreeb — its secret key is Kevin's) from
+fix/seed-retire-slug, and read back with the publishable key — all seven
+pages match the seed, teams intact, design-document untouched, none left
+saying ./cropwatcher or the old repo link. (A first run lost its connection
+after four pages; a re-run is idempotent.)
 THE SEED HID THE OVERVIEW (bug, 2026-10-25 → fixed 2026-11-19): the rename
 turned the starter slug "cropwatcher" into "dronedeck" in RETIRE (and in
 seed/portfolio.py), the overview's own slug, so a full --apply would have set
