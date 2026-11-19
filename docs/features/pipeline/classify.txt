@@ -1,7 +1,7 @@
 ================================================================================
 CLASSIFY — blocks@1: the stretches of a flight where temperature or pressure
 departs from what was expected
-Last verified: 2026-11-15 on feat/no-camera — contract v3: classify(data,
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against pelt.py after f406443 (an AI-disclosure header, and its docstring now says numpy is the pipeline's only runtime dependency — no code change). Before that, 2026-11-15 on feat/no-camera — contract v3: classify(data,
 clean, ctx), no frames; tests/pipeline/test_classify.py passing. Before that,
 2026-10-09 against docs/pipeline-v2 — tests/pipeline/
 test_classify.py, ml/anomaly-eval/evaluate.py on the lab's flights (cleaned by

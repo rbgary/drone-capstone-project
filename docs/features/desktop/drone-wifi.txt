@@ -1,6 +1,6 @@
 ================================================================================
 DRONE_WIFI — the firmware app that marks a drone as set up (its Wi-Fi is gone)
-Last verified: 2026-11-15 against feat/no-camera — firmware/drone-wifi/ read,
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/drone_setup.py (20fd531, two parts, no AI deck) — this doc was rewritten for it; the lab check is still OWED. Before that, 2026-11-15 against feat/no-camera — firmware/drone-wifi/ read,
 unchanged; the bundle's cf2.bin unchanged (manifest sha256); Set up's tests.
 NOT yet on the lab drone with the AI deck off (see STATUS).
 SOURCE: firmware/drone-wifi/src/drone_wifi.c

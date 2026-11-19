@@ -1,6 +1,6 @@
 ================================================================================
 MISSION PLAYBACK — watch any recorded flight again, on the room map, at any moment
-Last verified: 2026-10-24 — the filters kept while the window is open
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/sync/cloud.py after 53186d2 and the full-bucket merge; nothing it names was removed. Before that, 2026-10-24 — the filters kept while the window is open
 (lib/windowState.ts), desktop build. 2026-10-11 against data/flight-playback-cloud — tests/test_playback.py
 (20) and test_playback_cloud.py (17); the local Supabase stack with the agent's
 real client (backend/supabase/checks/playback_check.py 20/20); a real lab

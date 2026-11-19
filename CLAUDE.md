@@ -195,6 +195,9 @@ and deploying it would put operator credentials on a server for no benefit.
 `.vercelignore` is a second line of defence, but the Root Directory setting is
 the actual fix.
 
+The hosted Supabase project is `tmswmgwomoabvftdreeb`, owned by Kevin since 2026-11-16
+(`docs/features/supabase/data-model.txt`, "THE HOSTED PROJECT MOVED").
+
 Env vars needed on Vercel: `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`. The build succeeds
 without them — `isSupabaseConfigured()` degrades the operator area rather than
@@ -220,9 +223,10 @@ blanking the site — but sign-in will not work until they are set.
 
 ## Out of scope
 
-The AI deck camera. Its Wi-Fi datalink never worked in the original capstone and was cut
-from final scope — the deck is fitted (`deck.bcAI = 1`) but treated as diagnostic only.
-Docker for the agent, real-time stick control over the internet, and haptics as a
+A camera on the drone. The AI deck was taken off the airframe on 2026-11-15 and its code
+removed (PR #5): photos are taken by a person and uploaded in the desktop app, and the
+pipeline runs on the sensors after the data arrives — no live verdicts, no image
+enhancement. See `docs/features/architecture.txt`, DECISIONS. Docker for the agent, real-time stick control over the internet, and haptics as a
 requirement (`navigator.vibrate` is Android-only) are also out.
 
 ## Reference material

@@ -1,7 +1,7 @@
 ================================================================================
 COMPONENTS — THE SHARED BUILDING BLOCKS
 Reach for one of these before writing a new one.
-Last verified: 2026-10-09 against web/tables — the components below, in a
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against web/lib/pipeline.ts after Phase 6a: anomalyMarks, faultMarks, marksOf, groupTint still exported, every component path present; nothing here named the removed frame helpers. Before that, 2026-10-09 against web/tables — the components below, in a
 browser at 390 and 1440 px in both themes.
 ================================================================================
 

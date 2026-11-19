@@ -42,13 +42,27 @@ and one page per part of the Project Management Planning document —
 apps-and-manual-flight, autonomous-flight, data-collection, anomaly-detection,
 documentation, testing — each with its user stories, owners, estimates,
 acceptance criteria, what is built and what is left. It needs the secret key,
-so the owner runs it (dry run first, then --apply). It sets the six starter
+so whoever holds the project's key runs it (dry run first, then --apply). It sets the six starter
 projects from seed/portfolio.py to draft, and never touches `design-document`,
 which the team wrote in /admin. Covers and inline images are site paths into
 web/public/projects/ (CREDITS.txt), so they deploy with the site rather than
 living in the bucket. Do not re-run seed/portfolio.py: it matches team members
 by NAME, and "Kevin" was renamed "Kevin Loi" in /admin — it would create a
 second Kevin.
+
+THE NO-CAMERA SCOPE IN THE PAGES (2026-11-19, the file only): stories 1.5
+(live camera), 3.2 (camera images) and 4.3 (clearer images) read "Removed — no
+camera (15 Nov)", 4.9 (flagged during the flight) "Removed — processed after
+landing"; each keeps the plan's own want, tasks and acceptance, with its "how"
+replaced by why it went. 3.4 asks for readings only, the 10-frame half noted
+as dropped. The kit row, the overview and the Part 1/3/4 summaries no longer
+promise a camera or an enhance step. NOT YET ON THE WEBSITE: the hosted rows
+still say the old text until the seed is run with --apply on the new project
+(tmswmgwomoabvftdreeb — its secret key is Kevin's). --apply OVERWRITES the
+seven pages whole, so compare them with /admin first: an edit made there
+since 2026-09-28 is lost unless it is copied into this file. Other statuses in
+it are older than the code (4.2 and 4.5 read "Sprint 1/2" and are built); not
+touched by this pass.
 
 
 WHAT CHANGED IN THE PORT, AND WHY

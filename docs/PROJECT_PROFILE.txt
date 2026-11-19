@@ -9,9 +9,11 @@ or moved. CLAUDE.md outranks this file wherever they disagree.
 REPOS  (the docs hub is the repo holding docs/)
   drone-capstone  <- docs hub, and the ONLY repo in this project (a monorepo)
     path       the repository root (github.com/rbgary/drone-capstone-project, public)
-    mainline   main — owner-only ruleset (id 23996708): PRs, merged with --admin
-    committers one owner, two identities: samsmoaky@gmail.com (local commits)
-               and the GitHub noreply address (squash merges done on GitHub)
+    mainline   main, landed by pull request. The "main: owner only" ruleset
+               (id 23996708) was set on the OLD repo (samsmoak/drone-capstone);
+               UNVERIFIED on rbgary/drone-capstone-project since the move.
+    committers the team, each as themselves (5 identities in the last 200
+               commits). Kevin: KL1LK <klcomics1@vt.edu>.
 
     surface            role      stack (pinned from the manifests)
     backend/agent/     backend   Python >=3.11 · FastAPI >=0.115 · cflib >=0.1.33
@@ -21,7 +23,8 @@ REPOS  (the docs hub is the repo holding docs/)
                                  Zustand 5 · supabase-js 2 — deploys to Vercel
     desktop/           client    Tauri 2 · React 19 · Vite 8 · TypeScript 6 —
                                  manual control, bundles the agent as a sidecar
-    firmware/          firmware  Crazyflie app (drone_wifi) and AI-deck ESP code
+    firmware/          firmware  Crazyflie app (drone_wifi) — the AI deck's ESP
+                                 code went with the camera, 2026-11-15
     scripts/           tooling   install.mjs / setup.mjs — one setup for every OS
 
 OTHER FOLDERS BESIDE IT — confirmed NOT part of this project (2026-09-27): every
@@ -77,7 +80,11 @@ CONVENTIONS  (CLAUDE.md "Conventions" is the full text)
              from Supabase.
 
 SHIP
-  identity     commit as samsmoaky@gmail.com
+  identity     each teammate commits as themselves — Kevin as KL1LK
+               <klcomics1@vt.edu>, and opens PRs from a GitHub compare link
+               (no gh CLI). CLAUDE.md's "Commit as samsmoaky@gmail.com" is the
+               owner's own rule from before the move; flagged to the team
+               2026-11-19, not changed here.
   attribution  NONE — no Claude co-author or footer lines, in commits or PR
                descriptions (CLAUDE.md "Git"). This overrides any tool default.
   route        short-lived branch -> PR -> `gh pr merge <n> --squash --admin`.
@@ -107,11 +114,11 @@ SHIP
                One implementation, never two: an experiment that replaces a
                teammate's ticket rewrites that ticket in the PR that lands it.
   deploy       web: Vercel, Root Directory = web (never give the agent a FastAPI
-               entrypoint). SINCE 2026-10-25 https://drone-capstone-project.vercel.app
-               is served by the LAB project (dronedeck-lab: private repo,
-               experiment/samuel), at the owner's ask (main caught up with
-               the lab whole on 2026-10-26, integrate/lab-2026-10-26); the public project (drone-capstone, main) has no friendly
-               domain until the address is moved back. desktop: nothing is published —
+               entrypoint). The site is https://drone-capstone-project.vercel.app
+               (PR #6, 2026-11-19). WHICH Vercel project serves it is
+               UNVERIFIED since the repo moved: until then the address was
+               served by the LAB project (dronedeck-lab, experiment/samuel,
+               since 2026-10-25), and PR #6 changed only the address. desktop: nothing is published —
                every machine builds its own from main with
                `node scripts/install.mjs`; CI only proves it builds
                (features/development/releases.txt).

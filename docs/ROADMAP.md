@@ -169,8 +169,8 @@ the only instructions. Added:
 >
 > **1280 of its 1291 inputs are a photograph.** `extract_features(df)` runs
 > EfficientNet-B0 over `df['image_path']`, one image per `(fruit_id, week)` — a
-> per-fruit weekly series of pomegranate photos. This drone's camera does not
-> work (see `docs/features/desktop/pages-and-windows.txt`), and it does not
+> per-fruit weekly series of pomegranate photos. This drone carries no camera
+> (removed 2026-11-15), and it would not
 > photograph individual labelled fruits over weeks.
 >
 > **Of the remaining 11 columns, this drone can measure 2**: `temp` (after
@@ -197,14 +197,16 @@ the only instructions. Added:
 >    as a model.
 > 2. **Train something on this drone's own sensors.** Needs labelled data that
 >    does not exist yet.
-> 3. **Fix the camera datalink first**, then revisit — but the model is still
->    trained on pomegranates, not greenhouse crops.
+> 3. ~~**Fix the camera datalink first**, then revisit~~ — gone: the drone
+>    carries no camera since 2026-11-15 (the AI deck is off it;
+>    `docs/features/architecture.txt`, DECISIONS). The model was trained on
+>    pomegranates anyway, not on our equipment.
 
 97. [ ] ~~Port the notebook's feature extraction~~ — see above. Nine of the
     eleven environmental columns cannot be measured by this airframe, so there
     is nothing faithful to port.
 98. [ ] ~~Load `best_lnn_stable.pt`, infer after correction~~ — blocked on the
-    camera and on the feature space, not on time.
+    another team's photographs and on the feature space, not on time.
 98b. [ ] **Decide what Task 4 actually is**, given the above. Option 1 is the
     only one that ships without new hardware.
 

@@ -1,6 +1,6 @@
 ================================================================================
 LAYOUT — the rule every screen obeys, in both apps
-Last verified: 2026-10-24 against desktop/camera-capture — the whole desktop harness
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against desktop/src/harness.tsx after the camera went: no Camera, Capture or Wi-Fi sections, and no wifi_scan anywhere in desktop/src or src-tauri; NOT re-run in a browser. Before that, 2026-10-24 against desktop/camera-capture — the whole desktop harness
 with the new Capture sections, at the five widths, both themes: 10 runs PASS,
 the self-test FAIL as it must; screenshots at 720 and 1280 caught Capture
 below the fold, which the DOM measurement passed (the Capture page's doc,
@@ -93,11 +93,10 @@ desktop/src-tauri/tauri.conf.json   the window's minimum width, 720 px
   boundary, so React removes the WHOLE harness. The real app is not affected
   — its wifi_scan (src-tauri lib.rs) returns a scan or an error, never null;
   the harness without ?agent= is not either (no bridge: invoke throws, the
-  form catches it). Nothing to do with the drone. THE FIX: the stand-in
-  answers wifi_scan with {permission: "unsupported", networks: [], error:
-  null}; and a per-section error boundary, so one broken page names itself
-  instead of blanking all of them. Until then, a check script can wrap the
-  bridge (done for the display chain's check, 2026-11-08).
+  form catches it). Nothing to do with the drone. What is still worth doing:
+  a per-section error boundary, so one broken page names itself instead of
+  blanking all of them (the wifi_scan stand-in once proposed here has nothing
+  left to answer).
 
 --------------------------------------------------------------------------------
 5. RELATED

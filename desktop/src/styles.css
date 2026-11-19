@@ -80,7 +80,7 @@
   --grid: #ebebe8;
   --axis: #9a9993;
 
-  /* The console surface: the command log, the vitals tail, the camera frame.
+  /* The console surface: the command log and the vitals tail.
      Darker than --surface-2 in light mode and darker than --background in dark,
      because a terminal reads as a recessed well in both. Measured against it:
      --console-ink 14.84:1 light / 14.89:1 dark, --console-dim (timestamps,
@@ -298,7 +298,7 @@ body {
 }
 
 /* ── The console ──────────────────────────────────────────────────────
-   The command log, the vitals tail and the camera frame sit on one recessed
+   The command log and the vitals tail sit on one recessed
    surface in a monospace face. Tabular numerals are not optional here: a
    vitals column that reflows as the digits change is unreadable at 10 Hz. */
 .console {

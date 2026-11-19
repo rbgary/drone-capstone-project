@@ -252,7 +252,8 @@ The drone's POSE is measured; the ROOM is declared (4 × 4 × 2 m, drawn to
 scale). That is the most this airframe's sensors can support, and the distinction
 matters enough to state on the pane.
 
-Asked the drone directly (docs/flight-log.txt):
+Asked the drone directly (docs/flight-log.txt, 2026-09; the AI deck has been
+off the drone since 2026-11-15, so bcAI should read 0 — not yet re-asked):
 
   deck.bcLighthouse4   1    yes
   deck.bcAI            1    yes

@@ -3,8 +3,12 @@ GRAPH STATE — WHAT IS OUT OF SYNC, AND WHAT THAT STOPS
 Read this BEFORE starting a feature. It is the one file that says whether the
 docs can be trusted for the area you are about to work in.
 Generated from `python3 graph_check.py` plus what passes noticed by hand.
-Last run: 2026-11-15 on feat/no-camera, Phase 1 (contract v3: no frames, no
-enhance, no live run) — 49 docs. DANGLING 0 · ONE-WAY 0 · STALE 12. live.txt,
+Last run: 2026-11-19 on docs/no-camera (main 540114c, after PR #5 landed the
+no-camera work and PR #6 the repo move) — 46 docs. DANGLING 0 · ONE-WAY 0 ·
+STALE 0 (was 16: every one re-read against the diff that set it off and
+re-dated; one drift fixed, floor-plans.txt's ~7 camera frames a hold).
+UNCOMMITTED 1 until the sweep's commit (portfolio.txt + the project seed).
+Earlier: 2026-11-15 on feat/no-camera, Phase 1 — 49 docs, STALE 12; live.txt,
 enhance.txt and scene.txt deleted with their edges, both halves.
 Earlier: 2026-10-25 on experiment/samuel (the CropWatcher -> DroneDeck rename)
 — 52 docs. DANGLING 0 · ONE-WAY 0.
@@ -47,18 +51,8 @@ BLOCK  (0)
 None recorded.
 
 --------------------------------------------------------------------------------
-WARN  (3)
+WARN  (2)
 --------------------------------------------------------------------------------
-2026-11-15  NO-CAMERA WORK IN PHASES (feat/no-camera). Until it lands whole,
-            docs describe a half-removed camera ON PURPOSE. Done: Phase 1
-            (pipeline v3, no frames), Phase 2 (the agent's camera, its
-            routes, capture sessions, decks_lost, Kind.FRAMES) and Phase 3
-            (the desktop's Camera tab, Capture and Drone Wi-Fi pages, the
-            Rust Wi-Fi module; camera.txt and capture.txt deleted) and Phase
-            4 (Set up: two parts, no AI deck; camera-firmware.txt deleted,
-            drone-wifi.txt rewritten — Option A kept, Option C written up).
-            Still describing what is left: the web half of
-            pipeline/results.txt — Phase 6.
 2026-10-09  DRIFT FOUND AND FIXED: pipeline/data-pipeline.txt still said the
             unit of work was one point and that results never left the
             laptop; desktop/camera.txt still said no whole frame had ever
@@ -131,6 +125,13 @@ and why it did not apply)
 --------------------------------------------------------------------------------
 RESOLVED
 --------------------------------------------------------------------------------
+2026-11-19  NO-CAMERA WORK IN PHASES (WARN since 2026-11-15): PR #5 merged
+            Phases 0–4 and 6a into main 2026-11-18, and the docs sweep on
+            docs/no-camera brought the architecture docs, CLAUDE.md, the
+            profile, the ROADMAP and the project seed in line. The docs no
+            longer describe a half-removed camera. Still to come, waiting on
+            Reagan's classifier: Phase 5 (photos), Phase 6b (photos on the
+            web) — docs/plans/2026-11-16-no-camera-phases-5-7.txt.
 2026-10-11  Migration 20261011000019 pushed to the hosted project (0001–0018
             were live; 0019 alone applied) and verified read-only: RLS, four
             policies, grants select + insert to authenticated, none to anon.

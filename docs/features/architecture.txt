@@ -32,8 +32,8 @@ Every decision below is downstream of that line.
 
 THE FIVE PIECES
 
-  Drone            Crazyflie 2.1 + Lighthouse deck (positioning) + AI deck
-                   (fitted, diagnostic only — its camera link is out of scope)
+  Drone            Crazyflie 2.1 + Lighthouse deck (positioning). No camera:
+                   the AI deck was taken off on 2026-11-15 (DECISIONS)
   Flight agent     backend/agent/ — Python 3.11, FastAPI, cflib. The only
                    process that touches the radio
   Desktop app      desktop/ — Tauri v2 (Rust shell + React webview). The
@@ -306,14 +306,15 @@ app does not have this problem because the shell hands it the token directly.
 CROP-HEALTH PREDICTIONS are a third entry as of 2026-09-22, and this one changes
 what Task 4 can be. The previous team's best_lnn_stable.pt cannot be loaded and
 fed by this airframe: 1280 of its 1291 inputs are an EfficientNet-B0 embedding
-of a PHOTOGRAPH of a labelled pomegranate tracked weekly, and this drone's
-camera does not work. Of the remaining 11 columns it can measure 2 — the rest
+of a PHOTOGRAPH of a labelled pomegranate tracked weekly — that team's own
+photographs, which we do not have — and the drone carries no camera (since
+2026-11-15). Of the remaining 11 columns it can measure 2 — the rest
 are outdoor weather-station readings, several of them meaningless indoors.
 Zero-padding the image half would write confident nonsense into `predictions`
 and colour the zone map with it. The options are in ../ROADMAP.md phase 11.
 
-Also out of scope by decision: the AI deck's camera link, Docker for the agent,
-real-time stick control over the internet.
+Also out of scope by decision: a camera on the drone (the AI deck is off it,
+DECISIONS), Docker for the agent, real-time stick control over the internet.
 
 
 DECISIONS
@@ -332,8 +333,8 @@ DECISIONS
 - The desktop app bundles the agent rather than asking for Python. The people
   flying this are not all developers.
 - Installers live at fixed paths in a bucket, so a release needs no redeploy.
-- No camera on the drone (decided 2026-11-15; being removed on
-  feat/no-camera). The AI deck is off the airframe: its ESP32 stopped
+- No camera on the drone (decided 2026-11-15; removed from the code by PR #5,
+  merged 2026-11-18). The AI deck is off the airframe: its ESP32 stopped
   answering on 2026-10-24, and a person with a real camera takes better
   pictures than its 324×244 grayscale feed. Photos are uploaded in the desktop
   app, attached to a session and optionally an inspection point, and the image
