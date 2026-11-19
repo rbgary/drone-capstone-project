@@ -56,9 +56,9 @@ WHERE IT STANDS — Phases 0–4, done on feat/no-camera (NOT merged to main)
     20261118000020 APPLIED to the hosted project 2026-11-18 (its migration
     history rebuilt first — supabase/data-model.txt), so this agent is safe
     to ship.
-    OWED: `cd backend && supabase db reset` + the checks on the local stack
-    (Docker Desktop was not reachable from WSL that day); the pages in a
-    browser.
+    Proven on the local stack 2026-11-18: every migration from scratch,
+    every check passing, the four changed pages in a browser (results.txt).
+    PHASE 6a IS DONE.
 
 --------------------------------------------------------------------------------
 BEFORE PHASE 5 — WHAT REAGAN HANDS OVER (the gate; expected in a few days)

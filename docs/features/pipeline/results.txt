@@ -4,8 +4,13 @@ shown on the session and flight pages, and notified
 Last verified: 2026-11-18 on feat/no-camera — the camera removed from the
 web (Phase 6a): web typecheck, lint and build; tests/test_results_upload.py
 (no image columns sent); migration 20261118000020 APPLIED to the hosted
-project and checked there read-only. NOT seen in a browser; 0020 NOT yet run
-on the local stack (Docker was not reachable). 2026-11-15 — the agent half: no frames uploaded.
+project and checked there read-only; on the local stack all 20 migrations
+from scratch and every check (rls 15, results 11 sending the image columns,
+session_results 12 sending none, notifications 16, owner 10, playback 20,
+hosted_schema_check 49 true); the session, flight, processed-session and
+processed pages rendered against a planted flight with an OLD-style finding
+(frames, image_support, a camera note) and a new one — both findings shown,
+no camera text anywhere, and looked at by the owner in a browser. 2026-11-15 — the agent half: no frames uploaded.
 2026-10-24 — the manual section, the download and the paged listing: web typecheck, lint and build; lib/frame-zip.ts run for real in Node
 against a local server (progress, a missing file reported, the manual name,
 cancel, index.csv, the zip's own CRC check). NOT yet seen in a browser against

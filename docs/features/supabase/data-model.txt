@@ -27,8 +27,8 @@ WHERE IT LIVES
                                                              image_support optional
                                                              (no camera); APPLIED to
                                                              the hosted project
-                                                             2026-11-18; NOT YET run
-                                                             on the local stack
+                                                             2026-11-18; proven on the
+                                                             local stack the same day
   backend/supabase/checks/hosted_schema_check.sql            read-only: does a database
                                                              hold what 0001–0019 make
   web/types/database.ts                                      generated types —
