@@ -32,11 +32,13 @@ THE EVENTS
   manual_arm, manual_flight
   processing_set        the DPP switch, on or off, and the mode it was set in
   processing_run        a recorded flight processed by hand
-  capture_set           the auto-capture switch, on or off, and the mode
-  camera_capture        a frame captured by hand, with its number
   land
   emergency_stop
   guard_abort           with the guard's reason (see flight-safety.txt)
+
+capture_set and camera_capture (the camera's auto-capture switch and a frame
+captured by hand) are no longer written since 2026-11-15 — the drone carries no
+camera. Rows already on the web keep them; audit_events.action is free text.
 
 Each carries an outcome: ok / refused / failed / aborted.
 
@@ -79,6 +81,5 @@ INVARIANTS
 
 RELATED
 
-shares-data-with  ../desktop/capture.txt
-                  capture_set (the auto-capture switch) and camera_capture (a frame
-                  captured by hand), recorded against the session
+No typed edge since 2026-11-15: its one, to the Capture page's doc, went with
+the camera's audit actions.

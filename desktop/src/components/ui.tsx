@@ -230,8 +230,8 @@ export function Button({
 
 /**
  * An on/off switch with its state in words beside it ("…: on"), so the state
- * never rests on the knob's colour alone. The DPP switch and the auto-capture
- * switch at the top of Control are both this.
+ * never rests on the knob's colour alone. The DPP switch at the top of Control
+ * is this (the camera's auto-capture switch was too, until 2026-11-15).
  */
 export function Switch({ on, label, onClick, disabled, title }: {
   on: boolean;

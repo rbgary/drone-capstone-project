@@ -39,8 +39,6 @@ class Action(StrEnum):
     GUARD_ABORT = "guard_abort"
     PROCESSING_SET = "processing_set"       # the DPP switch, on or off
     PROCESSING_RUN = "processing_run"       # a flight asked for by hand
-    CAPTURE_SET = "capture_set"             # the auto-capture switch, on or off
-    CAMERA_CAPTURE = "camera_capture"       # a frame captured by hand
 
 
 class Result(StrEnum):

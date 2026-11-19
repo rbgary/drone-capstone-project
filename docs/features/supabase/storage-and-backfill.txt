@@ -14,11 +14,15 @@ Four buckets:
                 covers, team photos and images inside write-ups.
   flight-frames PRIVATE (migration 0011, applied 2026-09-24). A session's
                 CAPTURED camera frames — those that changed, at most two a
-                second, and every manual capture (desktop/capture.txt) — and
+                second, and every manual capture (the Capture page, removed) — and
                 its frames.csv:
                 <session id>/frames/000001.png, <session id>/frames.csv.
                 Operators insert, read, and update (frames.csv is replaced
-                once at the session's end). See desktop/camera.txt.
+                once at the session's end). NOTHING WRITES IT since 2026-11-15
+                (the drone carries no camera; the agent's frame upload was
+                removed). What is there stays, and the web still reads it.
+                The hand-taken photos are to go here next, under
+                <session id>/photos/ (the no-camera work, Phase 5).
 
 
 WHERE IT LIVES
@@ -93,5 +97,6 @@ INVARIANTS
 RELATED
 
 shares-data-with  ../backend/offline-sync.txt
-                  the syncer uploads the flight CSV and the frames into these
-                  buckets; a full quota holds back only the files, never the rows
+                  the syncer uploads the flight CSV into flight-logs (frames
+                  into flight-frames until 2026-11-15); a full quota holds back
+                  only the file, never the rows

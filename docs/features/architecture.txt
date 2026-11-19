@@ -332,10 +332,14 @@ DECISIONS
 - The desktop app bundles the agent rather than asking for Python. The people
   flying this are not all developers.
 - Installers live at fixed paths in a bucket, so a release needs no redeploy.
-- No camera on the drone, data is processed only after the data arrives, 
-  and we use a classifier over photos uploaded onto the app. This is because of
-  hardware issues with the AI deck, which is also where the drone camera is 
-  attached to. 
+- No camera on the drone (decided 2026-11-15; being removed on
+  feat/no-camera). The AI deck is off the airframe: its ESP32 stopped
+  answering on 2026-10-24, and a person with a real camera takes better
+  pictures than its 324×244 grayscale feed. Photos are uploaded in the desktop
+  app, attached to a session and optionally an inspection point, and the image
+  classifier gives each its own verdict on the laptop. A flight is processed
+  only after its data has arrived — no live verdicts — and image enhancement
+  and upscaling go with the camera.
 
 
 INVARIANTS

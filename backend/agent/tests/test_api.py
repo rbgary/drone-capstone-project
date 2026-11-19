@@ -340,47 +340,6 @@ class TestHistoryApi:
         assert response.status_code == 404
 
 
-class TestRecordingRoutes:
-    """A session's frames, read back from disk through the API."""
-
-    def test_nothing_is_recording_outside_a_session(self, client):
-        assert client.get("/camera/recording", headers=auth(client)).json() == {"recording": False}
-        assert client.get("/camera/recording/frame/latest", headers=auth(client)).status_code == 204
-
-    def test_frames_are_served_from_disk_by_number_and_latest(self, client, tmp_path):
-        recording = rest.agent.recorder.start("s-api", tmp_path / "s-api")
-        try:
-            rest.agent.recorder.on_frame(b"frame-one", "image/png", 2, 1)
-            rest.agent.recorder.on_frame(b"frame-two", "image/png", 2, 1)
-            summary = client.get("/camera/recording", headers=auth(client)).json()
-            assert (summary["recording"], summary["count"], summary["latest_seq"]) == (True, 2, 2)
-            latest = client.get("/camera/recording/frame/latest", headers=auth(client))
-            assert latest.content == b"frame-two"
-            assert latest.headers["cache-control"] == "no-store"
-            first = client.get("/camera/recording/frame/1", headers=auth(client))
-            assert first.content == b"frame-one"
-            listed = client.get("/camera/recording/frames?after=1&limit=5", headers=auth(client))
-            assert [f["seq"] for f in listed.json()["frames"]] == [2]
-            assert recording.count == 2
-        finally:
-            rest.agent.recorder.stop()
-
-    def test_recorded_frames_need_the_token(self, client):
-        """Unlike the live frame, a recording is session data."""
-        for path in ("/camera/recording", "/camera/recording/frame/latest",
-                     "/camera/recording/frames"):
-            assert client.get(path).status_code == 401
-
-    def test_a_bad_frame_number_is_a_404_not_a_crash(self, client, tmp_path):
-        rest.agent.recorder.start("s-api", tmp_path / "s-api")
-        try:
-            bad = client.get("/camera/recording/frame/abc", headers=auth(client))
-            beyond = client.get("/camera/recording/frame/99", headers=auth(client))
-            assert (bad.status_code, beyond.status_code) == (404, 204)
-        finally:
-            rest.agent.recorder.stop()
-
-
 class TestArrowKeyControls:
     """Which way the arrow keys move the drone (flight/keyframe.py)."""
 

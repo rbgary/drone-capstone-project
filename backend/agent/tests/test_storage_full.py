@@ -1,10 +1,11 @@
 """A full storage bucket no longer stops every upload (found 2026-11-08).
 
 File storage and the database are separate resources with separate quotas.
-When storage refuses a file — a frame, a frames index, an enhanced frame, a
-flight log — the rest of that pass's files wait on this computer with their
-cursors unmoved, and every database row still goes. The next pass tries
-storage again, so uploads resume by themselves once space is freed."""
+When storage refuses a file — the flight's log, the one file the syncer sends
+since the camera went (2026-11-15; frames and enhanced frames were cases here
+until then) — it waits on this computer, and every database row still goes.
+The next pass tries storage again, so uploads resume by themselves once space
+is freed."""
 
 from __future__ import annotations
 
@@ -18,7 +19,6 @@ from dronedeck.sync.outbox import Kind, Outbox
 from dronedeck.sync.syncer import STORAGE_FULL, Syncer
 from tests.test_playback import FLIGHT, write_flight
 from tests.test_playback_cloud import flight_record
-from tests.test_recording import recorded
 from tests.test_results_upload import ResultsCloud, finding, queue, write_result
 from tests.test_sync import add_flight
 
@@ -37,10 +37,6 @@ class StorageCloud(ResultsCloud):
         if self.storage_refuses is not None:
             raise self.storage_refuses
 
-    def upload_frame(self, object_path, path, content_type, *, replace=False):
-        self._storage()
-        super().upload_frame(object_path, path, content_type, replace=replace)
-
     def upload_flight_csv(self, object_path, csv_path):
         self._storage()
         super().upload_flight_csv(object_path, csv_path)
@@ -50,16 +46,15 @@ class StorageCloud(ResultsCloud):
         super().upsert_result(row)
 
 
-FULL = StorageError("could not upload a camera frame: StorageApiError", full=True)
+FULL = StorageError("could not upload the flight log: StorageApiError", full=True)
 
 
 @pytest.fixture
 def rig(tmp_path):
-    """A flight that has landed, its processed result with two enhanced
-    frames, and a session's three recorded frames — all waiting to upload."""
-    outbox, _ = recorded(tmp_path, 3, end=True)        # Outbox(tmp_path / "outbox")
+    """A flight that has landed and its processed result, waiting to upload."""
+    outbox = Outbox(tmp_path / "outbox")
     add_flight(outbox, tmp_path)
-    write_result(tmp_path / "r", findings=[finding("a")], frames=2)
+    write_result(tmp_path / "r", findings=[finding("a")])
     queue(outbox, tmp_path / "r")
     cloud = StorageCloud()
     return outbox, cloud, Syncer(outbox, lambda: cloud, sleep=lambda s: None)
@@ -75,14 +70,11 @@ class TestStorageFull:
         assert sorted(cloud.telemetry["flight-1"]) == [0, 1, 2, 3, 4]
         assert cloud.results["flight-1"]["findings_count"] == 1
         assert set(cloud.findings) == {"a"}
-        # …and no file did; their cursors did not move.
+        # …and the log file did not: the flight stays pending until it is up.
         assert cloud.uploads == [] and cloud.objects == {}
-        assert outbox.get(Kind.FRAMES, "s1").get("uploaded_through", 0) == 0
-        assert outbox.get(Kind.RESULTS, "flight-1").get("frames_uploaded", 0) == 0
-        # The records whose files are waiting stay pending.
         assert status.pending_flights == 1
-        assert outbox.count_pending(Kind.FRAMES) == 1
-        assert outbox.count_pending(Kind.RESULTS) == 1
+        # A result waits on the flight's rows, not its log file: it is sent.
+        assert outbox.count_pending(Kind.RESULTS) == 0
 
     def test_storage_is_tried_once_a_pass_not_once_a_file(self, rig):
         _, cloud, syncer = rig
@@ -110,13 +102,9 @@ class TestStorageFull:
 
         assert [path for path, _ in cloud.uploads] == ["flight-1.csv.gz"]
         assert cloud.backfills == [("flight-1", "flight-1.csv.gz")]
-        assert sorted(cloud.objects) == ["s1/frames.csv", "s1/frames/000001.png",
-                                         "s1/frames/000002.png", "s1/frames/000003.png",
-                                         "session-1/enhanced/000001.png",
-                                         "session-1/enhanced/000002.png"]
+        assert cloud.objects == {}                  # no frames to send any more
         assert cloud.result_upserts == 1            # the rows went once, while storage was full
         assert status.everything_sent
-        assert outbox.count_pending(Kind.FRAMES) == 0
         assert outbox.count_pending(Kind.RESULTS) == 0
         assert status.storage_error is None and status.storage_full is False
 
@@ -124,7 +112,7 @@ class TestStorageFull:
         outbox, cloud, syncer = rig
         cloud.storage_refuses = FULL
         syncer.sync_once()
-        write_result(tmp_path / "r", findings=[finding("a", "critical")], frames=2)
+        write_result(tmp_path / "r", findings=[finding("a", "critical")])
         queue(outbox, tmp_path / "r")                # processed again: the record is replaced
         syncer.sync_once()
         assert cloud.findings["a"]["severity"] == "critical"
@@ -133,7 +121,7 @@ class TestStorageFull:
 class TestOtherFailures:
     def test_a_storage_failure_that_is_not_the_quota_says_so(self, rig):
         _, cloud, syncer = rig
-        cloud.storage_refuses = StorageError("could not upload a camera frame: ConnectError")
+        cloud.storage_refuses = StorageError("could not upload the flight log: ConnectError")
         status = syncer.sync_once()
         assert status.storage_full is False
         assert "did not upload" in (status.storage_error or "")

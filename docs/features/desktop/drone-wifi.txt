@@ -1,341 +1,123 @@
-DRONE WI-FI — the camera joins the operator's network, set over the radio
-=========================================================================
+================================================================================
+DRONE_WIFI — the firmware app that marks a drone as set up (its Wi-Fi is gone)
+Last verified: 2026-11-15 against feat/no-camera — firmware/drone-wifi/ read,
+unchanged; the bundle's cf2.bin unchanged (manifest sha256); Set up's tests.
+NOT yet on the lab drone with the AI deck off (see STATUS).
+SOURCE: firmware/drone-wifi/src/drone_wifi.c
+================================================================================
 
-WHAT IT IS
+--------------------------------------------------------------------------------
+STATUS  (Last verified: 2026-11-15)
+--------------------------------------------------------------------------------
+  firmware  BUILT, KEPT AS IT IS — drone_wifi v4 on stock 2025.12.1, the image
+            in the bundle (cf2.bin) and on the lab drone. Not rebuilt, not
+            reflashed for the no-camera work.
+  marker    IN USE — cwsetup.fw is how Set up knows main is ours and current
+            (drone_setup.py needed_parts).
+  wifi      DEAD CODE — the Wi-Fi relay to the AI deck. The deck is off the
+            drone and the agent sends nothing (its Wi-Fi was removed
+            2026-11-15); the app's loop waits on the app channel for ever.
+  lab       OWED — `dronedeck setup --check` on the drone with no AI deck:
+            main and the positioning deck installed, nothing else listed.
+            It only reads.
+  cleanup   NOT DONE, ON PURPOSE — Option C below.
 
-The operator picks a Wi-Fi network in the app; the drone's AI deck joins it;
-the camera streams over the network the laptop is ALREADY on, so the laptop
-never leaves its internet (Supabase keeps syncing) and never switches networks.
+--------------------------------------------------------------------------------
+1. WHAT IT IS
+--------------------------------------------------------------------------------
+A small app of ours built into the drone's own firmware: Bitcraze's
+crazyflie-firmware 2025.12.1 plus firmware/drone-wifi, built by build.sh into
+cf2.bin, which Set up installs as "main". It was written (2026-09) to hand the
+AI deck's ESP32 the operator's Wi-Fi network over the radio, so the camera
+streamed on the laptop's own network.
 
-Out of the box the deck raises its own access point ("WiFi streaming example")
-and a laptop joined to it is offline. That is the problem this removes.
+There is no camera now (../architecture.txt, DECISIONS). What the app still
+does that matters is one read-only parameter, cwsetup.fw — its version. A
+drone that reports it runs our firmware; one that does not, or reports an
+older one, gets main installed. The other two parameters, cwsetup.deck and
+cwsetup.deckid, recorded the AI deck's software and serial; nothing reads
+them now, and a drone may keep them, harmlessly.
 
-  1. After sign-in, with nothing saved, the app asks once (a modal that closes
-     on save). After that: the Drone Wi-Fi page in the sidebar.
-  2. The operator picks a network (this laptop's own scan) and types its
-     password. The password goes to the OS secure store.
-  3. Every time the drone connects, the agent sends the network over the
-     Crazyradio to the drone_wifi firmware app, which hands it to the deck.
-  4. The deck joins, the drone prints its address on its console, the agent
-     reads it and the camera follows the deck there.
+--------------------------------------------------------------------------------
+2. WHERE IT LIVES
+--------------------------------------------------------------------------------
+firmware/drone-wifi/src/drone_wifi.c        the app: cwsetup.* params, the relay
+firmware/drone-wifi/src/wire.h              the bytes it sent to the ESP32
+firmware/drone-wifi/test/test_wire.c        those bytes through the ESP32's code
+firmware/drone-wifi/build.sh                wire test, then stock 2025.12.1 + app
+firmware/drone-wifi/app-config              CONFIG_APP_ENABLE, priority, stack
+backend/agent/dronedeck/firmware_bundle/cf2.bin, manifest.json ("drone_wifi": 4)
+backend/agent/dronedeck/drone_setup.py      reads cwsetup.fw (needed_parts)
+backend/agent/dronedeck/flash_firmware.py   writes cf2.bin to the STM32 by radio
 
-WORKS ON THE REAL DRONE (2026-09-24): "VT Open WiFi", open network. Joined in
-~3 s at 100.96.93.94 (RSSI -84); the laptop, on the same network at
-100.96.93.93, reached port 5000; 74 real frames in 20 s. See camera.txt for
-the frame rate and the stall that remains.
+--------------------------------------------------------------------------------
+3. DECISIONS
+--------------------------------------------------------------------------------
+• OPTION A — KEEP drone_wifi EXACTLY AS IT IS (2026-11-15, chosen by the team
+  to keep risk lowest). Three ways were weighed for "is main installed?" once
+  the camera went:
+    A  keep drone_wifi unchanged; Set up keeps reading cwsetup.fw
+    B  trim drone_wifi to the marker alone, rebuild, reflash every drone
+    C  ship Bitcraze's own cf2.bin; read main's version from the drone
+  A was chosen: no drone is reflashed, and a NEW drone gets the very image
+  already flown (flight-log.txt: v4 "as found", later "flashed back"). The
+  flight code is stock 2025.12.1 either way — drone_wifi never touched
+  flight; its loop blocks on appchannelReceiveDataPacket(...,
+  APPCHANNEL_WAIT_FOREVER) and acts only on a packet from the laptop, which
+  the agent no longer sends. B was rejected: the most risk (a new image to
+  flash and fly) for the least gain (still a custom build).
+  THE COST OF A is upkeep, not risk: a custom firmware build (build.sh, the
+  ARM toolchain download, the wire test) kept for one parameter, and dead
+  Wi-Fi code on every drone.
 
+• OPTION C — THE CLEANUP, WHEN THE TEAM WANTS TO DROP THE CUSTOM BUILD. Not
+  done. Nothing in A blocks it. The steps:
+    1. ON THE DRONE FIRST: read firmware.revision0 (and firmware.modified) on
+       the lab drone running drone_wifi v4. The record says 0x252b4134
+       (flight-status.txt, "Firmware"), the same value build.sh's comment
+       gives for unmodified 2025.12.1 — expected, since the app is built out
+       of Bitcraze's tree. CONFIRM IT; if the two differ, both values must
+       count as installed in step 3.
+    2. Replace firmware_bundle/cf2.bin with cf2.bin from Bitcraze's
+       crazyflie-release 2025.12.1 firmware-cf2-2025.12.1.zip — the zip whose
+       lighthouse.bin the bundle already carries (its sha256 is in
+       manifest.json). Record the new file's sha256 and source there.
+    3. drone_setup.py: read firmware.revision0 in _read_facts; main is
+       "installed" when it equals 2025.12.1's revision, "needed" otherwise.
+       Drop fw_version / cwsetup.fw and the manifest's "drone_wifi" key.
+    4. Delete firmware/drone-wifi/ and this doc's subject with it; update
+       commands.txt (FIRMWARE), setup.txt (THE BUNDLE), CLAUDE.md's Layout
+       row for firmware/, and the router.
+    5. LAB: flash the stock cf2.bin on a drone through Set up, then the
+       ladder (flight-log.txt) — hover first. Existing drones need no
+       reflash: on the same revision they read as installed and keep
+       drone_wifi, harmlessly, until the next time main is written.
+  What C buys: no custom firmware to build or maintain. What it risks: a new
+  drone gets an image this project never flashed itself (Bitcraze's own
+  release, same flight code), until step 5 proves it.
 
-WHERE IT LIVES
+--------------------------------------------------------------------------------
+4. INVARIANTS
+--------------------------------------------------------------------------------
+• MAIN MUST BE crazyflie-firmware 2025.12.1. build.sh pins FW_TAG: building
+  from another release changes flight behaviour this project has tuned
+  against, not just the app. Options A and C both keep it.
+• A NEW cf2.bin MEANS A NEW sha256 AND A HIGHER "drone_wifi" in manifest.json.
+  Set up refuses a file whose sha256 does not match (verified_file), and only
+  a higher version makes drones that have the old one update.
+• THE APP MUST STAY IDLE UNLESS ASKED. It runs beside the flight code on the
+  STM32; while nothing sends to it, it does nothing. Do not add work to it
+  that runs on its own.
 
-  firmware/drone-wifi/src/drone_wifi.c       the drone side: app channel -> CPX
-  firmware/drone-wifi/src/wire.h             the bytes sent to the ESP32
-  firmware/drone-wifi/test/test_wire.c       those bytes through the ESP32's code
-  firmware/drone-wifi/build.sh               test, then stock 2025.12.1 + app
-  backend/agent/dronedeck/flash_firmware.py  writes it to the STM32 by radio
-  backend/agent/dronedeck/camera/wifi.py   protocol, validation, console read,
-                                             the last join kept on disk
-  backend/agent/dronedeck/camera/deck.py   DeckStream.set_host — follow the IP
-  backend/agent/dronedeck/session.py       on_link_ready / on_link_down, standby
-  backend/agent/dronedeck/api/rest.py      GET/PUT/DELETE /camera/wifi
-  backend/agent/tests/test_camera_wifi.py    against a fake drone_wifi app
-  backend/agent/tests/test_camera_wifi_recovery.py  ask, rejoin, reasons, the ladder
-  firmware/aideck-esp/wifi-recovery.patch    the ESP32: rejoin, report, reasons
-  firmware/aideck-esp/wifi-link.patch        the ESP32: hold a weak link (below)
-  desktop/src-tauri/src/wifi/                scan (macOS, Windows), secure store
-  desktop/src-tauri/src/lib.rs               wifi_* / drone_wifi_* commands
-  desktop/src-tauri/Info.plist               the Location prompt's wording
-  desktop/src/components/DroneWifiForm.tsx   the picker (page and modal share it)
-  desktop/src/components/DroneWifiDialog.tsx the one-time modal after sign-in
-  desktop/src/pages/wifi/WifiPage.tsx        the page: radio / network / camera
-  desktop/src/lib/droneWifi.ts               commands, joinability, phase words
-
-
-FLASHING THE DRONE (once per drone; again after any firmware change)
-
-  firmware/drone-wifi/build.sh
-  quit DroneDeck (it holds the radio), then:
-  cd backend/agent && source .venv/bin/activate
-  python -m dronedeck.flash_firmware ../../firmware/drone-wifi/build/cf2.bin
-
-build.sh first runs test_wire.c and refuses to build if the bytes would be
-mangled. It fetches the Arm GNU toolchain 13.3 and crazyflie-firmware into
-~/.cache/dronedeck and builds there — Kbuild cannot build a path containing a
-space, and this repo lives under "current projects". Only the STM32 is written;
-the bootloader is never touched, so an interrupted flash is recovered by holding
-the power button ~3 s and flashing again.
-
-
-THE PROTOCOL (CRTP app channel, port 13, 30-byte packets)
-
-  0x01 off bytes…   SSID chunk        0x03 ssid_len key_len   apply
-  0x02 off bytes…   key chunk         0x04                     status
-                                      0x05                     report (v4)
-  reply  [0x80|cmd, code, applied]    code 0 OK · 1 BAD · 2 ALREADY · 3 TOO_EARLY
-                                           · 4 UNSUPPORTED (v4: deck bundle < 2)
-
-  report  drone_wifi sends CPX WIFI_CTRL 0x2E; a deck with wifi-recovery.patch
-          (bundle 2) says its address again — "WiFi connected to ip: …" on the
-          console, as when it joined — or "not connected, last reason N".
-
-To the ESP32, each value goes as CPX WIFI_CTRL [cmd, value…, NUL] — WITH its
-NUL (see the first invariant). The IP is not on the app channel: stock firmware
-prints "WiFi connected to ip: a.b.c.d" (src/modules/src/cpx/cpx.c) and the
-agent reads the console.
-
-
-THE THREE "CONNECTED"s — kept apart on the page, on purpose
-
-  Radio    the laptop reaches the drone over the Crazyradio (session.radio)
-  Network  the deck joined a Wi-Fi network and has an address (phase joined)
-  Camera   this laptop reaches that address and frames arrive (/camera live)
-
-A failed join once read as success because only the first was on screen.
-
-
-DECISIONS
-
-- CUSTOM FIRMWARE, BECAUSE NOTHING STOCK CAN DO IT. Stock firmware sends Wi-Fi
-  credentials once at boot from values COMPILED IN (Kconfig), exposes no param
-  for them (checked: no aideck/wifi param group on the drone), and cflib's CPX
-  CRTP transport is a stub. Bitcraze's own open request: crazyflie-firmware
-  issue #1416. The addition is one out-of-tree app on the SAME release the
-  drone ran (firmware.revision0 0x252b4134 = 2025.12.1), so nothing else moves.
-- OVER THE RADIO, NOT THE DECK'S ACCESS POINT. Sending credentials through the
-  deck's own AP would take the laptop offline on every power-on.
-- THE DESKTOP OWNS THE NETWORK; THE AGENT HOLDS IT IN MEMORY. Keychain on
-  macOS, Credential Manager on Windows (keyring crate). Rust pushes it to the
-  agent itself at every (re)connection, so the password crosses the webview
-  once — when typed — and is never read back. Only an agent-accepted network
-  is saved.
-- ASKED AT SIGN-IN, MANAGED ON A PAGE. The modal asks once and CLOSES ON SAVE —
-  the join happens when the drone next connects, which can be minutes away,
-  and nobody should sit watching a modal for it. Seeing and changing the
-  network is the Drone Wi-Fi page (sidebar, account menu, and the Camera tab's
-  "Change Wi-Fi" / "Wi-Fi" links all land there).
-- ONE NETWORK PER LAPTOP, not per drone: every drone this laptop flies needs to
-  be on the laptop's network anyway.
-- THE LIST IS THE LAPTOP'S OWN SCAN, CACHE FIRST. The OS's last scan answers
-  instantly and a live scan replaces it. A live scan alone took 12.5 s on a
-  MacBook Pro (measured 2026-09-24) and read as "stuck searching".
-- FILTERED BY WHAT THE DECK CAN JOIN: 2.4 GHz (the ESP32 has no 5 GHz radio) and
-  open or personal security. A dual-band router is one row; 5 GHz-only and
-  enterprise networks are shown disabled, with the reason. Typing a name is
-  always available. A choice other than the laptop's current network is WARNED
-  about, not refused: the camera needs both on one network, but the laptop may
-  be about to move.
-- ENTERPRISE (eduroam) IS NOT SUPPORTED, deliberately, for now. It signs in with
-  a personal username and password, which the ESP32 firmware cannot send.
-  ESP-IDF could be extended to, but campus networks commonly block devices from
-  reaching each other, and it would put a university password on an
-  unencrypted radio. Revisit only if a campus test shows device-to-device
-  traffic is allowed. (VT Open WiFi, 2026-09-24: it IS allowed there.)
-- APPLIED ON ITS OWN THREAD whenever a link opens — standby's, or a session's
-  after its checks. Joining takes seconds; a flight must never wait on it.
-
-
-INVARIANTS
-
-- VALUES GO TO THE ESP32 WITH THEIR NUL. Its wifi_ctrl copies n bytes and writes
-  the terminator at [n+1], leaving byte [n] from the PREVIOUS value. The GAP8
-  sets "WiFi streaming example" at boot, so "VT Open WiFi" (12 chars) joined as
-  "VT Open WiFin" — measured 2026-09-24; every name under 22 characters was
-  affected. test_wire.c runs the bytes through a copy of that code, stale
-  buffer included, and fails the build if they would be mangled. (The first
-  version's tests passed because the fake drone stored names correctly — a
-  fake that mirrors your assumption cannot catch it.)
-- A PASSWORD IS AT MOST 47 CHARACTERS, not WPA2's 63. The ESP32 keeps it in a
-  50-byte buffer (`static char key[MAX_SSID_SIZE]`); with the NUL sent and its
-  stray write one further, 47 is the most that fits. Enforced in the form, the
-  agent and the firmware. A name is 1-32 bytes (802.11).
-- THE DECK'S ADDRESS IS THE NETWORK'S TO GIVE, AND IT CHANGES. On VT Open WiFi
-  the deck was given a new address without restarting (2026-09-24), so no
-  address is ever treated as permanent:
-    1. the drone says its address over the radio ("got ip") — Bitcraze's own
-       documented way; the deck firmware has no discovery (mDNS never finished)
-    2. the console is followed for the life of the link (DeckWifi.watch)
-    3. an address remembered on disk is a first guess, marked unverified
-    4. no answer at it for 15 s = stale → THE LADDER (Agent.recover_camera,
-       2026-10-24): ASK the deck where it is (report) and follow it; not on
-       the network → REJOIN it (apply again — the patched ESP32 rejoins in
-       place); only a deck that can do neither (bundle < 2) gets the old
-       cure, RESTARTING THE DRONE OVER THE RADIO (Agent.restart_for_camera),
-       at most once a minute: Session.restart_drone between sessions,
-       Session.reset_drone in a CAPTURE session (nothing flies; it re-checks
-       as for a new capture session), NEVER in a flight session. Asking and
-       rejoining touch only the deck's Wi-Fi, so they run IN A SESSION too,
-       mid-flight. Joining or rejoining for 45 s without an address starts the
-       ladder too. "Reconnect camera" on the page runs it by hand.
-  Measured on the drone (the restart): restart → radio back 4.6 s → joined
-  11.9 s → first frame 12.1 s; "Reconnect camera" → live in 14 s. The ladder's
-  ask and rejoin are NOT yet measured on the drone (bundle 2, lab pending).
-  NOT a static address (a campus network assigns them; a clash is someone
-  else's outage) and NOT a DNS name (campus DNS: NXDOMAIN for aideck-*). On a
-  router the operator controls, a DHCP reservation for the deck's MAC
-  (94:54:c5:bb:04:98 on this drone) makes the address permanent.
-- RESETTING ONLY THE DECK DOES NOT WORK — tried and removed. Pulling its reset
-  line reboots the ESP32, but the STM32's UART link to it syncs once, at boot:
-  "There's no support for re-initializing the UART transport"
-  (cpx_uart_transport.c). After a deck-only reset the ESP32 never spoke again.
-  That is why a restart is the whole drone, over the radio.
-- ONE APPLY PER POWER-ON — ON AN OLD DECK ONLY. Stock ESP32 firmware creates its
-  station interface every time it is told to connect (aideck-esp-firmware
-  main/wifi.c, wifi_init_sta); a second creation fails an assert and reboots
-  the ESP32. firmware/aideck-esp/wifi-recovery.patch (bundle 2) creates it once
-  and REJOINS on a second connect, and drone_wifi v4 allows a re-apply exactly
-  when the drone's cwsetup.deck says the deck carries bundle 2 — the drone
-  checks, not the ground, so a ground that guesses wrong cannot crash an old
-  deck. On an old deck: ALREADY_APPLIED, and changing network means a restart.
-- THE RESTART IS THE CAMERA'S CURE AGAIN (restored 2026-10-24 evening,
-  Samuel: "when I press on reconnect camera … it does switch off and on the
-  drone"). It was removed that morning on the belief that a radio restart
-  (cflib stm_power_cycle) unpowered the decks — 06:39, 8 deck memories before,
-  0 after. Measured that evening on a 4.1 V battery: 6 radio restarts, all 8
-  deck memories kept each time, and each restart reset the AI deck (its ESP32
-  left the bootloader it had been put in). The 06:39 loss fits the deck stack
-  that kept losing contact that day (0 decks on several hand power-ons too).
-  The aideck driver pulls the shared GAP8/ESP32 reset line at every boot
-  (aideck.c, aideckInit), so a radio restart restarts both deck chips.
-  With NO AI deck detected, Reconnect camera restarts straight away — the
-  decks are detected when the drone boots; refused with the fix (409) only
-  when a flight session holds the drone. The watchdog's "answers but sends
-  nothing" case restarts too; in a flight session it says the fix instead,
-  and it stays quiet while no AI deck is detected. A link that opens with no
-  AI deck calls on_link_no_deck: the Wi-Fi state says to unplug the battery,
-  instead of "waiting for the drone to connect" beside a connected radio.
-- ASK BEFORE REJOINING. When a link opens on a drone that already applied
-  THIS network, the deck is asked first and only rejoined if it does not
-  answer: a rejoin costs the camera seconds of picture. A DIFFERENT network is
-  never asked about — the deck would answer from the old one and stay there.
-- EVERY DISCONNECT SAYS WHY (bundle 2): "Disconnected from access point, reason
-  N" (ESP-IDF wifi_err_reason_t). The agent turns it into words —
-  wifi.REASON_WORDS: 15/204 the password, 201 out of range or not 2.4 GHz,
-  200 the signal lost, 202 refused (wrong password or WPA3-only) — and the
-  Drone Wi-Fi page and the join messages show it. The stock "connect"
-  ESP_ERROR_CHECKs that rebooted the chip on a harmless "busy" are logged
-  instead (sta_connect).
-- A WEAK LINK IS HELD, NOT DROPPED (bundle 3, wifi-link.patch, 2026-10-24).
-  The lab reads the deck at -86 dBm; Wi-Fi itself lasts to about -97 dBm, at
-  its slowest rate. Three stock settings gave that margin away:
-    20 MHz, not 40   ESP-IDF's default is 40 MHz when the router offers it:
-                     twice the noise, ~3 dB less sensitivity, and the first
-                     thing a busy 2.4 GHz band breaks. Set before start, so
-                     the join negotiates 20.
-    power 20 dBm     set explicitly (esp_wifi_set_max_tx_power 80) and read
-                     back, not left to the PHY data.
-    15 s, not 6      without a beacon before the station drops. A turning
-                     drone fades for seconds; a real loss still rejoins at
-                     once (the disconnect handler reconnects).
-  NOT A FIXED RATE — this was proposed and is wrong: rate control already
-  falls to 11b 1 Mbps, the most sensitive rate, when frames fail (11b stays in
-  the protocol set); ESP-IDF refuses a fixed rate while TX AMPDU is on
-  (esp_private/wifi.h); and 1 Mbps would cap raw frames near one a second.
-  BROWNOUT HOLDS THE POWER AT 13 dBm. After a brownout reset ESP-IDF runs the
-  PHY at its lowest power for that whole boot (CONFIG_ESP32_REDUCE_PHY_TX_POWER,
-  Bitcraze's setting, kept — full power right after a brownout can brown it
-  out again) and the maximum set above cannot lift it; only a power-off
-  clears it. The deck says so in one line, at start and on every ask
-  ("WIFI: link: 20 MHz, power 80, beacon timeout 15 s, brownout 0"); the agent
-  reads it (wifi.DeckLink) and the Drone Wi-Fi page shows "Deck radio",
-  amber with the fix in words when a brownout holds it low.
-- THE LAST JOIN IS KEPT ON DISK (app data, deck-wifi.json: name and address,
-  never the password). ALREADY_APPLIED means the drone has not restarted since
-  it joined, so that address is still its address — an agent that restarted in
-  between would otherwise tell the operator to restart the drone for nothing.
-- NOT BEFORE 8 S AFTER BOOT. The GAP8 streamer raises its own access point 2 s
-  after boot (aideck-gap8-examples wifi-img-streamer.c, camera_task). An apply
-  before that is overridden. The firmware answers TOO_EARLY; the agent retries.
-- THE DECK FORGETS AT POWER-OFF. Nothing is saved on the ESP32 ("// Save to
-  NVS?" in its source). Hence re-sending on every connection.
-- A FAILED JOIN LEAVES THE DECK OFF THE NETWORK. In station mode it retries
-  the bad network forever and its own access point is gone; with bundle 2 the
-  agent can rejoin it with a corrected network without a restart.
-- NO REPLY TO STATUS = STOCK FIRMWARE. The agent says to flash drone_wifi rather
-  than waiting out a join that cannot happen.
-- THE PASSWORD IS NEVER LOGGED OR RETURNED. No route returns it; the firmware
-  zeroes it after applying. The radio is NOT encrypted — the form says so and
-  says to use a hotspot or a network set up for the drone.
-- macOS HIDES EVERY NETWORK NAME WITHOUT LOCATION PERMISSION. Measured on this
-  laptop: all 25 nearby SSIDs read "<redacted>". Info.plist carries the prompt's
-  wording; without it macOS never shows the prompt at all.
-- build.sh CHECKS .config, IT DOES NOT TRUST IT. The firmware's merge_config.sh
-  needs GNU readlink/sed and fails QUIETLY on macOS, producing a firmware that
-  flashes fine and never runs the app. Measured: the first build shipped with
-  CONFIG_APP_ENABLE unset.
-
-
-- THE DECK IS WATCHED FOR THE LIFE OF THE LINK, NOT ONLY WHILE JOINING
-  (DeckWifi.watch). Its console reports every drop ("Disconnected from access
-  point"), every address ("got ip") and its signal ("rssi"); each updates the
-  state at once — "reconnecting" with the reason, a new address moves the
-  camera. Measured 2026-09-24: joined at -84 dBm, then dropped off the network
-  while the laptop, on the same network, was fine — and the page kept saying
-  "joined" because only the join was ever read. Below -75 dBm is called weak.
-- AN AD-HOC-SIGNED BUILD IS A NEW APP TO THE KEYCHAIN. Every rebuild (and every
-  release — the CI builds are not code-signed either) gets a new signature, so
-  macOS asks before it hands the saved password over, and the network never
-  reaches the drone until someone answers. Measured 2026-09-24: radio
-  connected, Wi-Fi "not set", SecurityAgent waiting. The window now shows a
-  banner after 3 s. The lasting fix is a Developer ID signature, whose
-  identity survives updates — the owner's decision (it costs an Apple
-  developer account).
-- "IS THIS LAPTOP ON THE SAME NETWORK?" IS NOT THE FIRST GUESS. On 2026-09-24 it
-  was; the deck had dropped. The camera's reason now says the deck may have
-  dropped and is retrying; the page shows both networks for comparison.
-- WHEN THE LINK GOES, "JOINED" GOES. DeckWifi.link_down turns a join into
-  "waiting — last on X at Y" whenever the radio link closes. The address itself
-  is still remembered (deck-wifi.json) for a drone that returns without
-  restarting.
-
-
-KNOWN LIMITS
-
-- The network is applied whenever a link opens — a session's or STANDBY's
-  (sessions-and-modes.txt), so the camera works before any session.
-- The Windows scanner is compile-checked only; never run on Windows.
-
-
-RELATED
-
+--------------------------------------------------------------------------------
+5. RELATED
+--------------------------------------------------------------------------------
 consumed-by       setup.txt
-                  step 3 of Set up; main installs drone_wifi
-depends-on        camera.txt
-                  the stream this feeds an address to
-depends-on        ../backend/agent-api.txt
-                  /camera/wifi and its token
-depends-on        ../backend/sessions-and-modes.txt
-                  applied when a link opens
-shares-data-with  desktop-app.txt
-                  the secure store and Tauri commands
-shares-data-with  pages-and-windows.txt
-                  the Drone Wi-Fi page and badge
+                  main installs drone_wifi; Set up reads cwsetup.fw
 shares-data-with  ../development/commands.txt
                   the build.sh + flash_firmware commands, indexed there
 
-
-LAST VERIFIED  2026-10-24 late, the restored restart: Agent.restart_for_camera
-and the route, tests/test_camera_wifi_recovery.py TestTheLadder (9) and
-TestTheRoute; agent gates (ruff, mypy, 1,658 tests). NOT yet pressed on the
-drone — its ESP32 does not answer (flight-log.txt).
-2026-10-24 evening on the drone (deck bundle 0): joins 0 of 7
-on drone_wifi v4 and v3, with and without a radio restart; decks kept 6 of 6
-restarts; the ESP32 and GAP8 started, not in bootloader, the GAP8 silent —
-flight-log.txt. Open: does a radio restart power-cycle the AI deck.
-2026-10-24 for the weak link (bundle 3): wifi-link.patch
-applied on the three before it and built clean (ESP-IDF 4.3.1, 716 352 bytes,
-the link line in the binary); every call checked against the 4.3.1 headers;
-test_camera_wifi.py TestDeckLink (7); harness "Drone Wi-Fi · deck radio"
-light and dark. NOT yet on the drone — its decks read 0 that day.
-2026-10-24 for asking, rejoining and the reasons: drone_wifi v4
-built (its wire test passed), the patched ESP32 built (ESP-IDF 4.3.1),
-tests/test_camera_wifi_recovery.py (24) and test_camera_wifi.py (41) against
-a fake drone_wifi v4; the agent suite. NOT yet on the drone (bundle 2).
-2026-09-24 (standby and link_down: tests only — the drone's
-battery was flat for that pass; the app reported it correctly as not connected).
-  real drone     fixed firmware flashed; joined "VT Open WiFi" (12-char name —
-                 the case that failed before) at 100.96.93.94; laptop reached
-                 port 5000; 74 frames in 20 s; one 7 s stall, recovered
-  firmware       test_wire.c passes and reproduces the old "VT Open WiFin"
-  agent          ruff, mypy, pytest 573 passed
-  desktop        pnpm build, cargo clippy, cargo test; app built and launched
-  Windows        scanner compile-checked (x86_64-pc-windows-msvc) only
-  NOT SEEN       the page and modal on screen — no screen capture from here
+History: until 2026-11-15 this doc described the camera joining the
+operator's Wi-Fi — the Drone Wi-Fi page, the Rust scan and secure store, the
+agent's /camera/wifi routes, the ESP32 patches and the lab measurements.
+All of it was removed with the camera; git has the previous version.

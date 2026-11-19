@@ -33,7 +33,6 @@ from numpy.typing import NDArray
 from dronedeck.pipeline.contracts import (
     ClassifyResult,
     CleanResult,
-    EnhanceResult,
     Event,
     FlightContext,
     Label,
@@ -46,11 +45,9 @@ from dronedeck.pipeline.stages.classify.blocks import (
     Series,
     Tuning,
     _analyse,
-    _images,
     _temperature,
     _usable,
 )
-from dronedeck.pipeline.stages.classify.scene import measure
 
 #: The phase a session reading is in (Reading.text["phase"], pipeline/sources.py).
 GROUND = "ground"
@@ -130,10 +127,9 @@ class GroundClassifier:
     name = "ground"
     version = "1"
 
-    def classify(self, data: PointData, clean: CleanResult, enhanced: EnhanceResult,
+    def classify(self, data: PointData, clean: CleanResult,
                  ctx: FlightContext) -> ClassifyResult:
         model = f"{self.name}@{self.version}"
-        images = _images(enhanced, model)
         stretches = [s for s in ground_stretches(data.readings)
                      if len(s) >= MIN_GROUND_READINGS]
         parts: dict[str, list[Track]] = {"temperature": [], "pressure": []}
@@ -171,7 +167,6 @@ class GroundClassifier:
         else:
             sensors = Label("unknown", None, model,
                             "; ".join(dict.fromkeys(why_not)) or "nothing to analyse")
-        return ClassifyResult(images=images, sensors=sensors, features=features,
+        return ClassifyResult(sensors=sensors, features=features,
                               tracks=tracks, segments=tuple(segments),
-                              events=tuple(sorted(events, key=lambda e: e.start_index)),
-                              views=measure(enhanced.frames))
+                              events=tuple(sorted(events, key=lambda e: e.start_index)))

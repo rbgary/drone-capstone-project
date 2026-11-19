@@ -48,14 +48,11 @@ export type Session = {
    *  programs, and the position guards cannot run. */
   assisted: boolean;
   unassisted_reason: string | null;
-  /** The drone reported its AI deck earlier and now does not: the decks lost
-   *  power or contact. Only switching it off and on brings them back. */
-  decks_lost?: boolean;
   /** The last flight ended abnormally. Nothing flies until Retry has run every
    *  check again in this session — after a tumble the drone holds its motors. */
   retry_required: boolean;
   /** The radio, apart from any session: signed in and idle, the agent holds
-   *  the drone on standby — vitals and the camera, never the motors. */
+   *  the drone on standby — vitals, never the motors. */
   radio: Radio;
   /** The mission being flown, or the last one flown this session; null when
    *  none has run. From the agent's session snapshot (session.py). */
@@ -64,13 +61,6 @@ export type Session = {
    *  processed when it lands, whether that is the operator's choice or still
    *  the mode's default (on in Auto, off in Manual), and recent jobs. */
   processing: Processing;
-  /** The auto-capture switch (agent camera/recording.py): `auto` — frames are
-   *  recorded automatically; off, only manual captures are saved. Absent from
-   *  older agents. */
-  capture?: { auto: boolean; chosen: boolean };
-  /** What the session is for: "flight" (Control) or "capture" (the Capture
-   *  page, which never flies). Absent from older agents: "flight". */
-  purpose?: "flight" | "capture";
   /** Which way the arrow keys move the drone (dronedeck/flight/keyframe.py):
    *  the operator's choice, their marked spot, and — while flying — what the
    *  arrows mean right now. */
@@ -110,20 +100,9 @@ export type ProcessingJob = {
   queued_at: string;
   finished_at: string | null;
   error: string | null;
-  /** "flight", "session" (the session around its flights) or "live" (one
-   *  point's verdict in flight, story 4.9). Absent from an older agent. */
-  kind?: "flight" | "session" | "live";
-  point_id?: string | null;
-};
-
-/** One inspection point's verdict while the mission still flies (story 4.9,
- *  agent pipeline/runner.py run_live_point). */
-export type LivePoint = {
-  state: ProcessingJob["state"];
-  verdict?: "normal" | "anomaly" | "insufficient_data";
-  reasons?: string[];
-  findings?: { id: string; title: string; severity: "info" | "warning" | "critical"; sentence: string; signal: string }[];
-  error?: string | null;
+  /** "flight", or "session" (the session around its flights). Absent from an
+   *  older agent. Nothing is processed in flight (2026-11-15). */
+  kind?: "flight" | "session";
 };
 
 export type Processing = {
@@ -132,8 +111,6 @@ export type Processing = {
   jobs: ProcessingJob[];
   /** The session's most recent flight to land — processed or not. */
   last_flight_id: string | null;
-  /** The flight in the air's points, judged as each hold ends. */
-  live?: { flight_id: string | null; points: Record<string, LivePoint> };
 };
 
 /** One inspection point's verdict (pipeline/contracts.py PointResult). */
@@ -155,9 +132,6 @@ export type PipelineFinding = {
   t_start_s: number;
   t_end_s: number;
   point_ids: string[];
-  evidence_frames: number[];
-  image_support: "supports" | "contradicts" | "cannot_tell";
-  image_note: string;
 };
 
 /** results/<flight id>/result.json, as the pipeline wrote it. Version 1
@@ -173,7 +147,7 @@ export type FlightResult = {
     created_at: string;
     points: PointVerdict[];
     failures: { point_id: string; stage: string; reason: string }[];
-    summary: Record<string, { readings?: number; frames?: number; flags?: number }>;
+    summary: Record<string, { readings?: number; flags?: number }>;
     findings?: PipelineFinding[];
   };
 };
@@ -446,60 +420,6 @@ export type Telemetry = {
 };
 
 /** Held-key state. Mirrors `Intent` in the agent, field for field. */
-/** What the agent says about the camera. See backend camera/source.py. */
-export type CameraStatus = {
-  live: boolean;
-  /** "none" | "test-pattern" | "ai-deck". */
-  kind: string;
-  reason: string | null;
-  /** The DRONE's own answer (deck.bcAI). null until a drone has been asked,
-   *  which is not the same as "not fitted". */
-  deck_fitted: boolean | null;
-  /** The deck was detected earlier and is not now — power-cycle, not "not fitted". */
-  decks_lost?: boolean;
-  /** The agent is actively working towards a picture (the drone is joining or
-   *  rejoining Wi-Fi, or the camera is reconnecting): show progress, not "no
-   *  signal". */
-  connecting?: boolean;
-  /** The size of the frames being served; null until one has arrived. */
-  width: number | null;
-  height: number | null;
-  /** What actually arrives at the agent, over the last few seconds
-   *  (camera/rate.py FrameRate). null without a deck camera. */
-  rate?: CameraRate | null;
-  /** What the GAP8 says each frame cost it, from the drone's console
-   *  (camera/rate.py DeckTiming). null when it has said nothing lately. */
-  deck_timing?: DeckTiming | null;
-  /** What the deck itself said on the drone's console, and — after a few
-   *  connections it accepted and sent nothing on — which chip is silent and
-   *  what to do (agent camera/diagnose.py). */
-  deck?: {
-    lines: string[];
-    silent_connects: number;
-    diagnosis: { code: "gap8_silent" | "no_capture" | "send_stuck" | "unknown"; message: string } | null;
-  };
-};
-
-export type CameraRate = {
-  window_s: number;
-  frames: number;
-  fps: number;
-  mean_bytes: number | null;
-  /** Includes the gap still open, so a feed that just stopped shows it. */
-  longest_gap_s: number | null;
-  format: "raw" | "jpeg" | null;
-};
-
-export type DeckTiming = {
-  lines: number;
-  capture_ms: number;
-  encoding_ms: number;
-  transfer_ms: number;
-  bytes: number;
-  /** What the GAP8 could deliver if nothing downstream held it up. */
-  deck_fps: number | null;
-};
-
 export type Intent = {
   up: boolean; down: boolean;
   forward: boolean; back: boolean;
@@ -585,16 +505,6 @@ async function unreachable(path: string): Promise<string> {
     : "The flight agent on this computer is not running. Quit and reopen DroneDeck.";
 }
 
-/**
- * The URL an <img> loads camera frames from.
- *
- * A bare URL rather than a fetch, because an <img> cannot send the control
- * token in a header — and the agent serves this route unauthenticated for that
- * reason: it is read-only, it commands nothing, and the agent binds localhost.
- * `stamp` defeats the cache so a live feed does not freeze on the first frame.
- */
-export const cameraFrameUrl = (stamp: number) => `${base()}/camera/frame?t=${stamp}`;
-
 async function command<T>(path: string, body?: unknown, method: "GET" | "POST" = "POST"): Promise<T> {
   let response: Response;
   try {
@@ -622,10 +532,8 @@ export const api = {
     command<Session>("/auth/sign-in", { email, password }),
   signOut: () => command<Session>("/auth/sign-out"),
   setMode: (mode: Mode) => command<Session>("/session/mode", { mode }),
-  /** Start a session: "flight" (Control — every check, it can fly) or
-   *  "capture" (the Capture page — the radio and the camera deck only, it
-   *  never flies). Callers that pass nothing start a flight session. */
-  start: (purpose: "flight" | "capture" = "flight") => command<Session>("/session/start", { purpose }),
+  /** Start a session: connect, run every check, then confirm the area. */
+  start: () => command<Session>("/session/start"),
   confirmArea: (acceptUnassisted = false) =>
     command<Session>("/session/confirm", { accept_unassisted: acceptUnassisted }),
   healthTest: () => command<Session>("/session/health-test"),
@@ -639,22 +547,13 @@ export const api = {
   /** Rise to a height and hold it, in Manual, without holding W. Not the Auto
    *  hover test — that one needs base stations; this works on the barometer. */
   holdManual: (height_m: number) => command<Session>("/session/manual/hold", { height_m }),
-  cameraStatus: () => command<CameraStatus>("/camera", undefined, "GET"),
-  cameraWifi: () => command<CameraWifi>("/camera/wifi", undefined, "GET"),
-  cameraRecording: () => command<Recording>("/camera/recording", undefined, "GET"),
-  /** Restart the drone over the radio so its camera rejoins and reports its
-   *  address. Between sessions only. */
-  reconnectCamera: () => command<CameraWifi>("/camera/wifi/rejoin"),
   setupState: () => command<SetupState>("/setup", undefined, "GET"),
   setupCheck: () => command<SetupState>("/setup/check"),
   /** The terminal command that installs the drone's software on this machine
    *  (`dronedeck setup`). Set up shows it to copy: the install runs in a
    *  terminal, with DroneDeck quit, not from a button (setup.txt). */
   setupCommand: () => command<SetupCommand>("/setup/command", undefined, "GET"),
-  recordedFrames: (after: number, limit: number) =>
-    command<{ frames: RecordedFrameInfo[] }>(
-      `/camera/recording/frames?after=${after}&limit=${limit}`, undefined, "GET"),
-  /** Hold the drone on standby now (vitals, camera). Never arms. */
+  /** Hold the drone on standby now (vitals). Never arms. */
   connectDrone: () => command<Session>("/drone/connect"),
   /** Release the radio until Connect, for another tool. */
   disconnectDrone: () => command<Session>("/drone/disconnect"),
@@ -714,18 +613,6 @@ export const api = {
     command<{ blockers: MissionBlocker[] }>(`/missions/${encodeURIComponent(missionId)}/blockers`, undefined, "GET"),
   /** The DPP switch for this session. */
   setProcessing: (on: boolean) => command<Session>("/session/processing", { on }),
-  /** The auto-capture switch. Applies at once, in either mode. */
-  setCaptureAuto: (auto: boolean) => command<Session>("/session/capture", { auto }),
-  /** Save the camera's newest frame into the session, by hand. */
-  captureFrame: () => command<RecordedFrameInfo>("/camera/capture"),
-  /** A recorded session's frames — "manual": its captures made by hand. */
-  sessionFrames: (sessionId: string, source?: "auto" | "manual") =>
-    command<{ frames: RecordedFrameInfo[] }>(
-      `/history/sessions/${encodeURIComponent(sessionId)}/frames${source ? `?source=${source}` : ""}`,
-      undefined, "GET"),
-  /** The session's manual captures, oldest first. */
-  manualCaptures: () =>
-    command<{ frames: RecordedFrameInfo[] }>("/camera/recording/frames?source=manual&limit=2000", undefined, "GET"),
   /** Which way the arrow keys move the drone. Works in the air. */
   setKeyFrame: (frame: KeyFrameChoice) => command<Session>("/controls/frame", { frame }),
   /** "I'm here": the drone's position now becomes the operator's spot. */
@@ -909,108 +796,19 @@ export type FlightPlayback = {
 };
 
 /** Set up: installing the drone's software (drone_setup.py). */
-export type SetupPart = "main" | "lighthouse" | "camera" | "wifi";
+export type SetupPart = "main" | "lighthouse";
 /** GET /setup/command — the exact line for this machine, ready to paste. */
 export type SetupCommand = { command: string; check: string };
 
 export type SetupState = {
-  phase: "idle" | "checking" | "ready" | "installing" | "unplug" | "verifying" | "done" | "failed";
+  phase: "idle" | "checking" | "ready" | "installing" | "done" | "failed";
   message: string | null;
-  facts: {
-    battery_v: number | null;
-    ai_deck: boolean | null;
-    /** The camera software is on record, but not for the AI deck fitted now
-     *  — a replaced deck, or a drone from before decks were recorded. */
-    deck_unrecorded?: boolean;
-  } | null;
+  facts: { battery_v: number | null } | null;
   parts: Partial<Record<SetupPart, "installed" | "needed" | "installing" | "done" | "absent">>;
   current: SetupPart | null;
   progress: number;
   labels: Record<SetupPart, string>;
   order: SetupPart[];
-};
-
-/** A session's camera recording (camera/recording.py). */
-export type Recording =
-  | { recording: false }
-  | {
-      recording: true;
-      session_id: string;
-      count: number;
-      latest_seq: number;
-      latest_t_s: number | null;
-      upload_fps: number;
-      write_errors: number;
-      /** Frames are recorded automatically (auto-capture on). False: only
-       *  manual captures are saved. Absent from older agents: true. */
-      auto?: boolean;
-    };
-
-export type RecordedFrameInfo = {
-  seq: number; t_s: number; recorded_at: string; upload: boolean;
-  /** "auto", or "manual" — captured by hand. Absent from older agents. */
-  source?: "auto" | "manual";
-  /** The inspection point being held when it was taken (history only). */
-  point_id?: string | null;
-};
-
-/**
- * One recorded frame read back from disk, by number or "latest". A fetch with
- * the token, not an <img> URL: recorded frames are session data. Null on 204.
- */
-export async function recordedFrame(which: number | "latest"): Promise<Blob | null> {
-  const response = await fetch(`${base()}/camera/recording/frame/${which}`, {
-    headers: { "X-Agent-Token": token },
-    cache: "no-store",
-  });
-  if (response.status === 204) return null;
-  if (!response.ok) throw new AgentError("That frame could not be read.");
-  return response.blob();
-}
-
-/** One frame of a session that has ended, read from this laptop's disk — a
- *  fetch with the token, like recordedFrame. Null when it is not there. */
-export async function sessionFrame(sessionId: string, seq: number): Promise<Blob | null> {
-  const response = await fetch(
-    `${base()}/history/sessions/${encodeURIComponent(sessionId)}/frames/${seq}`, {
-      headers: { "X-Agent-Token": token },
-      cache: "no-store",
-    });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new AgentError("That frame could not be read.");
-  return response.blob();
-}
-
-/** Where the AI deck is in joining the operator's Wi-Fi. No password, ever. */
-/** What the deck's radio is set to. `brownout`: held at reduced power
- *  until the battery is unplugged (camera/wifi.py DeckLink). */
-export type DeckLink = {
-  bandwidth_mhz: number;
-  power_dbm: number | null;
-  beacon_timeout_s: number;
-  brownout: boolean;
-};
-
-export type CameraWifi = {
-  ssid: string | null;
-  phase: "not-set" | "waiting" | "sending" | "joining" | "joined" | "reconnecting" | "failed";
-  /** The deck's address on that network, once it has one. */
-  ip: string | null;
-  message: string | null;
-  /** The deck's last reported signal, dBm. Below about -75 it drops out. */
-  rssi?: number | null;
-  /** Times it has dropped off since it last joined. */
-  drops?: number;
-  /** The address is remembered from an earlier join — unverified. */
-  remembered?: boolean;
-  /** Only a restart of the drone gets it onto this network now. */
-  needs_restart?: boolean;
-  /** Why the deck last dropped off the network, in words, as it said
-   *  (wifi-recovery.patch); null when it has not said. */
-  reason?: string | null;
-  /** The deck radio's settings, read back by its ESP32 (wifi-link.patch);
-   *  null from a deck without it. */
-  link?: DeckLink | null;
 };
 
 // ── the live socket ───────────────────────────────────────────────────
@@ -1022,7 +820,6 @@ export type LiveHandlers = {
   onSync: (status: SyncStatus) => void;
   onTelemetry: (telemetry: Telemetry) => void;
   onConnection: (connected: boolean) => void;
-  onCameraWifi?: (state: CameraWifi) => void;
   onSetup?: (state: SetupState) => void;
 };
 
@@ -1068,7 +865,6 @@ export class LiveConnection {
       if (message.type === "session") this.handlers.onSession(message as Session);
       else if (message.type === "sync") this.handlers.onSync(message as SyncStatus);
       else if (message.type === "telemetry") this.handlers.onTelemetry(message as Telemetry);
-      else if (message.type === "camera_wifi") this.handlers.onCameraWifi?.(message as CameraWifi);
       else if (message.type === "setup") this.handlers.onSetup?.(message as SetupState);
     });
 

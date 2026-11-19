@@ -17,6 +17,10 @@ stage that crashes or hangs must never take the radio with it. The frozen
 desktop agent is the whole CLI with freeze_support() first
 (packaging/sidecar.py), so the same command works there.
 
+AFTER THE DATA HAS ARRIVED, NEVER IN FLIGHT (2026-11-15). A flight is queued
+once it has landed and its CSV is closed; nothing is judged while the drone is
+in the air (story 4.9's live verdicts were removed with the camera).
+
 WHAT COMES OUT. results/<flight id>/result.json, written by the pipeline. This
 module only tracks each job — queued, running, done, failed with a reason — and
 reports every change to its listener (the session: the app, and the flight's
@@ -42,8 +46,6 @@ log = logging.getLogger(__name__)
 
 #: A flight's id goes into a path (results/<id>/) and onto a command line.
 FLIGHT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-#: An inspection point's id too (results/<flight>/live/<point>.json).
-POINT_ID = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 #: Longest a single flight may take. The stubs finish in well under a second;
 #: the real stages will be slower, but a job still running after this is stuck.
 TIMEOUT_S = 15 * 60
@@ -58,16 +60,9 @@ class JobState:
     FAILED = "failed"
 
 
-#: What a job processes: one flight, a session around its flights, or — while a
-#: mission flies — the flight so far, for one inspection point's verdict
-#: (story 4.9). A live job goes ahead of everything waiting: it is wanted now.
-FLIGHT, SESSION, LIVE = "flight", "session", "live"
-KINDS = (FLIGHT, SESSION, LIVE)
-
-
-def job_key(flight_id: str, point_id: str | None = None) -> str:
-    """How a job is found: the id, or "<flight>#<point>" for a live job."""
-    return f"{flight_id}#{point_id}" if point_id else flight_id
+#: What a job processes: one flight, or a session around its flights.
+FLIGHT, SESSION = "flight", "session"
+KINDS = (FLIGHT, SESSION)
 
 
 @dataclass
@@ -80,8 +75,6 @@ class Job:
     #: Why it failed, in words; None otherwise.
     error: str | None = None
     kind: str = FLIGHT
-    #: A live job's inspection point.
-    point_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -107,11 +100,6 @@ def default_session_command(session_id: str) -> list[str]:
     return _cli("process", "--session", session_id)
 
 
-def default_live_command(flight_id: str, point_id: str) -> list[str]:
-    """The pipeline command for one point's verdict while the flight goes on."""
-    return _cli("process", "--flight", flight_id, "--live-point", point_id)
-
-
 def _lower_priority(process: subprocess.Popen[bytes]) -> None:
     """Behind the flight loop, not beside it. Best effort: a failure here
     changes how fast a result arrives, never whether."""
@@ -132,20 +120,18 @@ class ProcessingQueue:
     def __init__(self, *, on_change: Callable[[Job], None] | None = None,
                  command: Callable[[str], list[str]] = default_command,
                  session_command: Callable[[str], list[str]] = default_session_command,
-                 live_command: Callable[[str, str], list[str]] = default_live_command,
                  timeout_s: float = TIMEOUT_S) -> None:
         self._on_change = on_change
         self._command = command
         self._session_command = session_command
-        self._live_command = live_command
         self._timeout_s = timeout_s
         self._jobs: dict[str, Job] = {}
         self._listeners: dict[str, Callable[[Job], None]] = {}
         self._lock = threading.Lock()
-        #: (priority, order, key): live first, then in the order submitted;
-        #: a key of None stops the worker.
-        self._waiting: queue.PriorityQueue[tuple[int, int, str | None]] = queue.PriorityQueue()
-        self._order = 0
+        #: Keys in the order submitted; None wakes the worker to stop. Closing
+        #: is decided by `_closed`, never by where None sits in the line: a
+        #: job still waiting when the queue closes must not start (see close).
+        self._waiting: queue.Queue[str | None] = queue.Queue()
         self._running: subprocess.Popen[bytes] | None = None
         self._worker: threading.Thread | None = None
         self._closed = False
@@ -153,25 +139,22 @@ class ProcessingQueue:
     # ── the queue ────────────────────────────────────────────────────────
 
     def submit(self, flight_id: str, *, on_change: Callable[[Job], None] | None = None,
-               kind: str = FLIGHT, point_id: str | None = None) -> Job:
-        """Queue a flight (or, with kind "session", a session; with kind
-        "live", one point of a flight in the air). Queuing one already queued
-        or running changes nothing; one that finished is run again (its result
-        is replaced)."""
+               kind: str = FLIGHT) -> Job:
+        """Queue a flight (or, with kind "session", a session). Queuing one
+        already queued or running changes nothing; one that finished is run
+        again (its result is replaced)."""
         if kind not in KINDS:
             raise ValueError(f"{kind!r} is not a kind of job")
         if not FLIGHT_ID.match(flight_id or ""):
             raise ValueError(f"{flight_id!r} is not a {kind} id")
-        if (kind == LIVE) != bool(point_id) or (point_id and not POINT_ID.match(point_id)):
-            raise ValueError("a live job needs a point id, and only a live job has one")
-        key = job_key(flight_id, point_id)
+        key = flight_id
         with self._lock:
             if self._closed:
                 raise RuntimeError("the processing queue is closed")
             existing = self._jobs.get(key)
             if existing is not None and existing.state in (JobState.QUEUED, JobState.RUNNING):
                 return existing
-            job = Job(flight_id=flight_id, queued_at=_now(), kind=kind, point_id=point_id)
+            job = Job(flight_id=flight_id, queued_at=_now(), kind=kind)
             self._jobs[key] = job
             if on_change is not None:
                 self._listeners[key] = on_change
@@ -180,10 +163,7 @@ class ProcessingQueue:
                 self._worker = threading.Thread(target=self._work, name="processing",
                                                 daemon=True)
                 self._worker.start()
-        with self._lock:
-            self._order += 1
-            order = self._order
-        self._waiting.put((0 if kind == LIVE else 1, order, key))
+        self._waiting.put(key)
         self._changed(job)
         return job
 
@@ -197,13 +177,21 @@ class ProcessingQueue:
             return [j.to_dict() for j in reversed(self._jobs.values())]
 
     def close(self) -> None:
-        """Stop taking work and end the flight being processed. Called when the
-        agent shuts down; a flight not finished is simply processed again the
-        next time someone asks."""
+        """Stop taking work, end the flight being processed, and start nothing
+        that is still waiting. Called when the agent shuts down; a flight not
+        finished is simply processed again the next time someone asks.
+
+        NOTHING WAITING STARTS AFTER THIS (2026-11-16). A job started now
+        would outlive the agent — its child process is not the agent's to
+        stop once the agent has exited — and its result would never be
+        recorded, so the next start would run it again. When the stop marker
+        became a plain FIFO entry (Phase 1 of the no-camera work), every job
+        queued behind it ran after close(), session.end()'s own job included.
+        """
         with self._lock:
             self._closed = True
             running = self._running
-        self._waiting.put((-1, 0, None))
+        self._waiting.put(None)
         if running is not None:
             with contextlib.suppress(Exception):
                 running.kill()
@@ -225,17 +213,17 @@ class ProcessingQueue:
 
     def _work(self) -> None:
         while True:
-            _, _, key = self._waiting.get()
-            if key is None:
-                return
+            key = self._waiting.get()
             with self._lock:
+                if key is None or self._closed:
+                    return
                 job = self._jobs.get(key)
                 if job is None or job.state != JobState.QUEUED:
                     continue
                 job.state = JobState.RUNNING
             self._changed(job)
             flight_id = job.flight_id
-            error = self._run(flight_id, job.kind, job.point_id)
+            error = self._run(flight_id, job.kind)
             with self._lock:
                 job.state = JobState.FAILED if error else JobState.DONE
                 job.error = error
@@ -246,15 +234,11 @@ class ProcessingQueue:
                 log.info("processed %s %s", job.kind, flight_id)
             self._changed(job)
 
-    def _run(self, flight_id: str, kind: str = FLIGHT,
-             point_id: str | None = None) -> str | None:
-        """Run the pipeline on one flight, session or live point. None when it
-        succeeded, else why not."""
+    def _run(self, flight_id: str, kind: str = FLIGHT) -> str | None:
+        """Run the pipeline on one flight or session. None when it succeeded,
+        else why not."""
         flags = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
-        if kind == LIVE and point_id:
-            argv = self._live_command(flight_id, point_id)
-        else:
-            argv = (self._session_command if kind == SESSION else self._command)(flight_id)
+        argv = (self._session_command if kind == SESSION else self._command)(flight_id)
         try:
             process = subprocess.Popen(
                 argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -262,7 +246,15 @@ class ProcessingQueue:
         except OSError as e:
             return f"The pipeline could not be started: {e.strerror or e}."
         with self._lock:
-            self._running = process
+            # close() may have run after Popen but before this line, when it
+            # could not see the child to kill it: stop it here instead.
+            closing = self._closed
+            self._running = None if closing else process
+        if closing:
+            with contextlib.suppress(Exception):
+                process.kill()
+            process.communicate()
+            return "The agent shut down before the pipeline could run."
         _lower_priority(process)
         try:
             out, err = process.communicate(timeout=self._timeout_s)
@@ -281,7 +273,7 @@ class ProcessingQueue:
 
     def _changed(self, job: Job) -> None:
         with self._lock:
-            listener = self._listeners.get(job_key(job.flight_id, job.point_id))
+            listener = self._listeners.get(job.flight_id)
         for notify in (self._on_change, listener):
             if notify is None:
                 continue

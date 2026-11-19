@@ -6,8 +6,8 @@
  *           where the operator works, so it takes the larger share.
  *   right   the monitor: FlightDeck (the vitals, the keys and the action rail —
  *           never behind a tab, pages-and-windows.txt) above the console's
- *           Vitals and Camera tabs. The Scene moved into ③ Fly, where the
- *           mission it now draws lives.
+ *           Vitals. The Scene moved into ③ Fly, where the mission it now
+ *           draws lives.
  *
  * The divider is the same draggable, keyboard-operable window splitter as
  * Manual's, with ITS OWN saved position (dronedeck.split.control.auto):
@@ -42,7 +42,6 @@ import { FlightDeck } from "../ControlPage";
 import { Button } from "@/components/ui";
 import { MissionFlow, type FlowStart } from "./MissionFlow";
 
-const MONITOR_VIEWS = ["vitals", "camera"] as const;
 /** Side by side from here up; stacked below. */
 const AUTO_WIDE = "(min-width: 1280px)";
 const AIRBORNE = new Set(["mission", "manual", "program"]);
@@ -88,7 +87,7 @@ export function AutoControl({
         {deck}
         {flow}
         <ConsolePane telemetry={telemetry} history={history} logLines={logLines}
-                     onClearLog={onClearLog} views={MONITOR_VIEWS} />
+                     onClearLog={onClearLog} />
       </div>
     );
   }
@@ -109,7 +108,7 @@ export function AutoControl({
         <div className="flex h-[calc(100vh-9.5rem)] min-w-0 flex-1 flex-col gap-3 self-start pl-3">
           {deck}
           <ConsolePane telemetry={telemetry} history={history} logLines={logLines}
-                       onClearLog={onClearLog} views={MONITOR_VIEWS} fill />
+                       onClearLog={onClearLog} fill />
         </div>
       }
     />

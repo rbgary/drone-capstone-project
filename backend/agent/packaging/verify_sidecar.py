@@ -92,13 +92,12 @@ def _probe_env(data_dir: str) -> dict[str, str]:
     """The environment the probe agent runs in: isolated from this machine.
 
     Without this, verifying on a developer's laptop would restore THEIR saved
-    sign-in from the real data folder, hold the drone on standby and reach for
-    the camera — a build step touching the radio.
+    sign-in from the real data folder and hold the drone on standby — a build
+    step touching the radio.
     """
     env = dict(os.environ)
     env["DRONEDECK_DATA_DIR"] = data_dir
     env["DRONEDECK_STANDBY"] = "0"
-    env.pop("DRONEDECK_CAMERA", None)
     return env
 
 

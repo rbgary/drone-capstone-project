@@ -117,18 +117,6 @@ class FakeLink:
         yield CheckResult(CheckKey.ESTIMATE, CheckStatus.PASSED, "steady")
         return self.report
 
-    def capture_checks(self):
-        """A capture session's checks: the radio and the camera deck only —
-        `check_failure` (a flight check) never reaches them."""
-        self.capture_runs = getattr(self, "capture_runs", 0) + 1
-        yield CheckResult(CheckKey.IDENTITY, CheckStatus.PASSED, "cf-lab")
-        failure = getattr(self, "capture_failure", None)
-        if failure is not None:
-            yield failure
-            raise ChecksFailed(failure)
-        yield CheckResult(CheckKey.CAMERA, CheckStatus.PASSED, "AI deck fitted")
-        return self.report
-
     def health_test(self):
         if self.health_error:
             raise self.health_error
@@ -145,10 +133,7 @@ class FakeLink:
 
     # standby
     def identify(self):
-        return "cf-lab", True
-
-    def camera_cf(self):
-        return "the-cf"
+        return "cf-lab"
 
     def on_lost(self, callback) -> None:
         self.lose = callback
@@ -561,43 +546,6 @@ class TestEnd:
         assert rig.session.snapshot().state is State.SIGNED_OUT
         actions = [r.payload["action"] for r in rig.outbox.pending(Kind.AUDIT)]
         assert "session_end" in actions and actions[-1] == "sign_out"
-
-
-class TestDecksLost:
-    """2026-10-24: a restart over the radio left the decks unpowered and the
-    page read "no camera on this drone". A deck seen and then gone is LOST."""
-
-    def report(self, rig, fitted):
-        rig.session._set(ai_deck=fitted, radio={"state": "connected", "hardware_id": "cf-lab",
-                                                "message": None})
-        return rig.session.snapshot()
-
-    def test_a_drone_never_seen_with_a_deck_is_not_lost(self, rig):
-        assert self.report(rig, False).decks_lost is False
-
-    def test_seen_then_gone_is_lost_and_back_clears_it(self, rig):
-        assert self.report(rig, True).decks_lost is False
-        assert self.report(rig, False).decks_lost is True
-        assert rig.session.snapshot().to_dict()["decks_lost"] is True
-        assert self.report(rig, True).decks_lost is False
-
-    def test_not_asked_yet_changes_nothing(self, rig):
-        self.report(rig, True)
-        self.report(rig, False)
-        assert self.report(rig, None).decks_lost is True
-
-
-class TestNoDeckHook:
-    def test_a_link_without_an_ai_deck_calls_the_no_deck_hook_once(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("DRONEDECK_DATA_DIR", str(tmp_path))
-        calls: list[str] = []
-        session = Session(cloud=FakeCloud(), outbox=Outbox(tmp_path / "outbox"),
-                          link_factory=FakeLink, on_link_ready=lambda cf: calls.append("ready"),
-                          on_link_no_deck=lambda: calls.append("no-deck"))
-        link = FakeLink()
-        session._link_ready(link, False)
-        session._link_ready(link, False)
-        assert calls == ["no-deck"]
 
 
 class TestUnassisted:
@@ -1093,13 +1041,11 @@ def standby(tmp_path, monkeypatch):
         real_open()
 
     link.open = counting_open                      # type: ignore[method-assign]
-    handed: list[Any] = []
     events: list[tuple[str, dict]] = []
     session = Session(cloud=cloud, outbox=Outbox(tmp_path / "outbox"),
-                      link_factory=lambda: link, on_link_ready=handed.append,
+                      link_factory=lambda: link,
                       publish=lambda kind, payload: events.append((kind, payload)))
-    return SimpleNamespace(session=session, link=link, opens=opens, handed=handed,
-                           events=events)
+    return SimpleNamespace(session=session, link=link, opens=opens, events=events)
 
 
 class TestStandby:
@@ -1114,7 +1060,6 @@ class TestStandby:
         snap = standby.session.snapshot()
         assert standby.link.is_open
         assert snap.radio == {"state": "connected", "hardware_id": "cf-lab", "message": None}
-        assert snap.ai_deck is True
         assert snap.state is State.IDLE          # standby is not a session
 
     def test_vitals_stream_but_nothing_is_recorded(self, standby):
@@ -1124,14 +1069,6 @@ class TestStandby:
         standby.link.stream.subscribers[0](standby.link.stream.snapshot())
         assert any(kind == "telemetry" for kind, _ in standby.events)
         assert standby.session.history is None   # a file only ever comes from a session
-
-    def test_the_camera_gets_its_network_once_per_link(self, standby):
-        standby.session.sign_in("ada@example.com", "pw")
-        standby.session._standby_tick()
-        assert wait_for(lambda: standby.handed == ["the-cf"])
-        standby.session._standby_tick()          # still connected: nothing new
-        time.sleep(0.05)
-        assert standby.handed == ["the-cf"]
 
     def test_a_session_takes_the_link_over_and_still_runs_every_check(self, standby):
         standby.session.sign_in("ada@example.com", "pw")
@@ -1211,22 +1148,6 @@ class TestStandby:
         standby.session.sign_out()
         assert not standby.link.is_open
         assert standby.session.snapshot().radio["state"] == "off"
-
-
-class TestLinkDownHook:
-    def test_every_close_reports_it(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("DRONEDECK_DATA_DIR", str(tmp_path))
-        cloud = FakeCloud()
-        cloud.sign_in = lambda email, password: Operator("user-1", email, "Ada", "operator")
-        cloud.sign_out = lambda: None
-        link = FakeLink()
-        downs: list[int] = []
-        session = Session(cloud=cloud, outbox=Outbox(tmp_path / "outbox"),
-                          link_factory=lambda: link, on_link_down=lambda: downs.append(1))
-        session.sign_in("ada@example.com", "pw")
-        session._standby_tick()
-        link.lose("Too many packets lost")
-        assert wait_for(lambda: downs == [1])
 
 
 class TestRestartDrone:

@@ -20,10 +20,12 @@ WHERE IT LIVES
                      components/ui/time-series.tsx, flight-path.tsx, raw-readings.tsx
   processing         components/processing/findings.tsx (FindingsList, FindingCard),
                      flight-processing.tsx (one flight's verdicts, cleaning,
-                     frames, signals), signal-panel.tsx (raw vs clean);
+                     signals), signal-panel.tsx (raw vs clean);
                      lib/pipeline.ts (the result's JSON, read defensively);
-                     components/flight/FrameGallery.tsx (original / enhanced /
-                     side by side); components/ui/owner.tsx (who ran it)
+                     components/ui/owner.tsx (who ran it). The camera's
+                     FrameGallery.tsx and lib/frame-zip.ts were removed
+                     2026-11-18 (no camera) — Phase 6 of the no-camera plan
+                     adapts them from git for photos
   /app/zones         app/app/zones/page.tsx, components/ui/zone-map.tsx
   /app/compare       app/app/compare/page.tsx, lib/compare.ts
   /app/plan          app/app/plan/page.tsx — see mission-planner.txt
@@ -50,18 +52,21 @@ DECISIONS
   pipeline_findings (migration 20261009000016), in this order:
     What the pipeline found  every finding, worst first: severity in icon and
                              word, the agent's sentence word for word, when,
-                             where, the change against expected, the camera
-                             note, and each evidence frame original | enhanced
+                             where, the change against expected
     Data processing          per flight: stage versions, a verdict per point,
                              what the cleaner flagged (sensor values apart from
-                             "position not measured"), frames enhanced and
-                             unreadable, and per signal a Clean / Raw switch —
+                             "position not measured"), and per signal a
+                             Clean / Raw switch —
                              Clean is what was analysed against what was
                              expected, the findings' stretches shaded AND named
                              under the chart; Raw is every value as recorded,
                              flagged ones as points
-    Camera                   Original / Enhanced / Side by side; an enhanced
-                             image is always labelled as one
+  THE CAMERA IS GONE (2026-11-18, no-camera Phase 6a): the Camera and
+  Captured manually sections, the frames on each finding, its camera note,
+  the Frames row and a chart click showing the frame then were removed from
+  every page — old camera evidence is not to stay on the website (the team,
+  2026-11-16). The frames stay in the bucket. Photos taken by hand get a
+  section of their own (Phase 6b, docs/plans/2026-11-16-no-camera-phases-5-7.txt).
   The session page shows every flight's processing and every flight's raw
   telemetry beside its own 1 Hz vitals — a session is the superset of its
   flights. "Zone health" (the greenhouse predictions table) is gone from both
@@ -90,7 +95,7 @@ DECISIONS
 - SESSIONS: EVERYTHING IN A SESSION, NOT JUST ITS FLIGHTS (2026-10-06,
   Samuel). /app/sessions lists every session (who, drone, mode, duration,
   flight count); one session reads like the flight page — summary, sensor
-  temperature, height, battery, pressure, where the drone was, camera, zone
+  temperature, height, battery, pressure, where the drone was, zone
   health, raw readings — over the session's OWN vitals (session_samples, one
   a second, Start to End session, flying or not), plus its flights (each to
   its flight page) and its events (audit trail, operators only). A copy of

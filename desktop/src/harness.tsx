@@ -21,13 +21,11 @@ import { WindowLog } from "@/pages/sessions/WindowLog";
 import { SessionsPage } from "@/pages/sessions/SessionsPage";
 import { FlightPlaybackView } from "@/pages/sessions/Playback";
 import { PlaybackPage } from "@/pages/playback/PlaybackPage";
-import { CapturePage } from "@/pages/capture/CapturePage";
 import { StartupPage } from "@/pages/startup/StartupPage";
 import { Install, SetupPage } from "@/pages/setup/SetupPage";
-import { WifiPage } from "@/pages/wifi/WifiPage";
 import {
   EMPTY_INTENT, connectToShell,
-  type CameraWifi, type FlightList, type FlightPlayback, type MissionView, type PlanLimits, type RoomView, type Session,
+  type FlightList, type FlightPlayback, type MissionView, type PlanLimits, type RoomView, type Session,
   type SetupState,
   type Telemetry,
 } from "@/lib/agent";
@@ -283,24 +281,6 @@ const sampleMissions: MissionView[] = [
   { ...sampleMission, id: "m-ok", name: "Pump check", points: sampleMission.points.slice(0, 2),
     problems: [sampleRoom.problems[0]], valid: true, flown_revision: null, estimated_duration_s: 41 },
 ];
-/** A stand-in camera frame, 324x244 like the deck's, drawn once. */
-let frameBlob: Promise<Blob> | null = null;
-function sampleFrame(): Promise<Blob> {
-  frameBlob ??= new Promise<Blob>((resolve) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 324;
-    canvas.height = 244;
-    const ctx = canvas.getContext("2d")!;
-    const g = ctx.createLinearGradient(0, 0, 324, 244);
-    g.addColorStop(0, "#202020");
-    g.addColorStop(1, "#7a7a7a");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 324, 244);
-    canvas.toBlob((b) => resolve(b ?? new Blob()), "image/png");
-  });
-  return frameBlob;
-}
-
 if (!agentToken) {
   const realFetch = window.fetch.bind(window);
   const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
@@ -341,30 +321,9 @@ if (!agentToken) {
           created_at: "2026-09-29T10:00:02+00:00", failures: [],
           points: ["P1", "P2", "P3"].map((id) => ({ point_id: id, verdict: "insufficient_data",
             reasons: ["No model gave a verdict: no classifier yet."], alerts: [] })),
-          summary: { P1: { readings: 60, frames: 22 }, P2: { readings: 52, frames: 18 }, P3: { readings: 81, frames: 30 } },
+          summary: { P1: { readings: 60 }, P2: { readings: 52 }, P3: { readings: 81 } },
         },
       });
-    }
-    // The camera, for the Capture page and the Camera tab: a live deck with
-    // the measured rate, a frame drawn here, and five manual captures.
-    if (path === "/camera") {
-      return json({ live: true, kind: "ai-deck", reason: null, deck_fitted: true, width: 324, height: 244,
-        connecting: false,
-        rate: { window_s: 10, frames: 37, fps: 3.7, mean_bytes: 79056, longest_gap_s: 1.4, format: "raw" },
-        deck_timing: { lines: 20, capture_ms: 76, encoding_ms: 0, transfer_ms: 182, bytes: 79056, deck_fps: 3.88 } });
-    }
-    if (path === "/camera/wifi") return json({ ssid: "VT Open WiFi", phase: "joined", ip: "100.96.55.59", message: null, rssi: -61 });
-    if (path === "/camera/frame" || path.startsWith("/camera/recording/frame/")) return new Response(await sampleFrame());
-    if (path === "/camera/recording") {
-      return json({ recording: true, session_id: "3f1c", count: 412, latest_seq: 412, latest_t_s: 754.2,
-        upload_fps: 2, write_errors: 0, auto: true, captured: 96, manual: 5 });
-    }
-    if (path === "/camera/recording/frames") {
-      return json({ frames: [12, 88, 140, 301, 412].map((seq) => ({ seq, t_s: seq * 1.83,
-        recorded_at: "2026-10-24T10:00:00+00:00", upload: true, source: "manual" })) });
-    }
-    if (path === "/camera/capture" && post) {
-      return json({ seq: 413, t_s: 755.1, recorded_at: "2026-10-24T10:12:35+00:00", upload: true, source: "manual" });
     }
     // Two base stations at the room's corners, as /station/poses gives them:
     // the tripods on the map (stations.ts), facing back into the room.
@@ -515,36 +474,25 @@ const control = (label: string, override: Partial<Session>, autoStart?: FlowStar
   </Shell>
 );
 
-/** Set up step 2: the drone as it reads after its AI deck was swapped, and a
- *  fully installed drone opened to reinstall a part. */
+/** Set up step 2: a new drone that needs both parts, and a fully installed
+ *  drone opened to reinstall a part. */
 const setupBase: Omit<SetupState, "phase" | "parts" | "facts" | "message"> = {
-  current: null, progress: 0, order: ["main", "lighthouse", "camera", "wifi"],
-  labels: { main: "Drone firmware", lighthouse: "Positioning deck", camera: "Camera", wifi: "Camera Wi-Fi" },
+  current: null, progress: 0, order: ["main", "lighthouse"],
+  labels: { main: "Drone firmware", lighthouse: "Positioning deck" },
 };
-const setupSwapped: SetupState = {
+const setupNew: SetupState = {
   ...setupBase, phase: "ready", message: null,
-  facts: { battery_v: 4.12, ai_deck: true, deck_unrecorded: true },
-  parts: { main: "installed", lighthouse: "installed", camera: "needed", wifi: "needed" },
+  facts: { battery_v: 4.12 },
+  parts: { main: "needed", lighthouse: "needed" },
 };
 const setupDone: SetupState = {
   ...setupBase, phase: "done", message: "This drone's software is already installed.",
-  facts: { battery_v: 4.12, ai_deck: true, deck_unrecorded: false },
-  parts: { main: "installed", lighthouse: "installed", camera: "installed", wifi: "installed" },
+  facts: { battery_v: 4.12 },
+  parts: { main: "installed", lighthouse: "installed" },
 };
 const setupCommand = {
   command: "/Applications/DroneDeck.app/Contents/MacOS/dronedeck-agent setup",
   check: "/Applications/DroneDeck.app/Contents/MacOS/dronedeck-agent setup --check",
-};
-/** Drone Wi-Fi: a deck joined at the lab's weak signal, its radio held at
- *  reduced power after a brownout (wifi-link.patch). */
-const wifiBrownout: CameraWifi = {
-  ssid: "VT Open WiFi", phase: "joined", ip: "100.96.55.59", rssi: -86, drops: 0,
-  message: "On VT Open WiFi at 100.96.55.59 · -86 dBm (weak). Its radio is on reduced power since a brownout — unplug the battery for 10 seconds to clear it.",
-  link: { bandwidth_mhz: 20, power_dbm: 20, beacon_timeout_s: 15, brownout: true },
-};
-const wifiFull: CameraWifi = {
-  ...wifiBrownout, message: "On VT Open WiFi at 100.96.55.59 · -86 dBm (weak).",
-  link: { bandwidth_mhz: 20, power_dbm: 20, beacon_timeout_s: 15, brownout: false },
 };
 const setupSession: Session = { ...session, session_id: null, radio: { state: "searching", message: "Looking for the drone…", hardware_id: null } };
 
@@ -554,17 +502,11 @@ createRoot(document.getElementById("root")!).render(
     <Shell label="Control · Auto page while a Manual session is open">
       <ModeLock session={{ ...session, mode: "manual", state: "ready" }} looking="auto" onBack={() => {}} />
     </Shell>
-    <Shell label="Set up · new AI deck">
-      <SetupPage session={setupSession} setup={setupSwapped} wifi={null} run={runHere} onGo={() => {}} />
-    </Shell>
-    <Shell label="Drone Wi-Fi · deck radio after a brownout">
-      <WifiPage wifi={wifiBrownout} session={setupSession} onSaved={() => {}} />
-    </Shell>
-    <Shell label="Drone Wi-Fi · deck radio at full power">
-      <WifiPage wifi={wifiFull} session={setupSession} onSaved={() => {}} />
+    <Shell label="Set up · new drone">
+      <SetupPage session={setupSession} setup={setupNew} run={runHere} onGo={() => {}} />
     </Shell>
     <Shell label="Set up · install by command">
-      <Install setup={setupSwapped} run={runHere} busy={false} onClose={() => {}} command={setupCommand} />
+      <Install setup={setupNew} run={runHere} busy={false} onClose={() => {}} command={setupCommand} />
     </Shell>
     <Shell label="Set up · installed, reinstall">
       <Install setup={setupDone} run={runHere} busy={false} onClose={() => {}} command={setupCommand} />
@@ -592,12 +534,6 @@ createRoot(document.getElementById("root")!).render(
       },
       processing: {
         on: true, chosen: false, last_flight_id: null, jobs: [],
-        live: { flight_id: "f-air", points: {
-          P1: { state: "done", verdict: "anomaly", reasons: ["Warmer than expected near P1"],
-                findings: [{ id: "x1", title: "Warmer than expected near P1", severity: "warning",
-                             sentence: "From 0:11 to 0:15, near P1, the temperature sensor read 3.8 °C above the drone's normal cooling curve.", signal: "temperature" }] },
-          P2: { state: "running" },
-        } },
       },
     }, { step: 5, missionId: "m-long" })}
     {control("Auto · ③ Fly, landed", {
@@ -660,14 +596,6 @@ createRoot(document.getElementById("root")!).render(
     ))}
     {!agentToken && (
       <>
-        <Shell label="Capture · in a capture session">
-          <CapturePage session={{ ...session, state: "ready", session_id: "3f1c", message: null, purpose: "capture",
-                                  radio: { state: "connected", hardware_id: "cf-4a3b2c1d0e9f8a7b", message: null } }}
-                       run={runHere} onOpenControl={() => {}} />
-        </Shell>
-        <Shell label="Capture · no session">
-          <CapturePage session={{ ...session, state: "idle", session_id: null, message: null }} run={runHere} onOpenControl={() => {}} />
-        </Shell>
         <Shell label="Playback · the page, all flights">
           <PlaybackPage refreshKey="h" mode={(query.get("mode") as "auto" | "manual") ?? "auto"} />
         </Shell>

@@ -32,10 +32,8 @@ from dronedeck.flight.checks import (
     HealthTestResult,
     PropTestResult,
     ReadyReport,
-    _ai_deck_fitted,
     read_hardware_id,
     run_battery_test,
-    run_capture_checks,
     run_checks,
     run_prop_test,
 )
@@ -292,11 +290,11 @@ class DroneLink:
 
     # ── standby: what a link with no session needs ───────────────────────
 
-    def identify(self) -> tuple[str, bool | None]:
-        """The drone's hardware id and whether the AI deck is fitted — param
-        reads only, the two facts a link with no session shows. Never arms."""
+    def identify(self) -> str:
+        """The drone's hardware id — a param read, what a link with no session
+        shows. Never arms."""
         scf, _ = self._require_open()
-        return read_hardware_id(scf.cf), _ai_deck_fitted(scf.cf)
+        return read_hardware_id(scf.cf)
 
     def station_poses(self, timeout_s: float = 5.0) -> list[Any]:
         """Where the base stations are and which way they face, as stored on
@@ -339,10 +337,6 @@ class DroneLink:
                             station=int(bs))
                 for bs, g in sorted(geos.items()) if getattr(g, "valid", False)]
 
-    def camera_cf(self) -> Any:
-        """The Crazyflie, for the Wi-Fi hand-off (camera/wifi.py), or None."""
-        return self.scf.cf if self.scf is not None else None
-
     def on_lost(self, callback: Callable[[str], None]) -> None:
         """Call `callback(reason)` once if the radio link drops by itself.
 
@@ -380,12 +374,6 @@ class DroneLink:
             reset_estimator=lambda: preflight.reset_estimator(scf.cf),
             request_recovery=lambda: self._request_crash_recovery(scf.cf),
         )
-
-    def capture_checks(self) -> Generator[CheckResult, None, ReadyReport]:
-        """A capture session's checks: the radio and the camera's deck only
-        (flight/checks.py run_capture_checks). Never arms."""
-        scf, stream = self._require_open()
-        return run_capture_checks(scf.cf, stream.snapshot)
 
     @staticmethod
     def _request_crash_recovery(cf: Any) -> None:

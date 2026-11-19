@@ -27,8 +27,6 @@ from typing import Any, Protocol
 log = logging.getLogger(__name__)
 
 TELEMETRY_BUCKET = "flight-logs"
-#: Private, like flight-logs — migration 20260924000011_flight_frames.sql.
-FRAMES_BUCKET = "flight-frames"
 BACKFILL_FUNCTION = "import-flight-log"
 
 
@@ -149,8 +147,6 @@ class Cloud(Protocol):
     def insert_session_samples(self, rows: list[dict[str, Any]]) -> None: ...
     def upload_flight_csv(self, object_path: str, csv_path: Path) -> None: ...
     def request_backfill(self, flight_id: str, object_path: str) -> None: ...
-    def upload_frame(self, object_path: str, path: Path, content_type: str,
-                     *, replace: bool = False) -> None: ...
     def upsert_result(self, row: dict[str, Any]) -> None: ...
     def upsert_findings(self, rows: list[dict[str, Any]]) -> None: ...
     def delete_findings_except(self, flight_id: str, keep: list[str]) -> None: ...
@@ -463,9 +459,9 @@ class SupabaseCloud:
         except Exception as e:
             # The database has not had migration 20260928000012 yet. A failed
             # batch aborts the whole sync pass (syncer.sync_once), so refusing
-            # here would stall every later flight and every frame behind this
-            # one. Send the readings without the tag instead: the local CSV
-            # keeps point_id, and the pipeline reads the CSV.
+            # here would stall every later flight behind this one. Send the
+            # readings without the tag instead: the local CSV keeps point_id,
+            # and the pipeline reads the CSV.
             if "point_id" not in str(e):
                 raise CloudError(f"could not upload telemetry: {type(e).__name__}") from e
             log.warning("the database has no telemetry.point_id yet (apply migration "
@@ -494,29 +490,6 @@ class SupabaseCloud:
                 log.info("flight log %s already uploaded", object_path)
                 return
             raise StorageError(f"could not upload the flight log: {type(e).__name__}",
-                               full=storage_quota_refused(e)) from e
-
-    # ── camera frames ────────────────────────────────────────────────────
-
-    def upload_frame(self, object_path: str, path: Path, content_type: str,
-                     *, replace: bool = False) -> None:
-        """Upload one recorded frame (or, with replace, a session's frames.csv).
-
-        A frame never changes, so "already exists" is success: a previous try
-        landed and its reply was lost. The index is replaced, since it is
-        written once more at the session's end."""
-        try:
-            options = {"content-type": content_type}
-            if replace:
-                options["upsert"] = "true"
-            self._connect().storage.from_(FRAMES_BUCKET).upload(
-                object_path, path.read_bytes(), options)
-        except FileNotFoundError:
-            log.warning("recorded frame %s is gone from disk; skipping it", path)
-        except Exception as e:
-            if "Duplicate" in str(e) or "already exists" in str(e):
-                return
-            raise StorageError(f"could not upload a camera frame: {type(e).__name__}",
                                full=storage_quota_refused(e)) from e
 
     # ── the data pipeline's results ──────────────────────────────────────

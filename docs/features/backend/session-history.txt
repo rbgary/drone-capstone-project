@@ -19,11 +19,9 @@ WHERE IT LIVES
   backend/agent/dronedeck/api/rest.py     GET /history/sessions[/{id}[/samples]],
                                             GET /history/flights (this laptop's
                                             and Supabase's, merged),
-                                            GET /history/flights/{id}/playback,
-                                            GET /history/sessions/{id}/frames
-                                            [/{seq}] — its camera frames, and
-                                            ?source=manual its captures by hand
-                                            (../desktop/capture.txt)
+                                            GET /history/flights/{id}/playback
+                                            (the frames routes went with the
+                                            camera, 2026-11-15)
   desktop/src/pages/sessions/               RecentSessions, SessionsPage (Play back
                                             on every flight), WindowLog, Playback
 
@@ -87,7 +85,7 @@ RELATED
 
 shares-data-with  ../pipeline/data-pipeline.txt
                   meta.json names each session's flights; the pipeline finds a
-                  flight's frames and plan by it
+                  flight's plan by it
 shares-data-with  ../pipeline/session.txt
                   samples.csv is the session's own pipeline input; meta.json
                   carries the session's processing state

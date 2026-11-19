@@ -45,7 +45,7 @@ a = Analysis(
     ["sidecar.py"],
     pathex=[".."],
     binaries=[],
-    # The camera firmware Set up installs on a drone (drone_setup.py).
+    # The drone firmware Set up installs on a drone (drone_setup.py).
     datas=[(os.path.join(SPECPATH, "..", "dronedeck", "firmware_bundle"),
             "dronedeck/firmware_bundle")],
     hiddenimports=hiddenimports,

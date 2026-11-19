@@ -34,7 +34,6 @@ import {
   watchAgentExit,
   type Intent,
   type Mode,
-  type CameraWifi,
   type SetupState,
   type Session,
   type SyncStatus,
@@ -49,15 +48,10 @@ import { FlightStrip } from "@/components/FlightStrip";
 import { Sidebar } from "@/components/Sidebar";
 import { SessionsPage } from "@/pages/sessions/SessionsPage";
 import { PlaybackPage } from "@/pages/playback/PlaybackPage";
-import { CapturePage } from "@/pages/capture/CapturePage";
-import { CaptureLock } from "@/pages/control/CaptureLock";
 import { WindowLog } from "@/pages/sessions/WindowLog";
 import { StartupPage } from "@/pages/startup/StartupPage";
 import { SensorWindow, type WindowKey } from "@/pages/windows/SensorWindow";
-import { Message, Spinner } from "@/components/ui";
-import { DroneWifiDialog } from "@/components/DroneWifiDialog";
-import { PHASE_LABEL, PHASE_TONE, SHOW_DRONE_WIFI, droneWifi } from "@/lib/droneWifi";
-import { WifiPage } from "@/pages/wifi/WifiPage";
+import { Message } from "@/components/ui";
 import { SetupPage } from "@/pages/setup/SetupPage";
 import { intentFromKeys, isShift, KEY_MAP, sameIntent } from "@/lib/keys";
 
@@ -68,7 +62,7 @@ const HISTORY_LIMIT = HISTORY_S * 10;      // 10 Hz
 
 export type History = { t: number; values: Record<string, number>; height_m: number | null }[];
 
-export type Page = "home" | "setup" | "control" | "capture" | "sessions" | "playback" | "wifi" | WindowKey;
+export type Page = "home" | "setup" | "control" | "sessions" | "playback" | WindowKey;
 
 /** A command, and what to call it in the log. */
 export type Run = (action: () => Promise<unknown>, label?: string) => Promise<void>;
@@ -93,18 +87,8 @@ export default function App() {
   const [intent, setIntent] = useState<Intent>(EMPTY_INTENT);
   /** With a session open: the other mode's page, if the operator chose to look at it. */
   const [lookingAt, setLookingAt] = useState<Mode | null>(null);
-  // Drone Wi-Fi: the agent's live account of the deck joining, and the dialog.
-  const [cameraWifi, setCameraWifi] = useState<CameraWifi | null>(null);
-  const [wifiOpen, setWifiOpen] = useState(false);
   // Set up's progress, live from the agent (drone_setup.py).
   const [setupState, setSetupState] = useState<SetupState | null>(null);
-  // Asked at most once per launch: "Not now" means not now, not every reconnect.
-  const wifiAsked = useRef(false);
-  // Handing the saved network over is instant — unless macOS is asking whether
-  // this build may read it from the Keychain. The app is ad-hoc signed, so
-  // EVERY new build is a new app to the Keychain and asks again (2026-09-24:
-  // the drone sat on "not set" behind an unanswered prompt). Say so.
-  const [keychainWait, setKeychainWait] = useState(false);
 
   const live = useRef<LiveConnection | null>(null);
   const startedAt = useRef<number | null>(null);
@@ -130,7 +114,6 @@ export default function App() {
         onRefused: setRefused,
         onSync: setSync,
         onConnection: setConnected,
-        onCameraWifi: setCameraWifi,
         onSetup: setSetupState,
         onTelemetry: (frame) => {
           setTelemetry(frame);
@@ -161,28 +144,7 @@ export default function App() {
     return () => { cancelled = true; unlisten?.(); };
   }, []);
 
-  // The agent holds the drone's network in memory only, so it is re-sent every
-  // time the window (re)connects to it — a restarted agent would otherwise
-  // leave the deck on its own access point. With nothing saved, the operator is
-  // asked once after signing in.
   const signedIn = Boolean(session?.operator);
-  useEffect(() => {
-    if (!connected || !signedIn) return;
-    let cancelled = false;
-    const slow = window.setTimeout(() => { if (!cancelled) setKeychainWait(true); }, 3000);
-    droneWifi.push()
-      .finally(() => { window.clearTimeout(slow); if (!cancelled) setKeychainWait(false); })
-      .then((state) => {
-        if (cancelled) return;
-        if (state) setCameraWifi(state);
-        else if (!wifiAsked.current) {
-          wifiAsked.current = true;
-          setWifiOpen(true);
-        }
-      })
-      .catch((e) => { if (!cancelled) pushLog("refused", "Drone Wi-Fi not sent", String(e)); });
-    return () => { cancelled = true; window.clearTimeout(slow); };
-  }, [connected, signedIn, pushLog]);
 
   // Set up's state survives a window reload: ask once on (re)connecting.
   useEffect(() => {
@@ -190,24 +152,9 @@ export default function App() {
     api.setupState().then(setSetupState).catch(() => undefined);
   }, [connected, signedIn]);
 
-  // "Change Wi-Fi" from the Camera tab and the account menu lands on the page.
-  useEffect(() => {
-    const show = () => setPage("wifi");
-    window.addEventListener(SHOW_DRONE_WIFI, show);
-    return () => window.removeEventListener(SHOW_DRONE_WIFI, show);
-  }, [setPage]);
-
-  const wifiPhase = cameraWifi?.phase ?? "not-set";
-  const wifiBadge = {
-    tone: PHASE_TONE[wifiPhase],
-    label: cameraWifi?.ssid ? `${cameraWifi.ssid} — ${PHASE_LABEL[wifiPhase]}` : PHASE_LABEL[wifiPhase],
-  };
-
-  const closeWifi = useCallback(() => setWifiOpen(false), []);
-
   // Vitals are only true while the radio is up. Without this the last frame
-  // stayed on every sensor page marked "Live" after the drone switched off —
-  // the same stale claim the Wi-Fi page made about a join (2026-09-24).
+  // stayed on every sensor page marked "Live" after the drone switched off
+  // (2026-09-24).
   const radioState = session?.radio?.state;
   useEffect(() => {
     if (radioState !== undefined && radioState !== "connected") setTelemetry(null);
@@ -342,9 +289,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[var(--background)] text-[var(--foreground)]">
-      {wifiOpen && (
-        <DroneWifiDialog onClose={closeWifi} onSaved={setCameraWifi} />
-      )}
       <Sidebar
         page={page}
         onNavigate={setPage}
@@ -362,7 +306,6 @@ export default function App() {
           else void run(() => api.setMode(mode), `Set mode to ${mode}`);
         }}
         onSignOut={() => void run(api.signOut, "Sign out")}
-        badges={signedIn ? { wifi: wifiBadge } : {}}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -376,15 +319,6 @@ export default function App() {
           onStop={() => void run(api.emergencyStop, "Emergency stop")}
           onEndSession={() => void run(api.endSession, "End session")}
         />
-
-        {keychainWait && (
-          <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
-            <Message
-              tone="warning"
-              text="macOS is asking whether DroneDeck may use the saved Wi-Fi password. Answer the Keychain prompt (Always Allow) so the drone can join its network."
-            />
-          </div>
-        )}
 
         {(!connected || error) && (
           <div className="grid gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
@@ -416,8 +350,6 @@ export default function App() {
                 run={run}
                 onGo={setPage}
               />
-            ) : page === "control" && open && session?.purpose === "capture" ? (
-              <CaptureLock session={session} onOpenCapture={() => setPage("capture")} />
             ) : page === "control" && open && session && viewMode !== session.mode ? (
               <ModeLock session={session} looking={viewMode} onBack={() => setLookingAt(null)} />
             ) : page === "control" ? (
@@ -431,16 +363,9 @@ export default function App() {
                 logLines={logLines}
                 onClearLog={clearLog}
                 onOpenSessions={() => setPage("sessions")}
-                onOpenCapture={() => setPage("capture")}
               />
-            ) : page === "capture" && session ? (
-              <CapturePage session={session} run={run} onOpenControl={() => setPage("control")} />
-            ) : page === "capture" ? (
-              <Spinner label="Connecting to the flight agent…" />
             ) : page === "setup" ? (
-              <SetupPage session={session} setup={setupState} wifi={cameraWifi} run={run} onGo={setPage} />
-            ) : page === "wifi" ? (
-              <WifiPage wifi={cameraWifi} session={session} onSaved={setCameraWifi} />
+              <SetupPage session={session} setup={setupState} run={run} onGo={setPage} />
             ) : page === "sessions" ? (
               <SessionsPage refreshKey={historyKey} mode={viewMode} selectedId={sessionId} onSelect={setSessionId} />
             ) : page === "playback" ? (

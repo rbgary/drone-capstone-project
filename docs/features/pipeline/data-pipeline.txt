@@ -1,7 +1,11 @@
 ================================================================================
 THE DATA PIPELINE — a recorded flight in; findings, and a verdict per inspection
 point, out — on the laptop, then on the web
-Last verified: 2026-10-11 — re-read after rest.py changed for mission playback; its result and processing routes are unchanged. Before that:
+Last verified: 2026-11-15 on feat/no-camera — contract v3 (no frames, no
+enhance, no live run) against agent pytest (1 618 passing; the one failure is
+test_recording's chmod check run as root, removed with the camera in Phase 2),
+ruff, mypy, `dronedeck process --fixture`, and the desktop build. 2026-10-11 —
+re-read after rest.py changed for mission playback. Before that:
 2026-10-09 against docs/pipeline-v2 (= experiment/samuel without
 the mission-controller work) — agent pytest 1369, `dronedeck process` on the
 fixture and on real lab flights, the local Supabase stack (owner 10/10,
@@ -12,14 +16,16 @@ SOURCE: backend/agent/dronedeck/pipeline/runner.py
 THIS IS THE INDEX. One doc per stage, plus the results on the web:
 
   clean.txt       robust@1 — sensor faults flagged, never edited
-  enhance.txt     clahe@1 — clearer frames, and how usable each one is
   classify.txt    blocks@1 — stretches that depart from what was expected
   interpret.txt   findings@1 — those stretches judged and put into words
-  scene.txt       scene@1 — whether the camera's view changed during one
   session.txt     the session around its flights, processed too (ground@1)
-  live.txt        each point's verdict while the mission flies (story 4.9)
   calibrate.txt   the hand-warmer flights, measured (`dronedeck calibrate`)
   results.txt     the result uploaded, shown on the web, notified
+
+REMOVED 2026-11-15 (contract v3 — the drone carries no camera,
+../architecture.txt DECISIONS): enhance (clahe@1), scene (scene@1), the live
+verdicts in flight (story 4.9) and every image field of a finding. Their docs
+were deleted; git has them.
 
 DRIFT, SAID AS DRIFT (2026-10-09): until this pass this doc said the unit of
 work was one inspection point, that every point read "insufficient data — no
@@ -27,43 +33,45 @@ classifier yet", and that results never left the laptop. All three stopped
 being true today; the doc had not moved with the code on feat/dpp-clean.
 
 --------------------------------------------------------------------------------
-STATUS  (Last verified: 2026-10-09)
+STATUS  (Last verified: 2026-11-15)
 --------------------------------------------------------------------------------
-  skeleton  BUILT — contract v2, sources, sinks, runner, compose, the command
+  skeleton  BUILT — contract v3 (three stages, sensors only), sources, sinks,
+            runner, compose, the command; PIPELINE_VERSION "4"
   clean     BUILT — robust@1 (clean.txt)
-  enhance   BUILT — clahe@1 (enhance.txt)
-  classify  BUILT for the sensors — blocks@1 (flights), ground@1 (a session on
-            the ground); the camera — scene@1, whether its view changed
-            (scene.txt); no model judges the equipment in a frame
+  classify  BUILT — blocks@1 (flights), ground@1 (a session on the ground)
   interpret BUILT — findings@1 (interpret.txt)
-  trigger   BUILT — the DPP switch; each flight when it lands, the session
-            itself when it ends (session.txt), each inspection point as its
-            hold ends (live.txt); a closed app's unfinished work resumes
-            when it starts again
+  trigger   BUILT — the DPP switch; each flight once it has landed, the session
+            itself when it ends (session.txt); a closed app's unfinished work
+            resumes when it starts again. NOTHING IS PROCESSED IN FLIGHT.
   results   BUILT — uploaded, on the session and flight pages, notified
             (results.txt). Migrations 0015–0017 live on the hosted database
             since 2026-10-09
   calibrate BUILT — `dronedeck calibrate` (calibrate.txt); the flights
             themselves are OWED: every threshold stays PROVISIONAL until then
-  NOT BUILT an image model that judges the equipment (story 4.4, Reagan — no
-            labelled photos, and the camera cannot see heat)
+  NOT BUILT the photo classifier (story 4.4, Reagan's stage on
+            origin/feat/image-model-stage): photos taken by hand, uploaded in
+            the desktop app, each with its own verdict — outside this
+            pipeline, Phase 5 of the no-camera work
+  DATA      pipeline_findings still has evidence_frames, image_support and
+            image_note, retired: migration 20261118000020 makes image_support
+            optional and sync sends none of them (sync/results.py). Applied to
+            the hosted project 2026-11-18 (results.txt)
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS
 --------------------------------------------------------------------------------
 Story 4.5: "A single command turns a recorded flight into a result with a
 verdict for each inspection point." `dronedeck process --flight <id>` loads
-the flight's readings, its session's frames and the plan it flew, runs
-clean → enhance → classify → interpret ONCE over the whole flight, and writes
-<data folder>/results/<flight id>/result.json and the enhanced frames. The
-owner's ask (2026-10-09): the dirty data against the clean, the grayscale
-frame against the enhanced, and what it means — by BLOCKS of change, not every
-wiggle, with the readings as the evidence and the frames as support.
+the flight's readings and the plan it flew, runs clean → classify → interpret
+ONCE over the whole flight, and writes
+<data folder>/results/<flight id>/result.json. The owner's ask (2026-10-09):
+the dirty data against the clean, and what it means — by BLOCKS of change,
+not every wiggle, with the readings as the evidence.
 
 --------------------------------------------------------------------------------
 2. WHERE IT LIVES
 --------------------------------------------------------------------------------
-backend/agent/dronedeck/pipeline/contracts.py    the types — contract v2
+backend/agent/dronedeck/pipeline/contracts.py    the types — contract v3
 backend/agent/dronedeck/pipeline/sources.py      LocalFlightSource
 backend/agent/dronedeck/pipeline/sinks.py        LocalResultSink, to_jsonable
 backend/agent/dronedeck/pipeline/runner.py       run_stages, run_flight
@@ -90,32 +98,37 @@ backend/agent/tests/pipeline/                      fixture, conformance, tests
 3. DECISIONS
 --------------------------------------------------------------------------------
 • ON THE LAPTOP, IN THE AGENT — not Supabase. Edge Functions are Deno only with
-  2 s of CPU a request; the laptop has every frame the moment the drone lands
-  (the cloud gets the captured ones, at most 2 a second); only the laptop can steer the drone, which
-  stories 4.9 and 4.10 need. PORTS AND ADAPTERS (FlightSource, ResultSink),
+  2 s of CPU a request; the laptop has every reading the moment the drone
+  lands, and needs no network to judge them. PORTS AND ADAPTERS (FlightSource, ResultSink),
   stages chosen in one composition root: a cloud worker later is two adapters.
 • THE UNIT OF WORK IS THE FLIGHT (contract v2, 2026-10-09 — CHANGED from one
   inspection point). A block of unusual readings can start in transit and end
   at a point; a stage that sees one point at a time cannot find it, and v1
-  never analysed transit at all. Readings and frames carry their point_id;
-  interpret gives every point its verdict from them.
-• FRAMES ARE PER SESSION, so a flight's frames are the session's frames taken
-  between its first and last reading.
+  never analysed transit at all. Readings carry their point_id; interpret
+  gives every point its verdict from them.
+• AFTER THE DATA HAS ARRIVED, NEVER IN FLIGHT (2026-11-15, contract v3). A
+  flight is processed once it has landed and its CSV is closed. Story 4.9's
+  live verdicts — the flight so far judged as each point's hold ended — were
+  removed: the owner's ask is offline processing of what has arrived.
+• NO CAMERA, NO FRAMES (2026-11-15, contract v3). v2 handed every stage the
+  session's frames, enhanced them (clahe@1), measured the view change
+  (scene@1) and attached frames to each finding. The AI deck is off the
+  drone, so all of that went; a finding rests on the readings alone. Photos
+  are taken by hand and classified on their own (story 4.4).
 • A STAGE THAT FAILS OR BREAKS THE CONTRACT never takes the flight with it:
   clean failing leaves every point insufficient_data (unchecked readings are
-  not analysed); enhance failing falls back to originals; classify failing
-  labels everything unknown; interpret failing leaves every point
-  insufficient_data; each failure recorded with its reason.
+  not analysed); classify failing labels the sensors unknown; interpret
+  failing leaves every point insufficient_data; each failure recorded with
+  its reason.
 • NO INVENTED THRESHOLD. Every number in a stage cites a measurement file:
-  ml/sensor-faults/MEASUREMENTS.txt, ml/enhance-eval/RESULTS.txt,
-  ml/anomaly-eval/MEASUREMENTS.txt. Severities are tied to the measured wander
+  ml/sensor-faults/MEASUREMENTS.txt, ml/anomaly-eval/MEASUREMENTS.txt. Severities are tied to the measured wander
   of normal flights and stay PROVISIONAL until a real heat source is measured.
-• THE TELEMETRY IS THE SOURCE OF TRUTH; AN IMAGE ONLY SUPPORTS IT (the owner).
-  No finding is made from a frame; frames are attached as evidence.
-• RUNTIME DEPENDENCIES: numpy (clean, classify), opencv-python-headless
-  (enhance). OpenCV doubled the frozen agent (43 → 86 MB), verified by
-  build_sidecar.py's self-test. scipy and ruptures are NOT shipped (ruptures
-  is a test dependency, the reference PELT).
+• THE TELEMETRY IS THE SOURCE OF TRUTH (the owner). A photo's verdict never
+  makes or changes a finding.
+• RUNTIME DEPENDENCIES: numpy (clean, classify). opencv-python-headless is no
+  longer used by a stage; it stays for the photo classifier (story 4.4).
+  scipy and ruptures are NOT shipped (ruptures is a test dependency, the
+  reference PELT).
 • THE DPP SWITCH (2026-09-29; moved and defaulted 2026-10-09): at the TOP of
   the Control page in Auto and Manual alike, ON BY DEFAULT IN BOTH (Manual was
   off until the owner asked). Settable before a session starts or during one;
@@ -129,12 +142,22 @@ backend/agent/tests/pipeline/                      fixture, conformance, tests
 • PROCESSING RESUMES WHEN THE APP STARTS AGAIN (2026-10-09, the owner's ask):
   flights left pending, queued or running are queued again, in the
   background; a FAILED one is not retried unasked. Each laptop processes its
-  OWN flights — it holds every reading and frame. DRONEDECK_RESUME=0 turns
+  OWN flights — it holds every reading. DRONEDECK_RESUME=0 turns
   it off; the tests turn it off (tests/conftest.py).
 
 --------------------------------------------------------------------------------
 4. INVARIANTS
 --------------------------------------------------------------------------------
+• Nothing is processed while the drone flies: processing.py has two kinds of
+  job, "flight" and "session", both queued after the data has arrived.
+• CLOSING THE QUEUE STARTS NOTHING THAT WAS WAITING (ProcessingQueue.close,
+  the agent's shutdown). A job started then outlives the agent and its result
+  is never recorded, so the next start runs it again. Decided by `_closed`,
+  not by where the stop marker sits: on feat/no-camera the marker became a
+  FIFO entry and every waiting job — session.end()'s own included — ran after
+  close() (found and fixed 2026-11-16; test_processing.py
+  test_closing_starts_nothing_that_was_still_waiting, and the child started
+  during close() is stopped too).
 • The pipeline imports nothing from flight, session, api, sync or camera —
   tests/pipeline/test_conformance.py rule 1, per implementation. (safety is
   allowed: the cleaner imports the flight guard's speed limit, one number.)
@@ -153,8 +176,6 @@ backend/agent/tests/pipeline/                      fixture, conformance, tests
 --------------------------------------------------------------------------------
 consumed-by       clean.txt
                   the contract the cleaner implements; the runner calls it
-consumed-by       enhance.txt
-                  the contract the enhancer implements
 consumed-by       classify.txt
                   the contract the classifier implements
 consumed-by       interpret.txt
@@ -162,18 +183,16 @@ consumed-by       interpret.txt
 consumed-by       results.txt
                   result.json, which is uploaded and shown
 depends-on        ../missions/mission-controller.txt
-                  point_id on readings and frames; the plan flown
+                  point_id on readings; the plan flown
 depends-on        ../backend/telemetry-stream.txt
                   the flight CSV's columns are TelemetryRow's fields
-depends-on        ../desktop/camera.txt
-                  frames.csv and the frames folder of a session
 shares-data-with  ../backend/session-history.txt
                   sessions/<id>/meta.json names each session's flights, and
                   carries each one's processing state (what the resume reads)
 depends-on        ../backend/sessions-and-modes.txt
                   the session decides per flight whether it is processed
 consumed-by       ../desktop/auto-control.txt
-                  the DPP switch and the results on ② and ③
+                  the DPP switch and the results after landing
 shares-data-with  ../desktop/mission-playback.txt
                   the same flight files, found the same way (sources.py
                   LocalFlightSource): playback reads them back to watch
@@ -181,9 +200,5 @@ depends-on        ../backend/agent-api.txt
                   POST /session/processing, GET /flights/{id}/result
 consumed-by       session.txt
                   the contract's scope and period_s; run_session beside run_flight
-consumed-by       live.txt
-                  run_live_point: the flight so far, FlightContext.mode "live"
-consumed-by       scene.txt
-                  ClassifyResult.views, FrameRecord.view_change
 consumed-by       calibrate.txt
                   the stages, run again over the hand-warmer flights

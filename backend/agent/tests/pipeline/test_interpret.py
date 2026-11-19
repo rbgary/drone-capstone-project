@@ -1,6 +1,5 @@
-"""Interpret (stage 4), findings@1: events → findings with a severity and words,
-and a verdict per inspection point. The telemetry is the evidence; the frames
-only support it."""
+"""Interpret (stage 3), findings@1: events → findings with a severity and words,
+and a verdict per inspection point. The telemetry is the evidence."""
 
 from __future__ import annotations
 
@@ -13,13 +12,8 @@ import pytest
 from dronedeck.pipeline.contracts import (
     ClassifyResult,
     CleanResult,
-    EnhancedFrame,
-    EnhanceResult,
     Event,
     FlightContext,
-    Frame,
-    FrameQuality,
-    ImageVerdict,
     InspectionPoint,
     Label,
     PointData,
@@ -38,8 +32,6 @@ START = datetime(2026, 10, 9, 8, 0, tzinfo=UTC)
 FEATURES = {"temp_event_minimum_c": 0.8, "pressure_event_minimum_hpa": 0.2}
 POINTS = (InspectionPoint("P1", None, 0.5, 0.2, 0.4), InspectionPoint("P2", None, 1.0, 0.2, 0.4),
           InspectionPoint("P3", None, 1.5, 0.2, 0.4))
-GOOD = FrameQuality(200.0, 60.0, 0.0, 0.0, True)
-DARK = FrameQuality(5.0, 6.0, 0.9, 0.0, False, "too dark: mean 6 of 255")
 
 
 def event(peak: float = 3.0, *, signal: str = "temperature", unit: str = "C",
@@ -52,7 +44,7 @@ def event(peak: float = 3.0, *, signal: str = "temperature", unit: str = "C",
                  z_m=0.41 if placed else None)
 
 
-def flight_data(frames: tuple[Frame, ...] = ()) -> PointData:
+def flight_data() -> PointData:
     readings = []
     for i in range(700):
         t = i * 0.1
@@ -60,7 +52,7 @@ def flight_data(frames: tuple[Frame, ...] = ()) -> PointData:
         readings.append(Reading(i, START + timedelta(seconds=t), t,
                                 {"raw_temp": 30.0, "station_pressure_hpa": 1016.0},
                                 point_id=pid))
-    return PointData(InspectionPoint("flight", None, 0, 0, 0), tuple(readings), frames)
+    return PointData(InspectionPoint("flight", None, 0, 0, 0), tuple(readings))
 
 
 def tracks(model: str = "linear") -> tuple[Track, ...]:
@@ -68,16 +60,15 @@ def tracks(model: str = "linear") -> tuple[Track, ...]:
             Track("pressure", "station_pressure_hpa", "hPa", model, 0.015, (), (), ()))
 
 
-def run(events: tuple[Event, ...] = (), *, frames: tuple[Frame, ...] = (),
-        enhanced: tuple[EnhancedFrame, ...] = (), points=POINTS, model: str = "linear",
+def run(events: tuple[Event, ...] = (), *, points=POINTS, model: str = "linear",
         fitted: bool = True):
-    data = flight_data(frames)
+    data = flight_data()
     classified = ClassifyResult(
-        (), Label("faulty" if events else "normal", None, "blocks@1"), FEATURES,
+        Label("faulty" if events else "normal", None, "blocks@1"), FEATURES,
         tracks=tracks(model) if fitted else (), events=events)
     ctx = FlightContext("flight-1", None, "C", None, START, Path("/tmp"), points=points)
     return FindingInterpreter().interpret(data, CleanResult(data.readings, ()),
-                                          EnhanceResult(enhanced), classified, ctx)
+                                          classified, ctx)
 
 
 @pytest.mark.parametrize(("peak", "expected"), [
@@ -122,49 +113,6 @@ def test_an_event_in_transit_with_no_position_says_both():
     (finding,) = run((event(-2.0, points=(), placed=False),)).findings
     assert "between inspection points (position not measured)" in finding.sentence
     assert "below" in finding.sentence and finding.title.startswith("Cooler")
-
-
-def test_frames_during_the_stretch_are_evidence_and_never_the_verdict():
-    frames = tuple(Frame(s, START, t, Path(f"/f/{s}.png"), 324, 244, None, None, None)
-                   for s, t in ((1, 10.0), (2, 41.5), (3, 48.0), (4, 56.0), (5, 70.0)))
-    enhanced = tuple(EnhancedFrame(f, None, "clahe", 1,
-                                   quality=DARK if f.seq == 3 else GOOD) for f in frames)
-    (finding,) = run((event(3.0),), frames=frames, enhanced=enhanced).findings
-    assert finding.evidence_frames == (2, 4)                 # inside ±1 s; 3 unreadable
-    assert finding.image_support == "cannot_tell"
-    assert "2 readable frames" in finding.image_note
-
-
-def test_an_image_model_can_support_or_contradict_but_never_decide():
-    frames = tuple(Frame(s, START, t, Path(f"/f/{s}.png"), 324, 244, None, None, None)
-                   for s, t in ((2, 44.0), (3, 48.0)))
-    enhanced = tuple(EnhancedFrame(f, None, "clahe", 1, quality=GOOD) for f in frames)
-
-    def with_labels(*values: str):
-        data = flight_data(frames)
-        images = tuple(ImageVerdict(f.seq, "original", Label(v, 0.9 if v == "faulty" else 0.1,  # type: ignore[arg-type]
-                                                             "faulty-v1@1"))
-                       for f, v in zip(frames, values, strict=True))
-        classified = ClassifyResult(images, Label("faulty", None, "blocks@1"), FEATURES,
-                                    tracks=tracks(), events=(event(3.0),))
-        ctx = FlightContext("flight-1", None, "C", None, START, Path("/tmp"), points=POINTS)
-        (f,) = FindingInterpreter().interpret(data, CleanResult(data.readings, ()),
-                                              EnhanceResult(enhanced), classified, ctx).findings
-        return f
-
-    assert with_labels("faulty", "normal").image_support == "supports"
-    against = with_labels("normal", "normal")
-    assert against.image_support == "contradicts" and "the readings stand" in against.image_note
-    assert against.severity == "warning"                     # the image did not overrule it
-
-
-def test_no_frames_and_unreadable_frames_are_said_plainly():
-    (none,) = run((event(3.0),)).findings
-    assert none.image_note == "No camera frames were taken during this stretch."
-    frame = Frame(9, START, 45.0, Path("/f/9.png"), 324, 244, None, None, None)
-    (dark,) = run((event(3.0),), frames=(frame,),
-                  enhanced=(EnhancedFrame(frame, None, "clahe", 1, quality=DARK),)).findings
-    assert dark.evidence_frames == () and "none can be read (too dark)" in dark.image_note
 
 
 def test_the_point_with_a_warning_is_an_anomaly_and_the_others_are_not():
