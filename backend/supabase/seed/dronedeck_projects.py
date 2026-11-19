@@ -44,8 +44,13 @@ from typing import Any
 
 PDF = "/docs/dronedeck-project-management-planning.pdf"
 NEVER_TOUCH = {"design-document"}
+# The starter projects' slugs as seed/portfolio.py created them (2026-09).
+# The 2026-10-25 rename changed "cropwatcher" here to "dronedeck" — the
+# overview's own slug — so --apply wrote the overview and then set it to draft
+# (caught 2026-11-19 by the dry run's "draft dronedeck"). A slug not in the
+# database is skipped, so this is safe whatever that row is called now.
 RETIRE = [
-    "dronedeck", "flight-safety", "desktop-flight-app",
+    "cropwatcher", "flight-safety", "desktop-flight-app",
     "operator-dashboard", "temperature-correction", "offline-flight-data",
 ]
 
@@ -951,6 +956,8 @@ def main() -> None:
     existing = {r["slug"]: r for r in api.request("GET", "/rest/v1/projects?select=id,slug,status")}
     for slug in NEVER_TOUCH:
         assert all(proj["slug"] != slug for proj in PROJECTS) and slug not in RETIRE
+    if clash := sorted({proj["slug"] for proj in PROJECTS} & set(RETIRE)):
+        sys.exit(f"{', '.join(clash)} is both written and set to draft — refusing to write anything.")
 
     print("\n  " + ("Writing" if args.apply else "Plan (dry run — add --apply to write)") + ":\n")
     for order, proj in enumerate(PROJECTS, start=1):
