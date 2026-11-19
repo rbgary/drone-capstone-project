@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Install DroneDeck from a terminal, on macOS, Windows or Linux, in one command:
 //
-//   git clone https://github.com/samsmoak/drone-capstone.git
+//   git clone https://github.com/rbgary/drone-capstone-project.git
 //   cd drone-capstone
 //   node scripts/install.mjs
 //

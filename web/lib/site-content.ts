@@ -565,7 +565,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
           "Node.js 24 — from nodejs.org",
         ],
         commands: [
-          "git clone https://github.com/samsmoak/drone-capstone.git",
+          "git clone https://github.com/rbgary/drone-capstone-project.git",
           "cd drone-capstone",
           "node scripts/install.mjs",
         ],
@@ -590,7 +590,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
           "Node.js 24 — from nodejs.org",
         ],
         commands: [
-          "git clone https://github.com/samsmoak/drone-capstone.git",
+          "git clone https://github.com/rbgary/drone-capstone-project.git",
           "cd drone-capstone",
           "node scripts/install.mjs",
         ],
@@ -618,7 +618,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
           "Node.js 24 — from nodejs.org",
         ],
         commands: [
-          "git clone https://github.com/samsmoak/drone-capstone.git",
+          "git clone https://github.com/rbgary/drone-capstone-project.git",
           "cd drone-capstone",
           "node scripts/install.mjs",
         ],

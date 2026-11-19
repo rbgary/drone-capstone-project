@@ -8,7 +8,7 @@ or moved. CLAUDE.md outranks this file wherever they disagree.
 
 REPOS  (the docs hub is the repo holding docs/)
   drone-capstone  <- docs hub, and the ONLY repo in this project (a monorepo)
-    path       the repository root (github.com/samsmoak/drone-capstone, public)
+    path       the repository root (github.com/rbgary/drone-capstone-project, public)
     mainline   main — owner-only ruleset (id 23996708): PRs, merged with --admin
     committers one owner, two identities: samsmoaky@gmail.com (local commits)
                and the GitHub noreply address (squash merges done on GitHub)
@@ -107,7 +107,7 @@ SHIP
                One implementation, never two: an experiment that replaces a
                teammate's ticket rewrites that ticket in the PR that lands it.
   deploy       web: Vercel, Root Directory = web (never give the agent a FastAPI
-               entrypoint). SINCE 2026-10-25 https://drone-capstone.vercel.app
+               entrypoint). SINCE 2026-10-25 https://drone-capstone-project.vercel.app
                is served by the LAB project (dronedeck-lab: private repo,
                experiment/samuel), at the owner's ask (main caught up with
                the lab whole on 2026-10-26, integrate/lab-2026-10-26); the public project (drone-capstone, main) has no friendly

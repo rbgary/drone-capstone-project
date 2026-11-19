@@ -6,7 +6,7 @@ WHAT IT IS
 DroneDeck is installed from a terminal, not downloaded. On any Mac (Apple
 silicon or Intel), Windows PC or Linux PC:
 
-  git clone https://github.com/samsmoak/drone-capstone.git
+  git clone https://github.com/rbgary/drone-capstone-project.git
   cd drone-capstone
   node scripts/install.mjs
 

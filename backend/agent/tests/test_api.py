@@ -169,8 +169,8 @@ class TestLiveSocket:
 
 class TestCors:
     def test_the_site_may_read_health(self, client):
-        response = client.get("/health", headers={"origin": "https://drone-capstone.vercel.app"})
-        assert response.headers["access-control-allow-origin"] == "https://drone-capstone.vercel.app"
+        response = client.get("/health", headers={"origin": "https://drone-capstone-project.vercel.app"})
+        assert response.headers["access-control-allow-origin"] == "https://drone-capstone-project.vercel.app"
 
     def test_an_unknown_site_gets_no_grant(self, client):
         response = client.get("/health", headers={"origin": "https://evil.example"})
@@ -178,7 +178,7 @@ class TestCors:
 
     def test_a_website_may_not_preflight_a_command(self, client):
         response = client.options("/session/start", headers={
-            "origin": "https://drone-capstone.vercel.app",
+            "origin": "https://drone-capstone-project.vercel.app",
             "access-control-request-method": "POST",
         })
         assert response.status_code == 400
@@ -208,7 +208,7 @@ class TestCors:
 
     def test_private_network_preflight_is_answered(self, client):
         response = client.options("/health", headers={
-            "origin": "https://drone-capstone.vercel.app",
+            "origin": "https://drone-capstone-project.vercel.app",
             "access-control-request-method": "GET",
             "access-control-request-private-network": "true",
         })
@@ -272,7 +272,7 @@ class TestCorsRefusalLog:
 
     def test_a_refused_method_is_logged(self, client, caplog):
         with caplog.at_level("WARNING", logger=rest.log.name):
-            self._preflight(client, "https://drone-capstone.vercel.app")
+            self._preflight(client, "https://drone-capstone-project.vercel.app")
         assert any("method not allowed" in r.getMessage() for r in caplog.records)
 
     def test_a_retrying_page_is_logged_once(self, client, caplog):
