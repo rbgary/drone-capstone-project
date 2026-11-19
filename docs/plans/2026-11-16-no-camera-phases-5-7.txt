@@ -1,3 +1,7 @@
+This file was modified on 11/18/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It notes that OpenCV must go back into the
+frozen agent's self-test when the photo classifier is built.
+
 NO CAMERA, PHASES 5–7 — photos taken by hand, classified, and on the web
 ================================================================================
 Written 2026-11-16. Branch: feat/no-camera. Waiting on: Reagan's classifier.
@@ -118,9 +122,15 @@ CLASSIFY (agent, after arrival — never in flight)
     Adding a photo never re-runs a flight's sensor analysis.
   - Output: results/sessions/<id>/photos.json — per photo: label, p_faulty,
     model "<name>@<version>", reason when unknown, classified_at.
-  - NEW DEPENDENCY: onnxruntime (opencv-python-headless is already in for
-    image work). Into the frozen agent too; measure its size (OpenCV took it
-    43 → 86 MB, dpp-contract.txt rule 11).
+  - NEW DEPENDENCY: onnxruntime. Into the frozen agent too; measure its size
+    (OpenCV took it 43 → 86 MB, dpp-contract.txt rule 11).
+  - OPENCV IS NOT IN THE FROZEN AGENT. opencv-python-headless is still in
+    pyproject.toml, so the venv has it, but since the camera code went no
+    module imports cv2, so PyInstaller leaves it out (the agent is 44 MB).
+    "cv2" came off cli.py SELFTEST_MODULES on 2026-11-18 for that reason: the
+    build failed verifying it. If the classifier uses OpenCV, put "cv2" back
+    in SELFTEST_MODULES in the same change, or the installed app breaks the
+    first time it handles a photo while every test still passes.
   - A photo's verdict never makes or changes a sensor finding: the
     telemetry stays the evidence (the owner, 2026-10-09).
 
