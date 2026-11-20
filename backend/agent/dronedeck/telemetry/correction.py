@@ -27,6 +27,8 @@ import time
 from dataclasses import dataclass
 from enum import StrEnum
 
+from dronedeck.telemetry.heat_bias import HeatBiasModel
+
 # Dry-air gas constant, J/(kg·K). Used for the air-density calculation.
 R_DRY_AIR = 287.05
 # ISA standard sea-level pressure, hPa.
@@ -80,6 +82,15 @@ class CorrectionTuning:
     scale_cooling: float = 0.62
     scale_power: float = 0.78
 
+    # How fast the board cools once the motors start, s. NOT from the original
+    # capstone: the scale above is where the offset ends up, but the board
+    # takes tens of seconds to get there, so a step to it at takeoff read
+    # 2-4.5 °F warm for the first 20 s (lab flights 2026-11-07, 7148a651 and
+    # fca56de0, against a 71.1 °F room). The scale now slides from scale_idle
+    # to its band's value with this time constant. Replaying both flights,
+    # 20 s fit best: mean in-flight error 2.4 °F -> 0.2 °F. 0 = the old step.
+    flight_cooling_tau_s: float = 20.0
+
 
 @dataclass
 class CorrectionResult:
@@ -99,6 +110,9 @@ class CorrectionResult:
     mode: Mode
     state: ThermalState
     event: str
+    #: CPU + thrust heat removed on top of the offset (heat_bias.py), °C.
+    #: 0.0 unless the engine was given a fitted HeatBiasModel.
+    heat_bias_c: float = 0.0
 
 
 class ThermalEngine:
@@ -114,8 +128,13 @@ class ThermalEngine:
         initial_raw_c: float,
         initial_ambient_c: float,
         tuning: CorrectionTuning | None = None,
+        heat_bias: HeatBiasModel | None = None,
     ) -> None:
         self.tuning = tuning or CorrectionTuning()
+        #: Optional CPU-warm-up and thrust-heat correction (sprint 3, task 7).
+        #: None keeps the validated behaviour exactly.
+        self.heat_bias = heat_bias
+        self._started = time.monotonic()
 
         self._ema_c = initial_raw_c
         self._prev_ema_c = initial_raw_c
@@ -129,23 +148,34 @@ class ThermalEngine:
         self.event = "Initialized"
 
         self._last_update = time.monotonic()
+        # When the motors last started, for the takeoff cooling ramp; None on the ground.
+        self._flight_started: float | None = None
         self._env_suspect = 0
         self._stable_suspect = 0
         self._transition_settled = 0
 
     # ── state ────────────────────────────────────────────────────────────
 
-    def _scaling_for(self, thrust: int) -> float:
-        """Airflow over the board scales the idle offset down in flight."""
+    def _scaling_for(self, thrust: int, now: float) -> float:
+        """Airflow over the board scales the idle offset down in flight —
+        gradually, because the board takes time to cool (flight_cooling_tau_s)."""
         t = self.tuning
         if thrust == 0:
             self.state = ThermalState.IDLE
+            self._flight_started = None
             return t.scale_idle
+        if self._flight_started is None:
+            self._flight_started = now
         if thrust < t.thrust_cooling_ceiling:
             self.state = ThermalState.FLIGHT_COOLING
-            return t.scale_cooling
-        self.state = ThermalState.FLIGHT_POWER
-        return t.scale_power
+            target = t.scale_cooling
+        else:
+            self.state = ThermalState.FLIGHT_POWER
+            target = t.scale_power
+        if t.flight_cooling_tau_s <= 0:
+            return target
+        settled = 1.0 - math.exp(-(now - self._flight_started) / t.flight_cooling_tau_s)
+        return t.scale_idle + (target - t.scale_idle) * settled
 
     def _enter_transition(self, reason: str) -> None:
         self.mode = Mode.TRANSITION
@@ -174,18 +204,25 @@ class ThermalEngine:
         roc = (self._ema_c - self._prev_ema_c) / dt
         self._prev_ema_c = self._ema_c
 
-        scaling = self._scaling_for(thrust)
+        scaling = self._scaling_for(thrust, now)
         expected_raw_c = self.ambient_est_c + self.idle_offset_c * scaling
         deviation_c = self._ema_c - expected_raw_c
         corrected_c = self._ema_c - self.idle_offset_c * scaling
 
         # Only re-estimate while the motors are off. In flight, airflow makes
         # the thermal model unreliable and the estimates would chase noise.
+        bias_c = 0.0
+        if self.heat_bias is not None:
+            bias_c = self.heat_bias.update(now - self._started, thrust)
+            expected_raw_c += bias_c
+            deviation_c -= bias_c
+            corrected_c -= bias_c
+
         if thrust == 0:
             expected_raw_c, deviation_c = self._update_estimates(
                 roc, deviation_c, corrected_c, expected_raw_c
             )
-            corrected_c = self._ema_c - self.idle_offset_c * scaling
+            corrected_c = self._ema_c - self.idle_offset_c * scaling - bias_c
 
         return CorrectionResult(
             raw_temp_c=raw_temp_c,
@@ -202,6 +239,7 @@ class ThermalEngine:
             mode=self.mode,
             state=self.state,
             event=self.event,
+            heat_bias_c=bias_c,
         )
 
     def _update_estimates(

@@ -7,9 +7,13 @@ numbers came from flights against a reference thermometer, not from theory.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
+from dronedeck.telemetry import correction
 from dronedeck.telemetry.correction import (
+    CorrectionTuning,
     Mode,
     ThermalEngine,
     ThermalState,
@@ -39,18 +43,82 @@ def test_corrected_temperature_starts_at_ambient():
     assert result.thermal_offset_c == pytest.approx(3.0, abs=0.01)
 
 
-def test_flight_scales_the_offset_down():
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def clock(monkeypatch) -> Clock:
+    c = Clock()
+    monkeypatch.setattr(correction.time, "monotonic", c)
+    return c
+
+
+def test_flight_scales_the_offset_down(clock):
     """Airflow cools the board, so less of the raw reading is self-heating."""
     engine = ThermalEngine(IDLE_RAW_C, AMBIENT_C)
     idle = feed(engine, IDLE_RAW_C, thrust=0)
 
     engine_flight = ThermalEngine(IDLE_RAW_C, AMBIENT_C)
+    feed(engine_flight, IDLE_RAW_C, thrust=40000)
+    clock.now += 120.0  # long past the cooling ramp
     flying = feed(engine_flight, IDLE_RAW_C, thrust=40000)
 
     # Same raw reading, but in flight less is attributed to self-heating,
     # so the corrected value is higher.
     assert flying.corrected_temp_c > idle.corrected_temp_c
     assert flying.state is ThermalState.FLIGHT_POWER
+    assert flying.corrected_temp_c == pytest.approx(
+        IDLE_RAW_C - 3.0 * CorrectionTuning().scale_power, abs=0.01)
+
+
+class TestTakeoffCoolingRamp:
+    """The board cools over tens of seconds after takeoff, not at once
+    (flights 7148a651 and fca56de0, 2026-11-07, read 2-4.5 °F warm early)."""
+
+    def corrected_at(self, clock, engine, secs: float) -> float:
+        clock.now += secs
+        return feed(engine, IDLE_RAW_C, thrust=40000).corrected_temp_c
+
+    def test_takeoff_starts_from_the_ground_offset(self, clock):
+        engine = ThermalEngine(IDLE_RAW_C, AMBIENT_C)
+        first = feed(engine, IDLE_RAW_C, thrust=40000)
+        # At the moment of takeoff the whole ground offset is still there.
+        assert first.corrected_temp_c == pytest.approx(AMBIENT_C, abs=0.01)
+
+    def test_scale_reaches_63_percent_at_one_time_constant(self, clock):
+        tuning = CorrectionTuning()
+        engine = ThermalEngine(IDLE_RAW_C, AMBIENT_C)
+        feed(engine, IDLE_RAW_C, thrust=40000)
+        got = self.corrected_at(clock, engine, tuning.flight_cooling_tau_s)
+        scale = 1.0 + (tuning.scale_power - 1.0) * (1.0 - math.exp(-1.0))
+        assert got == pytest.approx(IDLE_RAW_C - 3.0 * scale, abs=0.01)
+
+    def test_corrected_rises_steadily_during_the_ramp(self, clock):
+        engine = ThermalEngine(IDLE_RAW_C, AMBIENT_C)
+        feed(engine, IDLE_RAW_C, thrust=40000)
+        readings = [self.corrected_at(clock, engine, 5.0) for _ in range(12)]
+        assert readings == sorted(readings)
+        assert readings[-1] - readings[0] > 0.3
+
+    def test_landing_restarts_the_ramp(self, clock):
+        engine = ThermalEngine(IDLE_RAW_C, AMBIENT_C)
+        feed(engine, IDLE_RAW_C, thrust=40000)
+        self.corrected_at(clock, engine, 120.0)
+        feed(engine, IDLE_RAW_C, thrust=0)
+        clock.now += 1.0
+        again = feed(engine, IDLE_RAW_C, thrust=40000)
+        assert again.corrected_temp_c == pytest.approx(AMBIENT_C, abs=0.05)
+
+    def test_zero_time_constant_is_the_old_instant_step(self, clock):
+        engine = ThermalEngine(IDLE_RAW_C, AMBIENT_C, CorrectionTuning(flight_cooling_tau_s=0.0))
+        first = feed(engine, IDLE_RAW_C, thrust=40000)
+        assert first.corrected_temp_c == pytest.approx(
+            IDLE_RAW_C - 3.0 * CorrectionTuning().scale_power, abs=0.01)
 
 
 def test_thrust_bands_select_different_scaling():

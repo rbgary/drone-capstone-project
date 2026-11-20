@@ -78,6 +78,7 @@ from dronedeck.mission.plan.store import NotFound, PlanStore
 from dronedeck.mission.plan.validate import errors, flyable_bound
 from dronedeck.paths import flights_dir
 from dronedeck.processing import SESSION, Job, JobState, ProcessingQueue
+from dronedeck.safety.battery_monitor import BatteryMonitor, motors_running
 from dronedeck.safety.flight_guard import Action as GuardAction
 from dronedeck.safety.flight_guard import Reason as GuardReason
 from dronedeck.safety.flight_guard import Verdict as GuardVerdict
@@ -347,6 +348,9 @@ class Session:
         self._recorder: FlightRecorder | None = None
         self._flight_id: str | None = None
         self._unsubscribe_telemetry: Callable[[], None] | None = None
+        #: Says when the battery falls under 30 % (sprint 3, task 19). Reports
+        #: only; the guard and the firmware still decide when to land.
+        self._battery = BatteryMonitor()
         self.history: SessionLog | None = None
         # The floor, in the estimator frame the current flight is using. The
         # checks' ground unless an unassisted flight re-read it from the baro.
@@ -806,6 +810,7 @@ class Session:
         # Live telemetry reaches the app's windows from the moment the link is
         # open — before, during and after a flight.
         if link.stream is not None:
+            self._battery.reset()
             self._unsubscribe_telemetry = link.stream.subscribe(self._publish_telemetry)
         return link
 
@@ -970,6 +975,12 @@ class Session:
     def _publish_telemetry(self, snap: Any) -> None:
         ground = self._height_reference
         z = snap.get("stateEstimate.z")
+        battery = self._battery.update(snap.get("pm.vbat"), time.monotonic(),
+                                       motors_running(snap))
+        if battery.just_went_low:
+            log.warning(battery.message())
+            self._emit("battery_low", {**battery.to_dict(), "message": battery.message(),
+                                       "session_id": self._snapshot.session_id})
         self._emit("telemetry", {
             "values": dict(snap.values),
             # No height without a reference: unassisted, before the barometer
@@ -978,6 +989,8 @@ class Session:
             # Whether x and y are a place (flight_guard.position_trusted): the
             # maps and the editor show the drone only when they are.
             "positioned": position_trusted(snap),
+            # Percent and whether it is under 30 % (safety/battery_monitor.py).
+            "battery": battery.to_dict(),
             "at": time.time(),
         })
         history = self.history

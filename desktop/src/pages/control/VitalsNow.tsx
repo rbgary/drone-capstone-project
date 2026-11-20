@@ -37,12 +37,15 @@ export function VitalsNow({ telemetry, session }: {
   const varCm = telemetry ? uncertaintyCm(telemetry.values) : null;
   const canfly = read(telemetry, "sys.canfly");
   const stations = useStationsHeard(telemetry);
+  const battery = telemetry?.battery ?? null;
 
   return (
     <div className="mono grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 text-xs xl:grid-cols-3">
       <Vital
-        label="Battery" value={vbat} unit="V" digits={2}
-        tone={vbat == null ? undefined : vbat < 3.3 ? "critical" : vbat < 3.75 ? "warning" : "good"}
+        label={battery?.percent != null ? `Battery · ${battery.percent}%` : "Battery"}
+        value={vbat} unit="V" digits={2}
+        tone={vbat == null ? undefined
+          : battery?.low || vbat < 3.3 ? "critical" : vbat < 3.75 ? "warning" : "good"}
       />
       <Vital label="Height" value={telemetry?.height_m ?? null} unit="m" digits={2} />
       <Vital
@@ -63,6 +66,17 @@ export function VitalsNow({ telemetry, session }: {
         </p>
       </div>
       <StationsVital stations={stations} />
+      {/* The agent's report, held for a few seconds so a sag under thrust is
+          not a warning (sprint 3, task 19). It warns; it does not land. */}
+      {battery?.low && (
+        <p className="col-span-full font-semibold">
+          <StatusDot tone="critical">
+            {battery.motors_on
+              ? `Battery under ${battery.flight_threshold_v.toFixed(2)} V under load`
+              : `Battery under ${battery.threshold_percent}%`} — finish up and land soon.
+          </StatusDot>
+        </p>
+      )}
     </div>
   );
 }
