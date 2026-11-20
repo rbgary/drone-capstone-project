@@ -1,15 +1,21 @@
+This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records that the manual-control lock was removed;
+anyone on the team may now change how the keys fly the drone.
+
 MANUAL CONTROL — assisted flying from held keys
 ===============================================
 
-LOCKED — 2026-09-30, by the owner (Samuel): "no one should change the manual
-flight control unless I want to make that change". It flies right as it is.
-Do not change how the keys fly the drone — not the keys, the lean, the speeds,
-Shift, or the tuning — without Samuel's say-so in writing. The files are
-fingerprinted (backend/agent/tests/test_manual_control_lock.py) and need his
-review (.github/CODEOWNERS); CLAUDE.md, "Manual flight control is locked".
+NO LONGER LOCKED (2026-11-04, the team). From 2026-09-30 these files were
+locked to Samuel, after a day of well-meant changes that each lost the drone
+in the lab; the lock was a fingerprint test, a CI workflow, CODEOWNERS and a
+CLAUDE.md rule. Samuel left the team and the team removed all four: anyone on
+it may change manual flight. What decides how the keys fly: flight/manual.py,
+flight/keyframe.py, flight/tuning.py, desktop/src/lib/keys.ts and arrows.ts,
+pages/control/ArrowFrame.tsx and App.tsx's keyboard handler. A change to them
+is worth re-flying the ladder in ../../flight-log.txt before relying on it.
 
 
-HOW TO FLY IT (what the operator does, as locked)
+HOW TO FLY IT (what the operator does)
 
   Start           the props idle on the floor. Nothing lifts yet.
   W / S           up / down. Hold W to take off. Let go: it holds that height.
@@ -397,8 +403,7 @@ stopped from — so it arrives instead of coasting past. The goal's velocity is
 computed in the room's frame — the frame the arrows move the point in too —
 and added as it is; the heading never bends it.
 
-fly_to(…, speed_m_s) (2026-10-01, Samuel's ask — re-fingerprinted in
-test_manual_control_lock.py): a mission's own travel speed, refused unless
+fly_to(…, speed_m_s) (2026-10-01, Samuel's ask): a mission's own travel speed, refused unless
 0 < speed ≤ MOVE_SPEED_M_S; None keeps MOVE_SPEED_M_S. It is the only thing
 that changed in manual.py — nothing the keys do.
 
