@@ -23,6 +23,14 @@ WHERE IT LIVES
   backend/supabase/checks/owner_check.py                     its proof (10 checks)
   backend/supabase/migrations/20261011000019_flight_playback.sql  plans, traces
   backend/supabase/checks/playback_check.py                  its proof (20 checks)
+  backend/supabase/migrations/20261118000020_findings_without_camera.sql
+                                                             image_support optional
+                                                             (no camera); APPLIED to
+                                                             the hosted project
+                                                             2026-11-18; proven on the
+                                                             local stack the same day
+  backend/supabase/checks/hosted_schema_check.sql            read-only: does a database
+                                                             hold what 0001–0019 make
   web/types/database.ts                                      generated types —
                                                              regenerated 2026-10-09
                                                              with `supabase gen types
@@ -37,7 +45,34 @@ storage-and-backfill.txt). Verified read-only on hosted: RLS on for both, the
 four policies, grants select + insert to authenticated and nothing to anon.
 Proven before that on the local stack (playback_check.py 20/20).
 
-Applied to the hosted project (fuwojlqpavvfgmqardfo) through 0019 (this line
+THE HOSTED PROJECT MOVED (2026-11-16): the live database is now
+tmswmgwomoabvftdreeb, owned by Kevin; fuwojlqpavvfgmqardfo (Samuel's, below)
+is no longer reachable, so the move could not be compared against it.
+Probed read-only with the publishable key that day: auth answers; all 22
+tables of 0001–0019 exist (the operator tables refuse anonymous, HTTP 401, as
+designed); the public content came across (projects 8, project_members 30,
+team_members 5, site_pages 2, gallery_albums 5, gallery_items 35, their
+stored links already on the new project); installers/latest/manifest.json is
+there. ONE FILE IS MISSING: portfolio-images/gallery/in-the-greenhouse/06.jpg
+(31 of 32 gallery files load). NOT checked: the operator data (sessions, flights, telemetry, results — anonymous cannot read
+them) and auth.users (whether the accounts came across).
+
+THE MIGRATION HISTORY DID NOT MOVE (found 2026-11-18): the schema came
+across, but `migration list` showed every migration local only, so `db push`
+would have run 0001–0019 again. hosted_schema_check.sql (beside the other
+checks) confirmed in the SQL Editor that every table, key column, function,
+trigger and bucket of 0001–0019 is there and every public table has RLS
+(all true); then `migration repair --status applied` for 0001–0019, a dry
+run listing only 0020, and `db push`. `migration list` now shows all 20 on
+both sides; 0020 checked read-only after (image_support nullable, its check
+gone, the retired comment on). WHICH CONNECTION STRING: the direct one
+(db.<ref>.supabase.co) is IPv6 only. It works for the teammates on macOS or
+Windows whose network has IPv6. From WSL, which has no IPv6 route (Kevin's
+machine), it is refused (ECONNREFUSED to a 2600:… address): use the Session
+pooler instead (Dashboard › Connect › Session pooler, port 5432, user
+postgres.<project ref>). Either works with every `supabase` command here.
+
+Applied to the old hosted project (fuwojlqpavvfgmqardfo) through 0019 (this line
 said 0017 until 2026-10-11 — drift: 0018 was already live). 0015–0017
 on 2026-10-09 (`supabase db push --db-url` from .env.team's SUPABASE_DB_URL;
 the live list showed 0001–0014 already there). Verified read-only as the
@@ -61,12 +96,17 @@ THE TABLES
   pipeline_results  ONE ROW PER PROCESSED FLIGHT (migration 20261009000016):
                 the whole result.json — verdicts per point, the cleaner's
                 flags [index, column, kind, reason], the tracks (observed and
-                expected per reading), the blocks, every frame's enhanced
-                copy, quality and label — plus findings_count and
+                expected per reading), the blocks — plus findings_count and
                 worst_severity. Replaced when the flight is processed again.
+                Its frames column is empty since pipeline "4" (no camera) and
+                the web no longer reads it.
   pipeline_findings  ONE ROW PER FINDING: signal, severity, title, sentence,
                 start/end, observed/expected/delta/z, point_ids, position,
-                evidence_frames, image_support. The id is made on the laptop
+                and three RETIRED columns (no camera, 2026-11-15):
+                evidence_frames, image_support, image_note — image_support
+                made optional by 20261118000020, so the agent sends none of
+                them; dropped by a later migration once no laptop runs an
+                older agent. The id is made on the laptop
                 from the flight and the stretch, so a re-process upserts.
                 Both: signed-in read; operators write (findings also delete —
                 a re-process retracts what it no longer finds); anon nothing.

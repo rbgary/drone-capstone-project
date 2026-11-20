@@ -1,8 +1,7 @@
 """`dronedeck setup` — put the drone's software on it from a terminal.
 
 The Set up page's engine (drone_setup.DroneSetup), run as a command: the same
-check, the same parts in the same order, the same battery unplug, the same
-verification and marker. The Set up page shows this command to copy rather
+check and the same parts in the same order. The Set up page shows this command to copy rather
 than an Install button (2026-10-24, Samuel: "put it in a command — which the
 user can run and get the firmware on the drone"), so an install is something
 you watch run, with every step printed, not a button whose progress hides in
@@ -15,7 +14,7 @@ and, if it does, says to quit it.
 
     dronedeck setup                          check, then install what is needed
     dronedeck setup --check                  check only; change nothing
-    dronedeck setup --reinstall camera,wifi  write those parts again too
+    dronedeck setup --reinstall lighthouse   write that part again too
 
 Installed app, no Python: the app's own agent binary is the whole CLI
 (packaging/sidecar.py) — `…/DroneDeck.app/Contents/MacOS/dronedeck-agent
@@ -38,9 +37,9 @@ from dronedeck.drone_setup import PART_LABEL, PART_ORDER, DroneSetup, SetupError
 
 #: Where DroneDeck's agent listens (api/rest.py, cli serve's default).
 AGENT_HEALTH = "http://127.0.0.1:8765/health"
-#: Longest an install may take, battery unplug included (drone_setup waits
-#: UNPLUG_WAIT_S for that alone).
-INSTALL_TIMEOUT_S = 40 * 60
+#: Longest an install may take: main and the positioning deck. (It was 40 min
+#: while the AI deck's battery unplug — up to 5 min alone — was part of it.)
+INSTALL_TIMEOUT_S = 20 * 60
 
 
 def agent_running(url: str = AGENT_HEALTH) -> bool:
@@ -114,7 +113,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         setup.wait(1.0)
     state = setup.state()
     if setup.busy():
-        print("\n  Still running after 40 minutes — something is stuck. Ctrl-C, then run "
+        print("\n  Still running after 20 minutes — something is stuck. Ctrl-C, then run "
               "this again: it continues from where it stopped.\n")
         return 1
     printer.parts(state)
@@ -123,8 +122,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 class _Printer:
-    """Each step once, progress in fifths, and the unplug as loud as a
-    terminal gets: the one step only a person can do."""
+    """Each step once, progress in fifths."""
 
     def __init__(self) -> None:
         self._phase: str | None = None
@@ -133,13 +131,7 @@ class _Printer:
 
     def publish(self, state: dict[str, Any]) -> None:
         phase, current = state.get("phase"), state.get("current")
-        if phase == "unplug" and self._phase != "unplug":
-            print("\a\n  ┌──────────────────────────────────────────────────────────┐"
-                  "\n  │  UNPLUG THE DRONE'S BATTERY NOW. Wait 10 seconds, then    │"
-                  "\n  │  plug it back in. The camera needs a full power-off.      │"
-                  "\n  └──────────────────────────────────────────────────────────┘",
-                  flush=True)
-        elif phase == "installing" and current != self._current and current:
+        if phase == "installing" and current != self._current and current:
             print(f"\n  Installing {PART_LABEL.get(current, current).lower()}…", flush=True)
             self._fifth = -1
         elif phase == "installing":
@@ -147,8 +139,6 @@ class _Printer:
             if fifth != self._fifth:
                 self._fifth = fifth
                 print(f"    {'█' * fifth}{'·' * (5 - fifth)}  {fifth * 20}%", flush=True)
-        elif phase == "verifying" and self._phase != "verifying":
-            print("\n  Checking the camera started…", flush=True)
         self._phase, self._current = phase, current
 
     @staticmethod
@@ -167,7 +157,7 @@ class _Printer:
 
 def add_parser(sub: Any) -> None:
     setup = sub.add_parser(
-        "setup", help="install the drone's software: firmware, positioning deck, camera")
+        "setup", help="install the drone's software: firmware and positioning deck")
     setup.add_argument("--check", action="store_true",
                        help="only read what is installed; change nothing")
     setup.add_argument("--reinstall", metavar="PARTS",

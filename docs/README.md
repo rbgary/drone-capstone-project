@@ -32,11 +32,8 @@ Feature docs are plain `.txt`, grouped by the surface they describe.
 | Doc | What it covers |
 |---|---|
 | [features/desktop/desktop-app.txt](features/desktop/desktop-app.txt) | The shell, the bundled agent sidecar, installers and CI |
-| [features/desktop/camera.txt](features/desktop/camera.txt) | The camera path — test pattern and the AI deck's Wi-Fi stream, the window's one feed, the session's recording, how fast it really is |
-| [features/desktop/camera-firmware.txt](features/desktop/camera-firmware.txt) | The AI deck's two chips: the wire format, why the feed is slow and stalls, the ESP32 throughput patch and the JPEG streamer (built, lab pending) |
-| [features/desktop/capture.txt](features/desktop/capture.txt) | Capture (its own sidebar page): pictures by hand in a session, the auto-capture switch, and which frames count as captured |
-| [features/desktop/setup.txt](features/desktop/setup.txt) | The Set up page: install the camera software on a new drone, then Wi-Fi, then a session |
-| [features/desktop/drone-wifi.txt](features/desktop/drone-wifi.txt) | The drone's camera joins the operator's Wi-Fi, set over the radio: the firmware addition, the flasher, the dialog |
+| [features/desktop/setup.txt](features/desktop/setup.txt) | The Set up page: the drone firmware and positioning deck on a new drone (no AI deck), base station channels, then a session |
+| [features/desktop/drone-wifi.txt](features/desktop/drone-wifi.txt) | drone_wifi, the firmware app kept only for Set up's "main is installed" marker — why it stays (Option A), and the cleanup to stock firmware (Option C) |
 | [features/desktop/pages-and-windows.txt](features/desktop/pages-and-windows.txt) | The sidebar shell, Control's two columns and its console, the five live sensor windows, and how the layout is measured |
 | [features/desktop/manual-room-map.txt](features/desktop/manual-room-map.txt) | Manual's room drawn from the two base stations, the drone in it, F/B/L/R where the keys move it, stations heard |
 | [features/desktop/auto-control.txt](features/desktop/auto-control.txt) | Control in Auto: ① Mission (plan, edit, pick) → ② Check → ③ Fly, the monitor on the right |
@@ -55,14 +52,11 @@ Feature docs are plain `.txt`, grouped by the surface they describe.
 
 | Doc | What it covers |
 |---|---|
-| [features/pipeline/data-pipeline.txt](features/pipeline/data-pipeline.txt) | **The index**: `dronedeck process` — clean → enhance → classify → interpret once over the flight, laptop-first, resumed when the app restarts; the DPP switch (top of Control, on by default); `process --all` |
+| [features/pipeline/data-pipeline.txt](features/pipeline/data-pipeline.txt) | **The index**: `dronedeck process` — clean → classify → interpret once over the flight after it lands, laptop-first, resumed when the app restarts; the DPP switch (top of Control, on by default); `process --all` |
 | [features/pipeline/clean.txt](features/pipeline/clean.txt) | robust@1: sensor faults flagged, never edited — scored against hampel@1 on 66 real flights |
-| [features/pipeline/enhance.txt](features/pipeline/enhance.txt) | clahe@1: clearer copies of dark frames, and each frame's quality |
 | [features/pipeline/classify.txt](features/pipeline/classify.txt) | blocks@1: stretches where temperature or pressure departs from what was expected |
 | [features/pipeline/interpret.txt](features/pipeline/interpret.txt) | findings@1: each stretch judged and put into words, a verdict per point |
-| [features/pipeline/scene.txt](features/pipeline/scene.txt) | scene@1: whether the camera's view changed during a finding — supports it, never contradicts |
 | [features/pipeline/session.txt](features/pipeline/session.txt) | The session itself processed — its 1 Hz samples around the flights, judged on the ground (ground@1), Auto and Manual |
-| [features/pipeline/live.txt](features/pipeline/live.txt) | Live verdicts (story 4.9): each inspection point judged as its hold ends, shown in Progress |
 | [features/pipeline/calibrate.txt](features/pipeline/calibrate.txt) | `dronedeck calibrate`: the hand-warmer flights measured, thresholds recommended — the lab procedure |
 | [features/pipeline/results.txt](features/pipeline/results.txt) | Results on the web: the Processed data page (`/app/processed`), anomalies highlighted in the readings and on the frames with their meaning, the session and flight pages, notified until read |
 
@@ -127,6 +121,8 @@ are the only thing that survives a session.
 [plans/2026-10-09-data-pipeline-v2.txt](plans/2026-10-09-data-pipeline-v2.txt) — the plan for the pipeline built whole: clean, enhance, classify, interpret, results on the web, notifications and owners. What shipped is in features/pipeline/.
 
 [plans/2026-10-09-pipeline-completion.txt](plans/2026-10-09-pipeline-completion.txt) — the pipeline completed: the session processed too, the camera's part (scene@1), live verdicts, calibration, the marks and the error table — and what is still owed.
+
+[plans/2026-11-16-no-camera-phases-5-7.txt](plans/2026-11-16-no-camera-phases-5-7.txt) — **what is next for the no-camera work**: where Phases 0–4 stand on feat/no-camera, what Reagan hands over before Phase 5 (the photo classifier), then photos in the desktop app (5), on the web (6) and the docs sweep (7).
 
 ## Handoffs — work orders given to teammates
 

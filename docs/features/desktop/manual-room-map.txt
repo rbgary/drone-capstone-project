@@ -1,7 +1,7 @@
 ================================================================================
 MANUAL ROOM MAP — the room drawn from the two base stations, the drone in it,
 and where each arrow key moves it, on the Manual page
-Last verified: 2026-10-24 against manual/room-map — agent tests, desktop build,
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/api/rest.py after 53186d2 (/station/space still served; the camera routes it never named are gone). Before that, 2026-10-24 against manual/room-map — agent tests, desktop build,
 harness screenshots. NOT yet flown: no manual flight with both stations heard
 has run on it.
 SOURCE: desktop/src/pages/control/ManualMap.tsx
@@ -119,8 +119,12 @@ harness   "Control · Manual, the room from the stations, flying / on the
   solves every station the record received, and storing writes both
   (bsGeoVal 3). With no light on the deck there is nothing to place the drone
   with — the geometry is not the fault then, the light is.
-• DECKS LOST IS NOT "NOT MEASURED". With the decks unpowered (0 deck
-  memories), the page says to switch the drone off and on, not to Measure.
+• DECKS LOST WAS NOT "NOT MEASURED" (2026-10-24 to 2026-11-15). The page said
+  to switch the drone off and on when the session's decks_lost was set. That
+  flag was worked out from the AI deck, which is off the drone now, so it and
+  its message went (2026-11-15). A positioning deck that is not detected still
+  shows: it is the first stage of the station stages under Measure
+  ("deck" — StationStages, from /station).
 
 --------------------------------------------------------------------------------
 4. INVARIANTS

@@ -24,12 +24,14 @@ WHERE IT LIVES
   backend/agent/dronedeck/paths.py         where the data dir is
   backend/agent/dronedeck/telemetry/sinks.py  CSV first, then cloud
   backend/agent/tests/test_outbox.py, test_syncer.py
+  backend/agent/tests/test_storage_full.py  a full bucket holds back no rows
+  desktop/src/pages/home/HomePage.tsx      the storage message on Home
 
 
 THE ORDER (records reference each other)
 
   audit events -> drones -> sessions -> flights -> telemetry rows -> CSV file
-  -> camera frames -> session vitals (sync/samples.py, Kind.SAMPLES)
+  -> session vitals (sync/samples.py, Kind.SAMPLES)
   -> pipeline results (sync/results.py, Kind.RESULTS)
   -> playback: plan as flown and control trace (LAST: sync/flight_playback.py,
      Kind.PLAYBACK — migration 20261011000019)
@@ -44,11 +46,11 @@ Pipeline results go after them for the same reason (migration
 20261009000016). `dronedeck process --flight` queues one record per flight
 once result.json is written (the agent wakes the syncer when a processing job
 finishes); the syncer waits while the flight's own record is still pending,
-then uploads the enhanced frames from a cursor (to flight-frames/<session>/
-enhanced/<seq>.png, replacing), upserts pipeline_results on flight_id, upserts
-pipeline_findings on their ids, and deletes the flight's findings the new
-result no longer makes. Processing a flight again re-queues it, which resets
-the cursor and replaces what was uploaded. Proved against the local stack
+then upserts pipeline_results on flight_id, upserts pipeline_findings on
+their ids, and deletes the flight's findings the new result no longer makes.
+Processing a flight again re-queues it, which replaces what was uploaded.
+(Until 2026-11-15 it first uploaded the enhanced frames from a cursor; a
+result carries no frames since pipeline "4".) Proved against the local stack
 with the real client, 2026-10-09.
 
 Playback goes last of all (migration 20261011000019), for the same reason:
@@ -68,6 +70,45 @@ wait for a flight row that may not exist yet.
 The sync runs during a flight, when a flight ends, at sign-in, and every minute
 while anything is unsent. The window shows what is pending and will not report
 "all data synced" until the outbox is empty.
+
+
+FILE STORAGE NEVER HOLDS BACK THE ROWS (2026-11-11)
+
+File storage (the flight-logs bucket; flight-frames too until the camera went,
+2026-11-15) and the database are
+separate resources with separate quotas: the free plan has 1 GB of files and
+500 MB of database. Before this, the pass ran in order and one error ended it,
+so a full bucket stopped vitals, results, findings and playback reaching
+Supabase too, and the dashboard quietly stopped updating (found 2026-11-08).
+
+Now every file upload goes through Syncer._store. The first one that storage
+refuses (a StorageError from cloud.py) skips every other file upload for the
+rest of that pass, and the database rows go on without them:
+
+  the flight's CSV     the telemetry rows go; the flight is marked `_rows_sent`
+                       and stays pending (counted in "flights to upload", shown
+                       as "uploading") until the log file is up
+  results, playback    wait for the flight's rows (`_rows_sent` or `_sent`),
+                       not for its log file
+
+The next pass tries storage once more, so uploads resume by themselves once
+space is freed, with nothing sent twice. (The feat/no-camera merge, 2026-11-18,
+dropped this section's two frame cases — the session frames' cursor and a
+result's enhanced frames — with the uploads themselves; the flight's CSV is
+the one file the syncer sends now.)
+
+The window says so: the sync status carries `storage_error` (a sentence) and
+`storage_full`, and Home shows it under the last upload attempt. `last_error`
+stays empty when every row went. "Full" is a guess at the wording, because
+Supabase does not document the refusal and it has not happened here: a 402, or
+"quota" in the error (cloud.storage_quota_refused; a 413 is one file over the
+size limit, not full). Anything else reads "Photos and flight logs did not
+upload". The raw refusal is logged once, when storage starts refusing, so the
+first real one shows what it looks like. A database error still ends the pass
+as before.
+
+Verified 2026-11-11 by tests/test_storage_full.py (14 tests; 5 of them fail
+against the old behaviour), not against a real full bucket.
 
 
 CSV AND SERVER-SIDE BACKFILL
@@ -100,12 +141,11 @@ DECISIONS
 
 INVARIANTS
 
-- CAMERA FRAMES: ONE OUTBOX RECORD PER SESSION, WITH A CURSOR (Kind.FRAMES,
-  camera/recording.py). The syncer uploads the frames frames.csv marks
-  upload=1, advancing "uploaded_through" after each, so an interrupted pass
-  resumes where it stopped; frames.csv goes last, once the session has ended,
-  and only then is the record sent. Not one record per frame: this outbox never
-  deletes a sent record, and that would be ~1,200 files per ten minutes.
+- NO CAMERA FRAMES SINCE 2026-11-15. Kind.FRAMES (one record per session, a
+  cursor through frames.csv) went with the camera. A laptop's unsent frames
+  records stay in <outbox>/frames/ on disk, untouched and never read; nothing
+  deletes them, and the frames already uploaded stay in the flight-frames
+  bucket.
 
 - Write the CSV first, then upload. A local write cannot fail; a flight cannot
   be re-run (CLAUDE.md #6).
@@ -140,8 +180,8 @@ INVARIANTS
 RELATED
 
 consumed-by       ../pipeline/results.txt
-                  Kind.RESULTS: a processed flight's result, findings and
-                  enhanced frames, uploaded near the end of a pass
+                  Kind.RESULTS: a processed flight's result and findings,
+                  uploaded near the end of a pass
 consumed-by       ../desktop/mission-playback.txt
                   Kind.PLAYBACK: a flight's plan as flown and control trace,
                   last in a pass; queued at flight end and, for flights flown
@@ -149,3 +189,7 @@ consumed-by       ../desktop/mission-playback.txt
 consumed-by       ../pipeline/session.txt
                   Kind.SESSION_RESULTS: a session's own result, after the
                   session's row, last in a pass
+shares-data-with  ../supabase/storage-and-backfill.txt
+                  the flight's gzipped CSV in flight-logs and the frames in
+                  flight-frames — one storage quota; when it refuses, the
+                  files wait here and the rows go on

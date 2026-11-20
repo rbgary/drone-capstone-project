@@ -1,7 +1,7 @@
 ================================================================================
 CLEAN — robust@1: flag the values a misbehaving sensor or estimator gave, and
 leave a real event alone
-Last verified: 2026-10-09 against docs/pipeline-v2 — tests/pipeline/
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against tests/pipeline/test_clean.py after 67955b3 (frames dropped from its calls; robust@1 unchanged). Before that, 2026-10-09 against docs/pipeline-v2 — tests/pipeline/
 test_clean.py, ml/sensor-faults/evaluate.py on 66 real flights × 5 seeds.
 SOURCE: backend/agent/dronedeck/pipeline/stages/clean/robust.py
 ================================================================================

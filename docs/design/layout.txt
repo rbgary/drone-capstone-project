@@ -1,9 +1,10 @@
 ================================================================================
 LAYOUT — the rule every screen obeys, in both apps
-Last verified: 2026-10-24 against desktop/camera-capture — the whole desktop harness
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against desktop/src/harness.tsx after the camera went: no Camera, Capture or Wi-Fi sections, and no wifi_scan anywhere in desktop/src or src-tauri; NOT re-run in a browser. Before that, 2026-10-24 against desktop/camera-capture — the whole desktop harness
 with the new Capture sections, at the five widths, both themes: 10 runs PASS,
 the self-test FAIL as it must; screenshots at 720 and 1280 caught Capture
-below the fold, which the DOM measurement passed (features/desktop/capture.txt).
+below the fold, which the DOM measurement passed (the Capture page's doc,
+deleted with the camera 2026-11-15).
 (2026-10-11, against desktop/mission-playback: the whole desktop harness
 (desktop/src/measure.ts), with the new Playback sections, at the five desktop
 widths, both themes: 10 runs PASS, the self-test FAIL as it must; the Playback
@@ -39,7 +40,9 @@ are getting squeezed" — so it is a rule, not a request.
 desktop/src/measure.ts        the measurement: overflow per element
 desktop/src/harness.tsx       every page with worst-case data; ?measure=1,
                               ?theme=light|dark, ?only=<section>, ?map=2d|3d,
-                              ?selftest=1
+                              ?selftest=1; ?agent=<token>&port=<n>&session=<id>
+                              — the session views against a running agent
+                              (BROKEN since 2026-10-24: section 4)
 desktop/src-tauri/tauri.conf.json   the window's minimum width, 720 px
 
 --------------------------------------------------------------------------------
@@ -78,6 +81,22 @@ desktop/src-tauri/tauri.conf.json   the window's minimum width, 720 px
   screenshot it at the widths as well (?only=<section>).
 • A fixed full-screen overlay sits over the whole harness page; measure it in
   its own section (?only=full) so it does not hide the others.
+• ?agent= MODE RENDERED A BLANK PAGE (found 2026-11-08). ITS CAUSE IS GONE
+  SINCE 2026-11-15: DroneWifiForm and every Wi-Fi page were deleted with the
+  camera, and nothing in the window calls wifi_scan any more. NOT re-checked
+  in a browser against a real agent — do that before calling it fixed. The
+  per-section error boundary below is still worth adding. What it was: Its stand-in Tauri bridge (harness.tsx, the
+  __TAURI_INTERNALS__ invoke) answers null to every command but agent_port
+  and agent_token. DroneWifiForm (Setup, Drone Wi-Fi — in the harness since
+  e25e132, 2026-10-24) calls wifi_scan, gets null rather than an error, and
+  reads result.networks: a TypeError in a state update, with no error
+  boundary, so React removes the WHOLE harness. The real app is not affected
+  — its wifi_scan (src-tauri lib.rs) returns a scan or an error, never null;
+  the harness without ?agent= is not either (no bridge: invoke throws, the
+  form catches it). Nothing to do with the drone. What is still worth doing:
+  a per-section error boundary, so one broken page names itself instead of
+  blanking all of them (the wifi_scan stand-in once proposed here has nothing
+  left to answer).
 
 --------------------------------------------------------------------------------
 5. RELATED

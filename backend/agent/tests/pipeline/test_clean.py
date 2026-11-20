@@ -56,7 +56,7 @@ def point(columns: dict[str, list[float | None]], *, times: list[float] | None =
                 t_s=times[i], values={c: v[i] for c, v in columns.items()},
                 text={"thermal_state": states[i]})
         for i in range(n))
-    return PointData(InspectionPoint("P1", None, 0.0, 0.0, 0.4), readings, ())
+    return PointData(InspectionPoint("P1", None, 0.0, 0.0, 0.4), readings)
 
 
 def noisy(n: int, base: float, wiggle: float) -> list[float | None]:
@@ -74,7 +74,7 @@ def flags_of(data: PointData, tmp_path: Path,
 
 
 def test_an_empty_point_is_an_empty_result(tmp_path):
-    empty = PointData(InspectionPoint("P3", None, 0.0, 0.0, 0.4), (), ())
+    empty = PointData(InspectionPoint("P3", None, 0.0, 0.0, 0.4), ())
     result = RobustCleaner().clean(empty, ctx(tmp_path))
     assert result.readings == () and result.flags == ()
 

@@ -60,6 +60,4 @@ backend/supabase/.temp/
 .vercel
 .env*
 
-# The AI deck firmware binary is fetched, not committed.
-aideck_gap8_*.bin
 

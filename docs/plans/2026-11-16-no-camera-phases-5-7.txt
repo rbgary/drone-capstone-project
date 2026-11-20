@@ -1,0 +1,243 @@
+This file was modified on 11/18/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It notes that OpenCV must go back into the
+frozen agent's self-test when the photo classifier is built.
+
+NO CAMERA, PHASES 5–7 — photos taken by hand, classified, and on the web
+================================================================================
+Written 2026-11-16. Branch: feat/no-camera. Waiting on: Reagan's classifier.
+
+THE DECISION (2026-11-15, docs/features/architecture.txt, DECISIONS): the AI
+deck is off the drone, so there is no camera. A person takes photos of the
+equipment and uploads them in the desktop app; the image classifier judges
+each photo on the laptop; photos and verdicts go up to the website. Flights
+are processed only after their data has arrived — no live verdicts.
+
+--------------------------------------------------------------------------------
+WHERE IT STANDS — Phases 0–4, done on feat/no-camera (NOT merged to main)
+--------------------------------------------------------------------------------
+  ecb053a  0  the decision written into architecture.txt
+  67955b3  1  pipeline contract v3: clean → classify → interpret, sensors only;
+              enhance (clahe@1), scene@1 and the live verdicts removed;
+              PIPELINE_VERSION "4"
+  53186d2  2  agent: dronedeck/camera/, its routes, capture sessions, frame
+              uploads and the camera check removed
+  6dfe230  3  desktop: Camera tab, Capture and Drone Wi-Fi pages, the Rust
+              Wi-Fi module removed
+  20fd531  4  Set up: main + positioning deck only; a drone without an AI deck
+              is no longer refused. drone_wifi kept as is (Option A,
+              docs/features/desktop/drone-wifi.txt)
+
+  Gates at 20fd531: agent ruff, mypy, pytest 1400 passed; desktop pnpm build;
+  cargo test 10 passed.
+
+  DECIDED 2026-11-18 (Kevin):
+    - The public project pages MARK the camera stories as removed (1.5
+      live camera feed, 3.2 greyscale images, the kit's "AI deck (camera)"):
+      backend/supabase/seed/dronedeck_projects.py, then the hosted rows —
+      a write to the hosted database, so on the owner's go.
+    - The old camera frames STAY in the flight-frames bucket for now (there
+      is plenty of storage). If storage runs short, they are the FIRST
+      thing deleted.
+
+  OWED ON THE LAB DRONE (none needs Phase 5):
+    - `dronedeck setup --check` with the deck off: main and the positioning
+      deck read installed, nothing else listed. Reads only.
+    - hover thrust without the deck, from a trace (flight-status.txt item 2).
+
+  PHASE 6a, done 2026-11-18 (needs no photos, so not held for Phase 5):
+    - migration 20261118000020: pipeline_findings.image_support optional,
+      its check dropped; the three image columns stay until a later
+      migration drops them
+    - sync/results.py sends no image columns
+    - the web: every camera frame, Original / Enhanced, the camera note,
+      the Frames row and the chart click removed; FrameGallery.tsx,
+      lib/frame-zip.ts, the frame queries and fflate deleted
+    Gates: agent ruff, mypy, pytest 1416 passed; web typecheck, lint, build.
+    20261118000020 APPLIED to the hosted project 2026-11-18 (its migration
+    history rebuilt first — supabase/data-model.txt), so this agent is safe
+    to ship.
+    Proven on the local stack 2026-11-18: every migration from scratch,
+    every check passing, the four changed pages in a browser (results.txt).
+    PHASE 6a IS DONE.
+
+--------------------------------------------------------------------------------
+BEFORE PHASE 5 — WHAT REAGAN HANDS OVER (the gate; expected in a few days)
+--------------------------------------------------------------------------------
+Phase 5 starts when these are in hand. Reagan agreed (2026-11-15) that we port
+and adapt the stage for photos; he finishes the model.
+
+  1. A MODEL TRAINED ON PHOTOS TAKEN BY HAND, not drone frames. The current
+     ml/image-classifier/ (origin/feat/image-model-stage) shrinks every photo
+     to the drone camera's 324 × 244 grayscale and inpaints a viewer's
+     crosshair. Both were for the camera and both go: train on what a phone
+     or camera gives (colour, any size). The dataset stays a manifest
+     (manifests/images.csv) — photos never committed — split BY SESSION, with
+     results on a held-out session.
+  2. THE INPUT CONTRACT, WRITTEN ONCE, in ml/image-classifier/preprocess.py
+     as to_model_input(): colour or grayscale, how a photo is fitted to the
+     input (squash, crop or pad), the size, the normalisation. The agent
+     copies it exactly and a test holds the two together, so it must be
+     unambiguous — including what happens to a portrait photo and to EXIF
+     rotation.
+  3. THE ONNX FILE, under 20 MB, run by ONNX Runtime on the CPU. Output as
+     today, 1 × 2 logits [normal, faulty], unless he says otherwise.
+  4. ITS MODELS.json ENTRY: name, version, file, sha256, source (how it was
+     trained, from what weights), licence, input, output, threshold
+     (p_faulty at or above it is "faulty"). The format is the one in
+     docs/handoffs/sprint-1/done/dpp-contract.txt, MODEL FILES.
+  5. WHAT "FAULTY" MEANS for this model — a gauge's needle in its high zone,
+     visible damage, or both (classify.txt on his branch; PROVISIONAL until
+     story 6.1) — and WHETHER THE GAUGE READERS (pressure_gauge.py,
+     status_gauge.py) are part of the verdict. On his branch they are not
+     called by anything. If they are wanted in Phase 5, say what a photo's
+     verdict does with a reading.
+  6. WHERE: push it to origin/feat/image-model-stage (or a new branch). No
+     rebase is needed — that branch is on the old cropwatcher/ paths, 70
+     commits behind main; Phase 5 ports the files onto dronedeck/.
+
+  If it is late: Phase 5 could be built with the model slot empty — every
+  photo reads "unknown — no image model yet", exactly as the stage was
+  designed — and the model dropped in by a MODELS.json entry. Decided
+  2026-11-16 NOT to do that: Phase 5 waits for the model.
+
+--------------------------------------------------------------------------------
+PHASE 5 — PHOTOS IN THE DESKTOP APP, CLASSIFIED ON THE LAPTOP
+--------------------------------------------------------------------------------
+UPLOAD (desktop: Sessions page)
+  - Each session gets "Add photos" (JPEG, PNG; several at once), for an
+    ended or an open session. Each photo can be tagged with one of that
+    session's inspection points (from its missions), or left untagged — the
+    tag is what a later task builds on (below).
+  - The gallery: CaptureGallery.tsx was deleted in Phase 3 (it only read
+    camera frames). Copy-adapt it from git (`git show 6dfe230^:desktop/src/
+    components/CaptureGallery.tsx`) with /copy-adapt, not from scratch.
+
+STORE (agent)
+  - POST /history/sessions/{id}/photos, multipart, token-gated like every
+    command. Checks: the session exists on this laptop; JPEG or PNG by its
+    bytes, not its name; a size cap; a safe file name (never the uploaded
+    one as a path).
+  - On disk: sessions/<id>/photos/<seq>.<ext> and an index, photos.csv
+    (seq, original name, point_id, sha256, uploaded_at, size). Written
+    before anything is uploaded (CLAUDE.md invariant 6).
+  - Routes to list a session's photos and serve one (the window's CSP
+    already allows images from 127.0.0.1:8765), and to set or clear a
+    photo's point.
+  - An audit event per upload (audit.py).
+  - NEW DEPENDENCY: python-multipart (FastAPI needs it for an upload; not in
+    pyproject.toml today). It must also be in the frozen agent: add it to
+    the self-test list (cli.py SELFTEST_MODULES) and check build_sidecar.
+
+CLASSIFY (agent, after arrival — never in flight)
+  - Port Reagan's stage onto dronedeck/: image.py (the ONNX loader, the
+    sha256 check, "unknown" with a reason when anything fails) and, if
+    wanted, the gauge readers. reticle.py is not ported.
+  - It is NOT a stage of the flight pipeline (contract v3 is sensors only).
+    A new job kind, "photos", in processing.py: queued when photos are
+    added, run in a child process like the others, one session at a time.
+    Adding a photo never re-runs a flight's sensor analysis.
+  - Output: results/sessions/<id>/photos.json — per photo: label, p_faulty,
+    model "<name>@<version>", reason when unknown, classified_at.
+  - NEW DEPENDENCY: onnxruntime. Into the frozen agent too; measure its size
+    (OpenCV took it 43 → 86 MB, dpp-contract.txt rule 11).
+  - OPENCV IS NOT IN THE FROZEN AGENT. opencv-python-headless is still in
+    pyproject.toml, so the venv has it, but since the camera code went no
+    module imports cv2, so PyInstaller leaves it out (the agent is 44 MB).
+    "cv2" came off cli.py SELFTEST_MODULES on 2026-11-18 for that reason: the
+    build failed verifying it. If the classifier uses OpenCV, put "cv2" back
+    in SELFTEST_MODULES in the same change, or the installed app breaks the
+    first time it handles a photo while every test still passes.
+  - A photo's verdict never makes or changes a sensor finding: the
+    telemetry stays the evidence (the owner, 2026-10-09).
+
+SHOW (desktop)
+  - Each photo's verdict in the session's gallery, in words and never by
+    colour alone (design/layout.txt), with the model that judged it.
+
+DONE WHEN
+  agent ruff, mypy, pytest (upload: a refused file, a bad id, a wrong type;
+  the index; the job; the model loading, a missing and a damaged model);
+  desktop pnpm build; the harness at 720–1600 px, both themes; and ON THE
+  LAPTOP: a real photo uploaded into a real session, classified, its verdict
+  shown.
+
+--------------------------------------------------------------------------------
+PHASE 6b — PHOTOS ON THE WEBSITE AND IN SUPABASE (6a is done, above)
+--------------------------------------------------------------------------------
+  - STORAGE: photos go into the existing private flight-frames bucket under
+    <session id>/photos/. Its policies (migration 0011) already let
+    operators insert, read and update. No new bucket.
+  - A NEW MIGRATION:
+      session_photos   session_id, seq, point_id (nullable), path, label,
+                       p_faulty, model, reason, classified_at, uploaded_by;
+                       RLS like pipeline_findings — every signed-in user
+                       reads, operators write; explicit grants ("a policy
+                       without a grant is a 403", rls-and-grants.txt)
+      (pipeline_findings' image_support was made optional in 6a; the
+      columns are dropped in a LATER migration, once no laptop runs an
+      agent that sends them.)
+  - SYNC: Kind.PHOTOS — each photo (from a cursor, "already exists" is
+    success), then its row. Waits for the session's own row, like the
+    others.
+  - WEB: the session page gets a Photos section with each verdict, adapted
+    with /copy-adapt from the camera's gallery, deleted in 6a — `git show
+    4a3c6f4:web/components/flight/FrameGallery.tsx`, and for "Select to
+    download" `4a3c6f4:web/lib/frame-zip.ts` (pnpm add fflate) with the
+    paged listAll / signAll from that commit's lib/queries.ts.
+    types/database.ts regenerated. All reads through lib/queries.ts.
+  - The rls checks extended with session_photos (backend/supabase/checks/).
+
+DONE WHEN
+  web pnpm typecheck, lint, build; `cd backend && supabase db reset` locally
+  and the rls checks; the pages in a browser at 390 and 1440 px, both themes;
+  then the migration applied to the hosted database (the owner's step).
+
+--------------------------------------------------------------------------------
+PHASE 7 — THE DOCS SWEEP
+--------------------------------------------------------------------------------
+  THE PHOTO-FREE PART DONE 2026-11-19 on docs/no-camera: architecture.txt
+  and architecture-at-a-glance.txt (no AI deck; crop-health's reason
+  reworded), CLAUDE.md's Out of scope and the hosted project's owner, the
+  profile (firmware row, the repo move, each teammate's commit identity),
+  the ROADMAP's phase 11, the leftover camera comments (styles.css,
+  .gitignore), the project seed (1.5, 3.2, 4.3, 4.9 marked removed; 3.4
+  readings only — the HOSTED rows still need the seed run with --apply,
+  frontend/portfolio.txt), and the 16 STALE docs re-read (STALE 0).
+  rls-and-grants.txt needed no change: 0020 touched no policy or grant.
+  CLAUDE.md's layout table needed none either (firmware/ was already
+  described as drone_wifi). WAITING ON PHASE 5: photos.txt, results.txt's
+  photo half.
+  - New: docs/features/pipeline/photos.txt from docs/_templates/feature.txt,
+    a line in the router, typed edges both ways (classify, results,
+    session-history, data-model, storage-and-backfill).
+  - Rewrite: architecture.txt and architecture-at-a-glance.txt (the AI deck
+    row, the camera in the flows, DESIGNED BUT NOT WIRED); results.txt (the
+    web half); data-model.txt; rls-and-grants.txt.
+  - CLAUDE.md: the Out-of-scope paragraph (the AI deck is OFF the drone now,
+    not fitted-but-diagnostic), the layout table.
+  - Plans and done tickets stay as dated records. The planning PDF's stories
+    4.3 (enhance), 4.4 (now photos) and 4.9 (live verdicts) are out of date —
+    tell whoever owns web/public/docs/dronedeck-project-management-planning.pdf.
+  - PROJECT_PROFILE.txt and GRAPH_STATE.txt brought current; kit.py check
+    clean of DANGLING and ONE-WAY.
+
+--------------------------------------------------------------------------------
+NOT IN THESE PHASES
+--------------------------------------------------------------------------------
+  - Inspection point IDs with a BASELINE PHOTO each (a later task). Phase 5
+    keeps it open by giving every photo an optional point_id.
+  - Option C, stock firmware in place of drone_wifi — drone-wifi.txt has
+    the steps.
+  - flight/tuning.py and the other locked manual-flight files (CLAUDE.md).
+  - Training or labelling the model — Reagan's.
+
+--------------------------------------------------------------------------------
+OPEN QUESTIONS FOR THE TEAM
+--------------------------------------------------------------------------------
+  1. Is a photo's point tag set at upload only, or editable afterwards?
+     (The plan above allows both.)
+  2. Can photos be deleted, on the laptop and on the web? (Not planned.)
+  3. A size cap for one photo — 20 MB?
+  4. Do the gauge readers ship in Phase 5 (Reagan, item 5 above)?
+  5. Merge Phases 0–4 to main now, or with 5–7? On their own they leave the
+     web showing frame galleries for older results only, which is harmless.

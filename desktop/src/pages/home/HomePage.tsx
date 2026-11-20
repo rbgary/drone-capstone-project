@@ -80,8 +80,8 @@ function droneValue(session: Session | null): string {
 /**
  * The drone's link when no session is running — standby.
  *
- * Signed in, the agent holds the drone so vitals and the camera show before a
- * session starts. It never arms. Disconnect frees the radio for another tool
+ * Signed in, the agent holds the drone so its vitals show before a session
+ * starts. It never arms. Disconnect frees the radio for another tool
  * (a flasher, the command line); Connect takes it back. Mid-session neither is
  * offered: End session is how a session lets go.
  */
@@ -93,7 +93,7 @@ function RadioRow({ session, run }: { session: Session; run: Run }) {
     <div className="flex flex-wrap items-center justify-between gap-3 border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm">
       <StatusDot tone={connected ? "good" : radio.state === "searching" || radio.state === "restarting" ? "warning" : "idle"}>
         {connected
-          ? `Drone on standby${radio.hardware_id ? ` (${radio.hardware_id})` : ""} — vitals and camera live, motors off.`
+          ? `Drone on standby${radio.hardware_id ? ` (${radio.hardware_id})` : ""} — vitals live, motors off.`
           : radio.message ?? "No drone connected."}
       </StatusDot>
       {connected ? (
@@ -147,7 +147,7 @@ export function HomePage({ session, telemetry, sync, connected, run, onGo }: Pro
             value: droneValue(session),
             tone: session?.radio?.state === "connected" ? "good" : "idle",
             hint: session?.radio?.state === "connected" && !session.session_id
-              ? "Standby — vitals and camera, motors off" : undefined,
+              ? "Standby — vitals, motors off" : undefined,
           },
           {
             label: "Battery",
@@ -273,6 +273,11 @@ export function HomePage({ session, telemetry, sync, connected, run, onGo }: Pro
       {sync?.last_error && (
         <p className="text-xs text-[var(--muted)]">
           <StatusDot tone="warning">Last upload attempt: {sync.last_error}</StatusDot>
+        </p>
+      )}
+      {sync?.storage_error && (
+        <p className="text-xs text-[var(--muted)]">
+          <StatusDot tone="warning">{sync.storage_error}</StatusDot>
         </p>
       )}
     </div>

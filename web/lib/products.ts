@@ -62,7 +62,7 @@ export const PRODUCTS: Product[] = [
     runsOn: "The laptop with the Crazyradio plugged in",
     points: [
       "Pre-flight checks, autonomous missions and manual flight from the keyboard.",
-      "Live sensor windows at 10 Hz, the drone's camera, and every session recorded to that computer.",
+      "Live sensor windows at 10 Hz, and every session recorded to that computer.",
       "Uploads finished flights to this dashboard when it can reach the network.",
     ],
     setupPage: "setup-desktop",
@@ -78,7 +78,7 @@ export const PRODUCTS: Product[] = [
     name: "Dashboard and website",
     summary:
       "This site: the public pages, and the operator dashboard that reads the flights, sensor " +
-      "readings, camera frames and inspection results the drone records.",
+      "readings and inspection results the drone records.",
     category: "web",
     runsOn: "Anywhere — it is a website",
     points: [

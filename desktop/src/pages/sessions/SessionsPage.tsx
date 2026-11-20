@@ -1,10 +1,9 @@
 /** Every session this computer recorded, and one session in full. */
 
 import { useCallback, useEffect, useState } from "react";
-import { AgentError, api, sessionFrame, type FlightRecord, type Mode, type SessionRecord } from "@/lib/agent";
+import { AgentError, api, type FlightRecord, type Mode, type SessionRecord } from "@/lib/agent";
 import { endReasonLabel, formatDateTime, formatDuration, formatNumber, formatTime } from "@/lib/format";
 import { Button, Message, PageHeader, Panel, Spinner, Stat, StatusDot } from "@/components/ui";
-import { CaptureGallery, type GalleryLoad } from "@/components/CaptureGallery";
 import { WINDOWS, WINDOW_VARIABLES } from "@/pages/windows/SensorWindow";
 import { flightTitle } from "./AllFlights";
 import { FlightPlaybackView } from "./Playback";
@@ -158,8 +157,6 @@ function SessionDetailBody({ record, mode, onPlay }: {
         )}
       </Panel>
 
-      <ManualCaptures sessionId={record.id} />
-
       {WINDOWS.map((w, index) => (
         <Disclosure
           key={w.key}
@@ -178,33 +175,5 @@ function SessionDetailBody({ record, mode, onPlay }: {
         </Disclosure>
       ))}
     </>
-  );
-}
-
-
-/**
- * The session's frames captured by hand (the Capture page), from this
- * computer's files — labelled as manual captures of this session. Hidden
- * when it has none, so a session without any reads as it always did.
- */
-function ManualCaptures({ sessionId }: { sessionId: string }) {
-  const [load, setLoad] = useState<GalleryLoad>({ kind: "loading" });
-  const read = useCallback(async () => {
-    setLoad({ kind: "loading" });
-    try {
-      setLoad({ kind: "ready", frames: (await api.sessionFrames(sessionId, "manual")).frames });
-    } catch (e) {
-      setLoad({ kind: "error", message: e instanceof AgentError ? e.message : "The captures could not be read." });
-    }
-  }, [sessionId]);
-  useEffect(() => { void read(); }, [read]);
-  const frame = useCallback((seq: number) => sessionFrame(sessionId, seq), [sessionId]);
-
-  if (load.kind === "ready" && load.frames.length === 0) return null;
-  return (
-    <Panel title={load.kind === "ready" ? `Captured manually · ${load.frames.length}` : "Captured manually"}
-           note="Pictures taken by hand during this session, on the Capture page.">
-      <CaptureGallery load={load} read={frame} onRetry={() => void read()} emptyText="No manual captures." />
-    </Panel>
   );
 }

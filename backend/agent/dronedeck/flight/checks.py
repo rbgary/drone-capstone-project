@@ -82,8 +82,6 @@ class CheckKey(StrEnum):
     DECK = "deck"
     POSITIONING = "positioning"
     ESTIMATE = "estimate"
-    #: A capture session's own check: the deck the camera lives on.
-    CAMERA = "camera"
 
 
 LABELS: dict[CheckKey, str] = {
@@ -94,7 +92,6 @@ LABELS: dict[CheckKey, str] = {
     CheckKey.DECK: "Positioning deck",
     CheckKey.POSITIONING: "Base stations",
     CheckKey.ESTIMATE: "Position settled",
-    CheckKey.CAMERA: "Camera deck",
 }
 
 
@@ -142,12 +139,6 @@ class ReadyReport:
     #: point, and the guards that watch drift and altitude cannot run. Only
     #: unassisted manual flight is offered in that state.
     assisted: bool = True
-    #: Whether the AI deck is fitted, as the DRONE reports it (deck.bcAI, over
-    #: the radio). None when it could not be asked. The camera lives on that
-    #: deck, so this is the one thing about the camera the radio CAN answer —
-    #: the frames themselves need the deck's own Wi-Fi (see camera/source.py).
-    #: Recorded, never acted on: nothing refuses a flight over a camera.
-    ai_deck: bool | None = None
     #: Whether the drone detected its Lighthouse deck (deck.bcLighthouse4).
     #: False outranks every other reason: with no deck, no base station can
     #: reach the estimator however well the stations are working.
@@ -374,9 +365,6 @@ def run_checks(
     # drone can do for itself, and the operator standing over it decides whether
     # to fly: a base station that is off is a recommendation, not a refusal.
     yield running(CheckKey.DECK)
-    # Asked at the same time as the positioning deck, because it is the same
-    # kind of question and the answer is free. It gates nothing.
-    ai_deck = _ai_deck_fitted(cf)
     if str(cf.param.get_value("deck.bcLighthouse4")) != "1":
         # No deck means no positioning at all, whatever the lighthouse
         # variables happen to read — there is nothing left to wait for.
@@ -386,7 +374,7 @@ def run_checks(
             hardware_id=hardware_id, vbat=vbat, endurance_s=endurance,
             ground_z_m=pz, takeoff_xy=(px, py), estimate_spread_m=float("inf"),
             positioning=assess_positioning(snapshot()), assisted=False,
-            ai_deck=ai_deck, lighthouse_deck=False,
+            lighthouse_deck=False,
         )
     yield CheckResult(CheckKey.DECK, CheckStatus.PASSED, "Lighthouse deck fitted")
 
@@ -412,7 +400,7 @@ def run_checks(
         return ReadyReport(
             hardware_id=hardware_id, vbat=vbat, endurance_s=endurance,
             ground_z_m=pz, takeoff_xy=(px, py), estimate_spread_m=float("inf"),
-            positioning=status, assisted=False, ai_deck=ai_deck,
+            positioning=status, assisted=False,
         )
     yield CheckResult(
         CheckKey.POSITIONING, CheckStatus.PASSED,
@@ -450,7 +438,7 @@ def run_checks(
                     return ReadyReport(
                         hardware_id=hardware_id, vbat=vbat, endurance_s=endurance,
                         ground_z_m=gz, takeoff_xy=(gx, gy), estimate_spread_m=spread,
-                        positioning=status, ai_deck=ai_deck,
+                        positioning=status,
                     )
         sleep(SETTLE_POLL_S)
 
@@ -467,102 +455,8 @@ def run_checks(
     return ReadyReport(
         hardware_id=hardware_id, vbat=vbat, endurance_s=endurance,
         ground_z_m=pz, takeoff_xy=(px, py), estimate_spread_m=best,
-        positioning=status, assisted=False, ai_deck=ai_deck,
+        positioning=status, assisted=False,
     )
-
-
-def _ai_deck_fitted(cf: Any) -> bool | None:
-    """Is the AI deck fitted? Ask the drone; never infer it from a photo.
-
-    The camera lives on that deck, so this is the one camera question the RADIO
-    can answer — a param read, the same way the Lighthouse deck is checked. The
-    frames themselves cannot come this way: usable CRTP throughput is a few KB/s
-    and the same link carries the 50 Hz setpoint stream, which is why the deck
-    carries its own Wi-Fi chip.
-
-    None rather than False when the param is missing or unreadable: firmware
-    that does not publish it has not said "no deck", and recording a guess as a
-    measurement is what CLAUDE.md #5 exists to stop.
-    """
-    try:
-        return str(cf.param.get_value("deck.bcAI")) == "1"
-    except Exception:
-        log.debug("deck.bcAI could not be read", exc_info=True)
-        return None
-
-
-def run_capture_checks(
-    cf: Any,
-    snapshot: Callable[[], Snapshot],
-    *,
-    clock: Callable[[], float] = time.monotonic,
-    sleep: Callable[[float], None] = time.sleep,
-) -> Generator[CheckResult, None, ReadyReport]:
-    """The checks a CAPTURE session runs (2026-10-24): only what taking a
-    picture needs — the drone answers over the radio, and the deck the camera
-    lives on is fitted.
-
-    Nothing about flying: not the motors, not whether the battery can arm
-    (sys.canfly), not the base stations, not the flight area. A capture session
-    never flies (Session refuses every flight action in one), and on
-    2026-10-24 a drone that would not arm kept the Capture page from taking a
-    single picture. The battery is reported for the record, never failed on.
-    The camera's Wi-Fi and its picture are NOT checks either: they come up
-    after the session opens, and the Capture page shows them as they do.
-    """
-    def fail(key: CheckKey, detail: str, **data: Any) -> CheckResult:
-        return CheckResult(key, CheckStatus.FAILED, detail, data)
-
-    # 1. Identity — the radio reaches the drone.
-    yield CheckResult(CheckKey.IDENTITY, CheckStatus.RUNNING)
-    try:
-        hardware_id = read_hardware_id(cf)
-    except Exception as e:
-        result = fail(CheckKey.IDENTITY, f"Could not read the drone's ID ({type(e).__name__}).")
-        yield result
-        raise ChecksFailed(result) from e
-    yield CheckResult(CheckKey.IDENTITY, CheckStatus.PASSED, hardware_id,
-                      {"hardware_id": hardware_id})
-
-    # 2. Telemetry flowing — the battery reading and the console come with it.
-    yield CheckResult(CheckKey.TELEMETRY, CheckStatus.RUNNING)
-    deadline = clock() + TELEMETRY_TIMEOUT_S
-    snap = snapshot()
-    while snap.updated_at is None or (snap.age_s(clock()) or 0) > 1.0:
-        if clock() > deadline:
-            result = fail(CheckKey.TELEMETRY, "No telemetry from the drone. Check the radio link.")
-            yield result
-            raise ChecksFailed(result)
-        sleep(0.1)
-        snap = snapshot()
-    yield CheckResult(CheckKey.TELEMETRY, CheckStatus.PASSED, "Receiving at 10 Hz")
-
-    # 3. The battery, for the record only — a capture session does not fly.
-    vbat = snap.get("pm.vbat")
-    if vbat is None:
-        yield CheckResult(CheckKey.BATTERY, CheckStatus.WARNING,
-                          "No battery reading — for information only; nothing will fly.")
-    else:
-        yield CheckResult(CheckKey.BATTERY, CheckStatus.PASSED,
-                          f"{vbat:.2f} V — for information only; nothing will fly.",
-                          {"vbat": round(vbat, 2)})
-
-    # 4. The camera's deck — asked of the drone, never assumed.
-    fitted = _ai_deck_fitted(cf)
-    if fitted is False:
-        result = fail(CheckKey.CAMERA, "This drone has no AI deck, so there is no camera to "
-                                       "capture with.")
-        yield result
-        raise ChecksFailed(result)
-    yield CheckResult(CheckKey.CAMERA,
-                      CheckStatus.PASSED if fitted else CheckStatus.WARNING,
-                      "AI deck fitted" if fitted else
-                      "Could not ask whether the AI deck is fitted — carrying on.")
-
-    return ReadyReport(
-        hardware_id=hardware_id, vbat=float(vbat or 0.0), endurance_s=0.0, ground_z_m=0.0,
-        takeoff_xy=(0.0, 0.0), estimate_spread_m=0.0, positioning=assess_positioning(snap),
-        assisted=False, ai_deck=fitted)
 
 
 def collect(

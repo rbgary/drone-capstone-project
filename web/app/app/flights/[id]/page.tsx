@@ -3,20 +3,17 @@ import { notFound } from "next/navigation";
 import {
   getFlight,
   getFlightTelemetry,
-  getEnhancedFrames,
   getFindings,
   getPipelineResults,
-  getSessionFrames,
   getZones,
 } from "@/lib/queries";
-import { FrameGallery } from "@/components/flight/FrameGallery";
 import { ErrorState, Stat, StatusBadge } from "@/components/ui/states";
 import { PageHeader } from "@/components/ui/page-header";
 import { TimeSeries } from "@/components/ui/time-series";
 import { FlightPath } from "@/components/ui/flight-path";
 import { RawReadings } from "@/components/ui/raw-readings";
 import { FLIGHTS, processedPath } from "@/lib/routes";
-import { excerptsFor, frameMarks, marksOf, readFlags, readTracks } from "@/lib/pipeline";
+import { excerptsFor, marksOf, readFlags, readTracks } from "@/lib/pipeline";
 import { ErrorTable } from "@/components/processing/error-table";
 import {
   elapsedSeconds,
@@ -25,7 +22,7 @@ import {
   flightTone,
 } from "@/lib/flight-format";
 import { LocalTime } from "@/components/ui/local-time";
-import { FindingsList, type FrameLinks } from "@/components/processing/findings";
+import { FindingsList } from "@/components/processing/findings";
 import { FlightProcessing } from "@/components/processing/flight-processing";
 import { OwnerStat } from "@/components/ui/owner";
 
@@ -51,18 +48,10 @@ export default async function FlightPage(props: PageProps<"/app/flights/[id]">) 
     getFindings([id]),
   ]);
   if (!flight) notFound();
-  // The camera belongs to the SESSION the flight was part of: frames are
-  // recorded from session start to end (camera/recording.py).
-  const [frames, enhanced] = flight.session_id
-    ? await Promise.all([getSessionFrames(flight.session_id), getEnhancedFrames(flight.session_id)])
-    : [[], {}];
   const result = results.rows[0] ?? null;
-  const frameLinks: FrameLinks = Object.fromEntries(
-    frames.map((f) => [f.seq, { original: f.url, enhanced: enhanced[f.seq] }]));
-  // The anomalies, marked where they show: their readings in the table, the
-  // frames taken during them, and each card's own excerpt.
+  // The anomalies, marked where they show: their readings in the table and
+  // each card's own excerpt.
   const readingMarks = marksOf(findings.rows, result ? readFlags(result.flags) : [], telemetry);
-  const marks = frameMarks(findings.rows);
   const excerpts = excerptsFor(findings.rows, () => (result ? readTracks(result.tracks) : []),
     Object.fromEntries(findings.rows.map((f) => [
       f.id, telemetry.filter((r) => r.index >= f.start_index && r.index <= f.end_index)])));
@@ -159,7 +148,7 @@ export default async function FlightPage(props: PageProps<"/app/flights/[id]">) 
             Nothing in this flight departed from what was expected.
           </p>
         ) : (
-          <FindingsList findings={findings.rows} frames={frameLinks} excerpts={excerpts} />
+          <FindingsList findings={findings.rows} excerpts={excerpts} />
         )}
         {result && flight.session_id && (
           <p className="text-sm">
@@ -175,8 +164,7 @@ export default async function FlightPage(props: PageProps<"/app/flights/[id]">) 
           <h2 id="processing-heading" className="text-lg font-semibold text-[var(--heading)]">
             Data processing
           </h2>
-          <FlightProcessing result={result} telemetry={telemetry} findings={findings.rows}
-                            frameLinks={frameLinks} />
+          <FlightProcessing result={result} telemetry={telemetry} findings={findings.rows} />
         </section>
       )}
 
@@ -254,15 +242,6 @@ export default async function FlightPage(props: PageProps<"/app/flights/[id]">) 
           <FlightPath rows={telemetry} zones={zones} />
         </section>
       </div>
-
-      <section aria-labelledby="camera-heading" className="space-y-3">
-        <h2 id="camera-heading" className="text-lg font-semibold text-[var(--heading)]">
-          Camera
-        </h2>
-        <FrameGallery frames={frames} enhanced={enhanced} marks={marks}
-                      downloadName={`dronedeck-flight-${flight.started_at?.slice(0, 10) ?? "unknown"}-${id.slice(0, 8)}`} />
-      </section>
-
 
       {result && (
         <section aria-labelledby="errors-heading" className="space-y-3">

@@ -1,7 +1,7 @@
 """The classifier — stage 3, story 4.6: find the BLOCKS of a flight where the
 temperature or the pressure departs from what was expected, and say so in
-numbers. The telemetry is the evidence; frames are labelled, never judged
-(no image model exists yet — story 4.4).
+numbers. The telemetry is the evidence. (Photos are classified on their own,
+outside the pipeline — story 4.4.)
 
 WHAT "EXPECTED" MEANS, AND WHY (ml/anomaly-eval/MEASUREMENTS.txt)
 
@@ -48,10 +48,8 @@ from numpy.typing import NDArray
 from dronedeck.pipeline.contracts import (
     ClassifyResult,
     CleanResult,
-    EnhanceResult,
     Event,
     FlightContext,
-    ImageVerdict,
     Label,
     PointData,
     Reading,
@@ -188,11 +186,11 @@ def fit_cooling(t: FloatArray, y: FloatArray) -> Fit:
     t0 = float(t[0])
     floor = _floor(y)
     best: tuple[float, float] | None = None
-    for tau in TAU_GRID:
-        basis = np.column_stack((np.ones_like(t), np.exp(-(t - t0) / tau)))
+    for candidate in TAU_GRID:
+        basis = np.column_stack((np.ones_like(t), np.exp(-(t - t0) / candidate)))
         _, loss = _irls(basis, y, floor, rounds=3)
         if best is None or loss < best[1]:
-            best = (float(tau), loss)
+            best = (float(candidate), loss)
     assert best is not None
     tau = best[0]
     basis = np.column_stack((np.ones_like(t), np.exp(-(t - t0) / tau)))
@@ -215,10 +213,9 @@ class BlocksClassifier:
     name = "blocks"
     version = "1"
 
-    def classify(self, data: PointData, clean: CleanResult, enhanced: EnhanceResult,
+    def classify(self, data: PointData, clean: CleanResult,
                  ctx: FlightContext) -> ClassifyResult:
         model = f"{self.name}@{self.version}"
-        images = _images(enhanced, model)
         airborne = _airborne(data.readings)
         tracks: list[Track] = []
         segments: list[Segment] = []
@@ -243,25 +240,9 @@ class BlocksClassifier:
             sensors = Label("normal", None, model)
         else:
             sensors = Label("unknown", None, model, "; ".join(why_not) or "nothing to analyse")
-        from dronedeck.pipeline.stages.classify.scene import measure
-
-        return ClassifyResult(images=images, sensors=sensors, features=features,
+        return ClassifyResult(sensors=sensors, features=features,
                               tracks=tuple(tracks), segments=tuple(segments),
-                              events=tuple(sorted(events, key=lambda e: e.start_index)),
-                              views=measure(enhanced.frames))
-
-
-def _images(enhanced: EnhanceResult, model: str) -> tuple[ImageVerdict, ...]:
-    out = []
-    for e in enhanced.frames:
-        if e.quality is not None and not e.quality.usable:
-            reason = f"frame unusable — {e.quality.reason}"
-        elif e.path is None and e.note and "could not be read" in e.note:
-            reason = "frame unreadable"
-        else:
-            reason = "no image model yet"
-        out.append(ImageVerdict(e.frame.seq, "original", Label("unknown", None, model, reason)))
-    return tuple(out)
+                              events=tuple(sorted(events, key=lambda e: e.start_index)))
 
 
 def _airborne(readings: Sequence[Reading]) -> NDArray[np.intp]:

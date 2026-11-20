@@ -14,11 +14,15 @@ Four buckets:
                 covers, team photos and images inside write-ups.
   flight-frames PRIVATE (migration 0011, applied 2026-09-24). A session's
                 CAPTURED camera frames — those that changed, at most two a
-                second, and every manual capture (desktop/capture.txt) — and
+                second, and every manual capture (the Capture page, removed) — and
                 its frames.csv:
                 <session id>/frames/000001.png, <session id>/frames.csv.
                 Operators insert, read, and update (frames.csv is replaced
-                once at the session's end). See desktop/camera.txt.
+                once at the session's end). NOTHING WRITES IT since 2026-11-15
+                (the drone carries no camera; the agent's frame upload was
+                removed). What is there stays, and the web still reads it.
+                The hand-taken photos are to go here next, under
+                <session id>/photos/ (the no-camera work, Phase 5).
 
 
 WHERE IT LIVES
@@ -49,6 +53,10 @@ DECISIONS
 
 - CSV first, always. A local write cannot fail; a flight cannot be re-run. The
   upload is best-effort and retried, never in the critical path (CLAUDE.md #6).
+  Nor in the rows' path: when storage refuses the CSV (a full bucket), the
+  telemetry rows have already gone and the file waits on the laptop for a
+  later pass (../backend/offline-sync.txt, FILE STORAGE NEVER HOLDS BACK THE
+  ROWS). Both buckets share the project's one storage quota.
 - The import is idempotent: it upserts on (flight_id, index) with
   ignore-duplicates, so a CSV already partly uploaded row by row costs nothing
   to re-import, and a CSV already in storage counts as success.
@@ -84,3 +92,11 @@ INVARIANTS
   is unknown — until migration 20260928000012 is applied, a backfill that sends
   point_id would be refused. Apply the migration, and put the function's source
   under backend/supabase/functions/.
+
+
+RELATED
+
+shares-data-with  ../backend/offline-sync.txt
+                  the syncer uploads the flight CSV into flight-logs (frames
+                  into flight-frames until 2026-11-15); a full quota holds back
+                  only the file, never the rows

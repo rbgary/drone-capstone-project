@@ -98,8 +98,10 @@ class SessionMeta:
     end_reason: str | None = None
     #: Every mode this session was in at some point, in first-used order.
     modes: list[str] = field(default_factory=list)
-    #: "flight", or "capture" — a Capture-page session that never flew.
-    #: Sessions recorded before 2026-10-24 have none: read as "flight".
+    #: "flight", or "capture" — a Capture-page session that never flew
+    #: (2026-10-24 to 2026-11-15, while the drone had a camera). Kept so those
+    #: sessions still read; every session is "flight" now. Sessions recorded
+    #: before 2026-10-24 have none: read as "flight".
     purpose: str = "flight"
     #: Why the checks found no position (ReadyReport.unassisted_reason), as the
     #: operator was told it — None when assisted. Kept so a session that flew
@@ -462,21 +464,6 @@ def set_flight_processing(flight_id: str, state: str, error: str | None = None, 
             _write_meta(meta_file, raw)
             return True
         return False
-
-
-def session_frames(session_id: str, source: str | None = None, *,
-                   root: Path | None = None) -> list[dict[str, Any]]:
-    """A recorded session's camera frames — of one source ("manual": the
-    captures made by hand), oldest first. Raises ValueError for a bad id."""
-    from dronedeck.camera.recording import read_index
-    return read_index(_session_folder(session_id, root), source)
-
-
-def session_frame(session_id: str, seq: int, *,
-                  root: Path | None = None) -> tuple[Path, str] | None:
-    """One recorded frame of a session, by number. Raises ValueError for a bad id."""
-    from dronedeck.camera.recording import frame_file
-    return frame_file(_session_folder(session_id, root), seq)
 
 
 def _session_folder(session_id: str, root: Path | None) -> Path:

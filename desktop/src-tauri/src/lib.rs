@@ -21,7 +21,6 @@ use std::sync::Mutex;
 
 use uuid::Uuid;
 
-mod wifi;
 
 use tauri::{Emitter, Manager, RunEvent, State};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -40,8 +39,8 @@ const AGENT_PORT: u16 = 8765;
 /// The publishable key is public by design — every table is behind RLS and the
 /// agent signs in as a real operator account (`sync/cloud.py`). **The secret
 /// key must never appear here**: this binary ships inside an installer.
-const SUPABASE_URL: &str = "https://fuwojlqpavvfgmqardfo.supabase.co";
-const SUPABASE_ANON_KEY: &str = "sb_publishable_FKtbEKeHIuSOcPNDBGUfwQ_U74hme33";
+const SUPABASE_URL: &str = "https://tmswmgwomoabvftdreeb.supabase.co";
+const SUPABASE_ANON_KEY: &str = "sb_publishable_cD47iXvjPbhUYH8SiYF97g_SzjUcPGw";
 
 /// The compiled-in default, unless this machine sets one — which is how a
 /// developer points the app at a local Supabase without a rebuild.
@@ -293,86 +292,6 @@ async fn stop_motors(token: State<'_, ControlToken>) -> Result<(), String> {
     Ok(())
 }
 
-// ── drone Wi-Fi ──────────────────────────────────────────────────────────
-
-/// Nearby networks, with the permission state the scan ran under.
-#[tauri::command]
-async fn wifi_scan(live: bool) -> Result<wifi::Scan, String> {
-    tauri::async_runtime::spawn_blocking(move || wifi::scan(live))
-        .await
-        .map_err(|e| format!("the scan did not finish: {e}"))
-}
-
-/// Ask for the permission that reveals network names (see `wifi` module).
-#[tauri::command]
-fn wifi_request_permission(app: tauri::AppHandle) {
-    wifi::request_permission(&app);
-}
-
-/// The saved drone network's NAME. The password is never read back out.
-#[tauri::command]
-fn drone_wifi_saved() -> Result<Option<String>, String> {
-    Ok(wifi::load()?.map(|saved| saved.ssid))
-}
-
-/// Give the agent a network. The agent validates it; only when it accepts is
-/// anything written to the secure store, so a refused password is not kept.
-async fn put_to_agent(token: &str, saved: &wifi::Saved) -> Result<serde_json::Value, String> {
-    let response = tauri_plugin_http::reqwest::Client::new()
-        .put(format!("http://127.0.0.1:{AGENT_PORT}/camera/wifi"))
-        .header("X-Agent-Token", token)
-        .header("Content-Type", "application/json")
-        .body(serde_json::json!({ "ssid": saved.ssid, "password": saved.password }).to_string())
-        .send()
-        .await
-        .map_err(|_| "Could not reach the flight agent on this computer.".to_string())?;
-    let ok = response.status().is_success();
-    let bytes = response.bytes().await.unwrap_or_default();
-    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
-    if ok {
-        Ok(body)
-    } else {
-        Err(body.get("detail").and_then(|d| d.as_str())
-            .unwrap_or("The agent refused that network.").to_string())
-    }
-}
-
-/// Save the drone's network and send it to the agent.
-#[tauri::command]
-async fn drone_wifi_save(
-    ssid: String,
-    password: String,
-    token: State<'_, ControlToken>,
-) -> Result<serde_json::Value, String> {
-    let saved = wifi::Saved { ssid, password };
-    let state = put_to_agent(&token.0, &saved).await?;
-    wifi::save(&saved)?;
-    Ok(state)
-}
-
-/// Send the saved network to the agent — at startup and whenever the agent
-/// restarts, since it holds the network in memory only. None when nothing is
-/// saved.
-#[tauri::command]
-async fn drone_wifi_push(token: State<'_, ControlToken>) -> Result<Option<serde_json::Value>, String> {
-    match wifi::load()? {
-        Some(saved) => put_to_agent(&token.0, &saved).await.map(Some),
-        None => Ok(None),
-    }
-}
-
-/// Forget the drone's network, here and in the agent.
-#[tauri::command]
-async fn drone_wifi_forget(token: State<'_, ControlToken>) -> Result<(), String> {
-    wifi::forget()?;
-    let _ = tauri_plugin_http::reqwest::Client::new()
-        .delete(format!("http://127.0.0.1:{AGENT_PORT}/camera/wifi"))
-        .header("X-Agent-Token", token.0.clone())
-        .send()
-        .await;
-    Ok(())
-}
-
 /// Start the bundled agent and stream its output into the log panel.
 fn spawn_agent(app: &tauri::AppHandle) -> Result<(), String> {
     let token = app.state::<ControlToken>().0.clone();
@@ -383,12 +302,6 @@ fn spawn_agent(app: &tauri::AppHandle) -> Result<(), String> {
         .env("DRONEDECK_AGENT_TOKEN", token)
         .env("SUPABASE_URL", configured("SUPABASE_URL", SUPABASE_URL))
         .env("SUPABASE_ANON_KEY", configured("SUPABASE_ANON_KEY", SUPABASE_ANON_KEY))
-        // The app reads the AI deck's camera by default. An app opened from
-        // Finder never sees a variable exported in a terminal, so leaving this
-        // to the environment meant the bundled agent always had no camera.
-        // With no deck in reach it retries quietly and the tab says to join
-        // the deck's Wi-Fi.
-        .env("DRONEDECK_CAMERA", configured("DRONEDECK_CAMERA", "deck"))
         // `--exit-with-parent` is what actually stops the agent. Killing the
         // child below only reaches PyInstaller's bootloader; the real Python
         // process is its child and survives, orphaned onto launchd, still
@@ -460,12 +373,6 @@ pub fn run() {
             agent_exit,
             agent_log_path,
             stop_motors,
-            wifi_scan,
-            wifi_request_permission,
-            drone_wifi_saved,
-            drone_wifi_save,
-            drone_wifi_push,
-            drone_wifi_forget,
         ])
         .setup(|app| {
             if let Err(message) = spawn_agent(app.handle()) {

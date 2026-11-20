@@ -1,3 +1,6 @@
+# This file was modified on 11/18/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). It corrects the docstring's list of runtime
+# dependencies: the pipeline uses numpy only since the camera was removed.
 """PELT: the optimal split of a series into blocks of constant mean.
 
 Killick, Fearnhead & Eckley (2012), "Optimal detection of changepoints with a
@@ -6,8 +9,8 @@ linear computational cost", JASA 107(500). Minimises
     Σ over blocks of Σ (y − the block's mean)²  +  penalty × (number of changes)
 
 exactly, pruning split points that can never be optimal again. Written here in
-numpy — the pipeline's runtime dependencies stay numpy, OpenCV and ONNX
-Runtime — and checked against the `ruptures` package (Pelt, model "l2") in
+numpy — the pipeline's only runtime dependency — and checked against the
+`ruptures` package (Pelt, model "l2") in
 tests/pipeline/test_classify.py, which agrees breakpoint for breakpoint.
 """
 

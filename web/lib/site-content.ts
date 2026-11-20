@@ -276,7 +276,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
         body:
           "A desktop app that flies the drone and a website with an operator dashboard, one " +
           "account for both. Keyboard flight at 50 Hz that holds its position, live sensors, " +
-          "the drone's camera, and every flight saved for comparison.",
+          "and every flight saved for comparison.",
         href: "/projects/apps-and-manual-flight",
       },
       {
@@ -565,7 +565,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
           "Node.js 24 — from nodejs.org",
         ],
         commands: [
-          "git clone https://github.com/samsmoak/drone-capstone.git",
+          "git clone https://github.com/rbgary/drone-capstone-project.git",
           "cd drone-capstone",
           "node scripts/install.mjs",
         ],
@@ -590,7 +590,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
           "Node.js 24 — from nodejs.org",
         ],
         commands: [
-          "git clone https://github.com/samsmoak/drone-capstone.git",
+          "git clone https://github.com/rbgary/drone-capstone-project.git",
           "cd drone-capstone",
           "node scripts/install.mjs",
         ],
@@ -618,7 +618,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
           "Node.js 24 — from nodejs.org",
         ],
         commands: [
-          "git clone https://github.com/samsmoak/drone-capstone.git",
+          "git clone https://github.com/rbgary/drone-capstone-project.git",
           "cd drone-capstone",
           "node scripts/install.mjs",
         ],
@@ -865,7 +865,7 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
       "This is the most common question, and the answer surprises people: you cannot see most of " +
       "them. The temperature and pressure sensor and the motion sensors are chips two or three " +
       "millimetres across, soldered onto the mainboard. There is no separate “sensor module” to " +
-      "find. The only sensor you can point at is the camera on the AI deck.",
+      "find.",
       "The Lighthouse positioning deck — a small board with four black domes — is the one part " +
       "that is genuinely easy to miss, and nothing can hold a position without it.",
     ],
@@ -897,11 +897,11 @@ export const PAGE_DEFAULTS: Record<PageKey, ContentObject> = {
       {
         image: "/hardware/03-ai-deck-1.1-mounted-underside-a.jpeg",
         alt: "AI deck mounted under the drone, camera module visible at the left edge",
-        name: "AI deck — camera (optional)",
+        name: "AI deck — camera (no longer fitted)",
         body:
-          "The black module at the left edge is the camera. It is the one part that never reached " +
-          "a working state: its Wi-Fi datalink was cut from the original project, and nothing here " +
-          "depends on it.",
+          "The black module at the left edge is the camera. It came with the kit and is now off the " +
+          "drone: since November 2026 the project uses no camera, and photos of the equipment are " +
+          "taken by hand instead.",
       },
       {
         image: "/hardware/07-cf-battery-holder-and-pin-headers.jpeg",

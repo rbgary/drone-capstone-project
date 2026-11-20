@@ -129,9 +129,6 @@ def build_parser() -> argparse.ArgumentParser:
     which.add_argument("--flight", help="the flight's id (a session's flights list it)")
     which.add_argument("--fixture", action="store_true",
                        help="run on the test fixture in tests/pipeline (source checkout only)")
-    process.add_argument("--live-point", metavar="POINT",
-                         help="with --flight: the flight so far, as the drone finishes "
-                              "holding at POINT (story 4.9); writes that point's verdict")
     which.add_argument("--session",
                        help="a session's id: its samples around the flights, on the ground")
     which.add_argument("--all", action="store_true",
@@ -567,8 +564,8 @@ def cmd_mission_report(args: argparse.Namespace) -> int:
 
 
 def cmd_process(args: argparse.Namespace) -> int:
-    """The data pipeline over one recorded flight: load, clean, enhance,
-    classify, interpret, save (story 4.5). Reads files; touches no radio."""
+    """The data pipeline over one recorded flight: load, clean, classify,
+    interpret, save (story 4.5). Reads files; touches no radio."""
     from dronedeck.pipeline.compose import default_stages
     from dronedeck.pipeline.runner import run_flight
     from dronedeck.pipeline.sinks import LocalResultSink
@@ -578,8 +575,6 @@ def cmd_process(args: argparse.Namespace) -> int:
         return _process_all()
     if args.session:
         return _process_session(args.session)
-    if args.live_point:
-        return _process_live(args.flight, args.live_point)
     if args.fixture:
         root = Path(__file__).resolve().parents[1] / "tests" / "pipeline" / "fixtures" / "data"
         if not root.exists():
@@ -600,8 +595,8 @@ def cmd_process(args: argparse.Namespace) -> int:
         print(f"    {stage:10} {name}")
     for point in result.points:
         detail = result.summary.get(point.point_id, {})
-        print(f"  {point.point_id:8} {point.verdict:18} {detail.get('readings', 0)} readings, "
-              f"{detail.get('frames', 0)} frames — {'; '.join(point.reasons)}")
+        print(f"  {point.point_id:8} {point.verdict:18} {detail.get('readings', 0)} readings "
+              f"— {'; '.join(point.reasons)}")
     for finding in result.findings:
         print(f"  {finding.severity.upper():8} {finding.sentence}")
     for failure in result.failures:
@@ -660,39 +655,14 @@ def _process_all() -> int:
     return 1 if failed or sessions_failed else 0
 
 
-def _process_live(flight_id: str | None, point_id: str) -> int:
-    """Story 4.9: one point's verdict while the flight goes on."""
-    from dronedeck.pipeline.compose import default_stages
-    from dronedeck.pipeline.runner import run_live_point
-    from dronedeck.pipeline.sources import FlightNotFound, LocalFlightSource
-    from dronedeck.processing import FLIGHT_ID, POINT_ID
-
-    if not flight_id:
-        print("  --live-point needs --flight")
-        return 2
-    if not FLIGHT_ID.match(flight_id) or not POINT_ID.match(point_id):
-        print("  not a flight id and point id")
-        return 2
-    try:
-        out, where = run_live_point(flight_id, point_id,
-                                    source=LocalFlightSource(paths.data_dir()),
-                                    results_root=paths.results_dir(), stages=default_stages())
-    except (FlightNotFound, ValueError) as e:
-        print(f"  {e}")
-        return 2
-    print(f"  {point_id}: {out['verdict']} — {len(out['findings'])} finding(s)")
-    print(f"  saved {where}")
-    return 0
-
-
 def session_results_dir() -> Path:
     """<data folder>/results/sessions/<session id>/ — a session's own result."""
     return paths.results_dir() / "sessions"
 
 
 def _process_session(session_id: str, *, quiet: bool = False) -> int:
-    """A session around its flights: its one-a-second samples and the frames
-    taken outside its flights (pipeline/runner.py run_session). 0 done, 1
+    """A session around its flights: its one-a-second samples
+    (pipeline/runner.py run_session). 0 done, 1
     failed, 2 nothing to process."""
     from dronedeck import history
     from dronedeck.pipeline.compose import session_stages
@@ -720,8 +690,7 @@ def _process_session(session_id: str, *, quiet: bool = False) -> int:
     _queue_session_result_upload(session_id, Path(where).parent)
     point = result.points[0] if result.points else None
     print(f"  session {session_id[:8]}: {point.verdict if point else 'no verdict'}, "
-          f"{len(result.findings)} finding(s), {len(result.flags)} flag(s), "
-          f"{len(result.frames)} frame(s)")
+          f"{len(result.findings)} finding(s), {len(result.flags)} flag(s)")
     if not quiet:
         for finding in result.findings:
             print(f"  {finding.severity.upper():8} {finding.sentence}")
@@ -819,12 +788,10 @@ SELFTEST_MODULES = (
     "supabase",                                         # sign-in, sync
     "cryptography.hazmat.bindings._rust",               # its native half, via PyJWT
     "numpy",                                            # geometry
-    "cv2",                                              # the pipeline's enhancer
     "cflib.localization.lighthouse_geo_estimation_manager",   # geometry (scipy)
     "cflib.localization",                               # geometry, config writer
     "cflib.crazyflie.mem.lighthouse_memory",            # geometry
     "cflib.bootloader",                                 # firmware flashing
-    "cflib.cpx",                                        # the AI deck's camera
     "libusb_package",                                   # the radio, and radio.py
     "usb.backend.libusb1",
     "uvicorn",                                          # serve
@@ -959,8 +926,8 @@ def _start_logging(*, verbose: bool) -> None:
             paths.log_file(), maxBytes=2_000_000, backupCount=3, encoding="utf-8"))
     except Exception:                       # a read-only home must not stop a flight
         pass
-    # One line per repeating message (logfilter.py): the 50 Hz flight loop and
-    # the camera watchdog otherwise rotate the useful lines out of the file.
+    # One line per repeating message (logfilter.py): the 50 Hz flight loop
+    # otherwise rotates the useful lines out of the file.
     from dronedeck.logfilter import RepeatFilter
     repeats = RepeatFilter()
     for handler in handlers:

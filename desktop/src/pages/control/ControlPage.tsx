@@ -39,7 +39,7 @@ import { Button, Message, PageHeader, Panel, Spinner, Stat, StatusDot, TONE_COLO
 import { SplitPane } from "@/components/SplitPane";
 import { useMediaQuery, WIDE } from "@/lib/useMediaQuery";
 import { AutoControl } from "./auto/AutoControl";
-import { CaptureSwitch, DataPipelinePanel, ProcessingSwitch } from "./DataPipeline";
+import { DataPipelinePanel, ProcessingSwitch } from "./DataPipeline";
 import { ArrowFrame } from "./ArrowFrame";
 import { arrowWords } from "@/lib/arrows";
 import type { FlowStart } from "./auto/MissionFlow";
@@ -60,12 +60,10 @@ type Props = {
   onClearLog: () => void;
   /** Recent sessions moved off this page; the header links to Sessions. */
   onOpenSessions: () => void;
-  /** The Capture page — offered here while a session runs. */
-  onOpenCapture?: () => void;
 };
 
 export function ControlPage({
-  session, telemetry, history, intent, run, logLines, onClearLog, onOpenSessions, onOpenCapture,
+  session, telemetry, history, intent, run, logLines, onClearLog, onOpenSessions,
   autoStart,
 }: Props) {
   // Below `lg` the two columns stack, so there is no divider to drag and the
@@ -89,16 +87,9 @@ export function ControlPage({
           {/* The DPP switch: at the top, in both modes, on by default (the
               owner, 2026-10-09) — DataPipeline.tsx. */}
           <ProcessingSwitch session={session} run={run} />
-          {/* Auto-capture beside it, in both modes, on by default (2026-10-24). */}
-          <CaptureSwitch session={session} run={run} />
           {/* The recent-sessions list used to sit full-width at the foot of this
               page, duplicating the Sessions page and taking the width the console
               wanted. One link does the same job. */}
-          {/* Capturing by hand has its own page (2026-10-24); during a
-              session, this is the way there — the same session. */}
-          {onOpenCapture && session.session_id !== null && (
-            <Button onClick={onOpenCapture}>Capture images →</Button>
-          )}
           <Button onClick={onOpenSessions}>Recent sessions →</Button>
         </div>
       </div>

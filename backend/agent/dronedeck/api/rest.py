@@ -28,9 +28,7 @@ import os
 import sys
 import threading
 import time
-from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Any, Literal
 
 from fastapi import (
     Body,
@@ -50,12 +48,6 @@ from starlette.responses import JSONResponse, Response
 from dronedeck import history, playback
 from dronedeck.api.events import EventHub
 from dronedeck.api.tokens import HEADER, load_or_create_token
-from dronedeck.camera import DeckStream, FrameSource, NoCamera, TestPattern
-from dronedeck.camera.deck import parse_addr
-from dronedeck.camera.diagnose import GAP8_SILENT, NO_CAPTURE, DeckConsole
-from dronedeck.camera.rate import DeckTiming
-from dronedeck.camera.recording import NotRecording, Recorder
-from dronedeck.camera.wifi import DeckWifi, Phase, WifiError, follow_console
 from dronedeck.drone_setup import DroneSetup, SetupError
 from dronedeck.flight import basestation
 from dronedeck.flight.manual import CLIMB_RATE_M_S, MAX_HEIGHT_M, MOVE_SPEED_M_S
@@ -81,21 +73,6 @@ from dronedeck.sync.syncer import Syncer, close_orphaned_flights
 log = logging.getLogger(__name__)
 
 DEFAULT_HOST = "127.0.0.1"
-#: How long a REMEMBERED deck address may go unanswered before the window is
-#: told it is stale and the drone needs a restart (wifi.WifiState.remembered).
-STALE_ADDRESS_S = 15.0
-#: Said when the drone does not detect its AI deck and cannot be restarted for
-#: it (a flight session holds it). The decks are detected when the drone boots.
-NO_DECK_WORDS = ("The drone does not detect its AI deck right now, so there is no camera "
-                 "to reconnect. End the session and press Reconnect camera to restart "
-                 "the drone, or unplug the battery for 10 seconds.")
-#: At most one recovery (ask, then rejoin) per this many seconds.
-RECOVER_EVERY_S = 30.0
-#: At most one camera restart of the drone per this many seconds: a deck out of
-#: range will not come back by being restarted in a loop.
-REJOIN_EVERY_S = 60.0
-#: Joining or rejoining this long without an address: ask, and rejoin.
-JOIN_STUCK_S = 45.0
 DEFAULT_PORT = 8765
 #: How long shutting down may take before the process exits regardless. Above
 #: the longest honest landing (End session waits 15 s for a flight to land,
@@ -119,7 +96,7 @@ DESKTOP_ORIGINS = (
 # is running. They may never command: a page on the internet cannot know the
 # token, and these origins are not allowed to POST at all.
 WEBSITE_ORIGINS = (
-    "https://drone-capstone.vercel.app",
+    "https://drone-capstone-project.vercel.app",
     "http://localhost:3000",
 )
 
@@ -163,12 +140,6 @@ class HoldRequest(BaseModel):
     height_m: float = Field(0.30, gt=0, le=1.0, description="metres above the floor")
 
 
-class DeckWifiRequest(BaseModel):
-    ssid: str = Field(..., min_length=1, max_length=64)
-    #: Empty for an open network. Never logged and never returned.
-    password: str = Field("", max_length=128)
-
-
 class MissionRunRequest(BaseModel):
     mission_id: str = Field(..., min_length=1, max_length=64)
     ambient: str = Field("22C", description="room temperature, e.g. 74F or 22C")
@@ -177,17 +148,6 @@ class MissionRunRequest(BaseModel):
 class ProcessingRequest(BaseModel):
     #: Process this session's flights through the data pipeline when they land.
     on: bool
-
-
-class StartRequest(BaseModel):
-    #: "flight" (every check; it can fly) or "capture" (the radio and the
-    #: camera's deck only; it never flies).
-    purpose: Literal["flight", "capture"] = "flight"
-
-
-class CaptureRequest(BaseModel):
-    #: Record the camera's frames automatically. Off: only manual captures.
-    auto: bool
 
 
 class KeyFrameRequest(BaseModel):
@@ -231,185 +191,15 @@ class Agent:
             lambda: self.cloud if self.cloud.operator is not None else None,
             on_status=lambda status: self.hub.publish("sync", status.to_dict()),
         )
-        self.camera: FrameSource = _camera_from_env()
-        #: The Wi-Fi network the AI deck should join, given by the desktop at
-        #: sign-in and sent to the drone on every link. When the deck reports
-        #: its address, the camera follows it there.
-        self.deck_wifi = DeckWifi(
-            on_change=lambda state: self.hub.publish("camera_wifi", state.to_dict()),
-            on_ip=self._deck_joined,
-            joined_file=data_dir() / "deck-wifi.json",
-        )
-        #: What the GAP8 says each frame cost it, from the drone's console.
-        self.deck_timing = DeckTiming()
-        #: The deck's own console lines, and why it is silent (camera/diagnose.py).
-        self.deck_console = DeckConsole()
-        #: Every camera frame of a session, to disk first (camera/recording.py).
-        #: Standby frames are shown, never recorded.
-        self.recorder = Recorder(self.outbox, position=lambda: self.session.position(),
-                                 point_id=lambda: self.session.current_point_id(),
-                                 auto=lambda: self.session.capture_auto())
-        if isinstance(self.camera, DeckStream):
-            self.camera.add_listener(self.recorder.on_frame)
         self.session = Session(
             cloud=self.cloud, outbox=self.outbox, syncer=self.syncer,
-            publish=self.hub.publish, on_link_ready=self._link_ready,
-            on_link_down=self._link_down, on_link_no_deck=self._link_no_deck,
-            on_session_open=self.recorder.start, on_session_close=self.recorder.stop,
+            publish=self.hub.publish,
         )
-        #: The Set up page: installs the camera software on a drone.
+        #: The Set up page: installs the drone's software.
         self.setup = DroneSetup(
             pause_radio=self._hold_radio, resume_radio=self._release_radio,
             publish=lambda state: self.hub.publish("setup", state),
         )
-
-    #: Stops following the deck's console, once the link it came from closes.
-    _unwatch: Callable[[], None] | None = None
-    #: When the camera was last recovered (asked, rejoined) — RECOVER_EVERY_S.
-    _last_recover: float = 0.0
-    #: The Crazyflie of the link that is up; None when down.
-    _cf: Any = None
-    #: When the drone was last restarted for the camera — REJOIN_EVERY_S.
-    _last_rejoin: float = 0.0
-
-    def _link_ready(self, cf: Any) -> None:
-        """A link is up (standby's or a session's): follow the deck's Wi-Fi
-        reports for as long as it lasts, then hand it the network."""
-        self._cf = cf
-        unwatch_wifi = self.deck_wifi.watch(cf)
-        # The GAP8's per-frame timings ride the same console (camera/rate.py).
-        def deck_line(line: str) -> None:
-            self.deck_timing.feed_line(line)
-            self.deck_console.feed_line(line)
-        unwatch_timing = follow_console(cf, deck_line)
-
-        def unwatch() -> None:
-            unwatch_wifi()
-            unwatch_timing()
-        self._unwatch = unwatch
-        self.deck_wifi.apply(cf)
-
-    def restart_for_camera(self, *, reason: str) -> bool:
-        """Restart the drone over the radio so its AI deck boots, joins and says
-        its address again — the one cure for a deck that cannot rejoin by
-        itself (camera software older than bundle 2).
-
-        Between sessions it is Session.restart_drone; in a CAPTURE session
-        (nothing flies) it is Session.reset_drone, which checks the drone again
-        as for a new capture session. Never in a flight session: a restart
-        drops anything in the air. False when refused.
-
-        RESTORED 2026-10-24 evening (Samuel: "when I press on reconnect camera
-        … it does switch off and on the drone"). It was removed that morning
-        on the belief that the restart unpowered the decks; on the drone that
-        evening 6 radio restarts on a charged battery kept all 8 deck memories
-        each time, and the deck's chips were reset by each (flight-log.txt).
-        """
-        if self.session.measuring_station:
-            # A restart mid-measurement drops the link it is reading.
-            log.info("not restarting the drone (%s): the base station is being measured",
-                     reason)
-            return False
-        try:
-            snap = self.session.snapshot()
-            if snap.session_id is not None and self.session.capturing_only:
-                self.session.reset_drone()
-            else:
-                self.session.restart_drone(reason=reason)
-        except SessionError as e:
-            log.info("not restarting the drone (%s): %s", reason, e)
-            return False
-        self._last_rejoin = time.monotonic()
-        return True
-
-    def recover_camera(self, why: str) -> str:
-        """Get the camera back on the network, the least disruptive way first:
-
-          1. ASK the deck where it is, and follow it there   (any time)
-          2. REJOIN it to the network                        (any time)
-          3. RESTART the drone — only when the deck cannot do 1 and 2 (camera
-             software older than bundle 2): idle or in a capture session,
-             never in a flight session, at most once a minute
-
-        1 and 2 touch only the deck's Wi-Fi: not the radio link, not the flight.
-        Returns DeckWifi.recover's outcome, or "restarted".
-        """
-        cf = self._cf
-        if cf is None:
-            return "no-drone"
-        self._last_recover = time.monotonic()
-        outcome = self.deck_wifi.recover(cf, why)
-        log.info("camera recovery (%s): %s", why, outcome)
-        if (outcome in ("unsupported", "needs_restart")
-                and time.monotonic() - self._last_rejoin >= REJOIN_EVERY_S
-                and self.restart_for_camera(reason=why)):
-            return "restarted"
-        return outcome
-
-    def watchdog(self) -> None:
-        """Every few seconds: is the camera off the network, or is joining
-        stuck? Then recover it (recover_camera). Never in a loop."""
-        while True:
-            time.sleep(5.0)
-            try:
-                wifi = self.deck_wifi.state()
-                camera = self.camera
-                if (self._cf is None or not isinstance(camera, DeckStream)
-                        or time.monotonic() - self._last_recover < RECOVER_EVERY_S):
-                    continue
-                # No AI deck detected: nothing on the drone can answer, and
-                # asking every half minute only fills the radio and the log.
-                if self.session.snapshot().ai_deck is False:
-                    continue
-                # A camera chip that is not running, or a camera that fails, is
-                # not a network problem: rejoining or restarting cannot help —
-                # the battery must come out (camera/diagnose.py). Restarting
-                # anyway, every minute, is what the lab saw on 2026-10-24.
-                found = self.deck_console.diagnose(camera.silent_connects())
-                if found is not None and found.code in (GAP8_SILENT, NO_CAPTURE):
-                    continue
-                no_frames = (not camera.status().live
-                             and camera.no_frames_for() > STALE_ADDRESS_S)
-                unreachable = camera.unreachable_for() > 0
-                if wifi.phase is Phase.JOINED and no_frames:
-                    if unreachable:
-                        self.recover_camera(f"No answer from the camera at {wifi.ip}.")
-                        continue
-                    # It answers and sends nothing, and the drone has not said
-                    # why: asking settles nothing. A restart clears the ESP32's
-                    # stuck-client state (firmware/aideck-esp) — idle or in a
-                    # capture session; in a flight session the operator is told.
-                    self._last_recover = time.monotonic()
-                    why = (f"The camera at {wifi.ip} answers but has sent no picture for "
-                           f"{camera.no_frames_for():.0f} s.")
-                    if (time.monotonic() - self._last_rejoin < REJOIN_EVERY_S
-                            or not self.restart_for_camera(reason=why)):
-                        self.deck_wifi.needs_power_cycle(
-                            f"{why} End the session and press Reconnect camera, or unplug "
-                            "the battery for 10 seconds, to restart the camera.")
-                elif (wifi.phase in (Phase.JOINING, Phase.RECONNECTING)
-                      and self.deck_wifi.phase_age() > JOIN_STUCK_S):
-                    self.recover_camera(f"Still not on {wifi.ssid} after "
-                                        f"{self.deck_wifi.phase_age():.0f} s.")
-                elif wifi.phase is Phase.FAILED and (
-                        wifi.needs_restart or self.deck_wifi.phase_age() > RECOVER_EVERY_S):
-                    self.recover_camera("The last attempt to join did not work.")
-            except Exception:
-                log.exception("camera watchdog failed; it keeps running")
-
-    def _link_no_deck(self) -> None:
-        """A link is up but the drone reports no AI deck: there is no camera to
-        hand the network to. Say so on the Wi-Fi state, with the fix — it read
-        "waiting for the drone to connect" beside a connected radio."""
-        if self.deck_wifi.state().ssid is not None:
-            self.deck_wifi.needs_power_cycle(NO_DECK_WORDS)
-
-    def _link_down(self) -> None:
-        self._cf = None
-        unwatch, self._unwatch = self._unwatch, None
-        if unwatch is not None:
-            unwatch()
-        self.deck_wifi.link_down()
 
     def _hold_radio(self) -> None:
         """Set up flashes over the radio: standby lets go of it first."""
@@ -419,30 +209,6 @@ class Agent:
     def _release_radio(self) -> None:
         with contextlib.suppress(SessionError):
             self.session.connect_drone()
-
-    def _deck_joined(self, ip: str) -> None:
-        if isinstance(self.camera, DeckStream):
-            self.camera.set_host(ip)
-            self.camera.kick()
-
-
-def _camera_from_env() -> FrameSource:
-    """Where camera frames come from, chosen by DRONEDECK_CAMERA.
-
-    unset   NoCamera — the default, because joining the deck's access point
-            takes this laptop off its normal network, so it is opt-in.
-    deck    the AI deck's Wi-Fi streamer, at DRONEDECK_DECK_ADDR
-            (default 192.168.4.1:5000). The laptop must be on the deck's Wi-Fi.
-    test    a generated pattern, which proves the route, the content policy
-            and the window without a camera.
-    """
-    choice = os.environ.get("DRONEDECK_CAMERA", "").strip().lower()
-    if choice == "deck":
-        return DeckStream(parse_addr(os.environ.get("DRONEDECK_DECK_ADDR")))
-    if choice == "test":
-        return TestPattern()
-    return NoCamera()
-
 
 agent = Agent()
 
@@ -475,11 +241,10 @@ async def lifespan(api: FastAPI):
     # happens, so it runs beside startup rather than in front of it.
     threading.Thread(target=_restore_sign_in, daemon=True, name="restore-sign-in").start()
     # Hold the drone on standby whenever someone is signed in and no session
-    # runs: vitals and the camera before any session. DRONEDECK_STANDBY=0
-    # turns it off — for tests, and for a developer who wants the radio free.
+    # runs: vitals before any session. DRONEDECK_STANDBY=0 turns it off — for
+    # tests, and for a developer who wants the radio free.
     if os.environ.get("DRONEDECK_STANDBY", "1").strip() != "0":
         agent.session.start_standby()
-        threading.Thread(target=agent.watchdog, name="camera-watchdog", daemon=True).start()
     # Flights the last run left half-processed (the app closed first) are
     # processed again, in the background. NOT in Agent(): that is built when
     # this module is imported, and a test importing it must never start
@@ -639,225 +404,6 @@ def status() -> dict:
     }
 
 
-@app.get("/camera")
-def camera_status() -> dict:
-    """What the Camera tab shows when there is nothing to show.
-
-    Unauthenticated, like /status and for the same reason: it carries no
-    operator details and commands nothing. `deck_fitted` is the DRONE's own
-    answer (deck.bcAI, read over the radio during the checks), so the tab
-    reports what was asked rather than what someone typed.
-    """
-    status = agent.camera.status()
-    snapshot = agent.session.snapshot()
-    payload = {**status.to_dict(), "deck_fitted": snapshot.ai_deck,
-               "decks_lost": snapshot.decks_lost}
-    # How fast it really is, from both ends (camera/rate.py): what arrives
-    # here, and what the GAP8 says each frame cost it. None without a deck.
-    payload["rate"] = agent.camera.rate.summary() if isinstance(agent.camera, DeckStream) else None
-    payload["deck_timing"] = agent.deck_timing.summary()
-    # What the deck itself says, and why it is silent when it is.
-    silent = agent.camera.silent_connects() if isinstance(agent.camera, DeckStream) else 0
-    payload["deck"] = agent.deck_console.to_dict(silent)
-    # No frames AND no radio link: the likeliest reason is the drone itself —
-    # off, or its battery flat — not the network. Say that first, rather than
-    # a network theory about an address the drone may no longer have.
-    radio_up = snapshot.radio.get("state") == "connected"
-    wifi = agent.deck_wifi.state()
-    #: The agent is actively working towards a picture — the window shows a
-    #: spinner and the reason, not "no signal".
-    payload["connecting"] = False
-    if not status.live and isinstance(agent.camera, DeckStream):
-        if snapshot.radio.get("state") == "restarting":
-            payload["connecting"] = True
-            payload["reason"] = ("Restarting the drone so its camera rejoins and reports "
-                                 "its address — about 15 s.")
-        elif not radio_up:
-            payload["reason"] = (
-                "The drone is not connected — it may be switched off or its battery "
-                "flat. Its camera streams once the drone is on and connected."
-            )
-        elif wifi.phase in (Phase.SENDING, Phase.JOINING, Phase.RECONNECTING):
-            payload["connecting"] = True
-            payload["reason"] = wifi.message
-        elif (found := agent.deck_console.diagnose(silent)) is not None \
-                and found.code in (GAP8_SILENT, NO_CAPTURE):
-            # The drone has said why, and it is not ours to fix by retrying:
-            # the operator acts (the battery), so no spinner — and the
-            # watchdog does not restart it either.
-            payload["connecting"] = False
-            payload["reason"] = found.message
-        elif wifi.phase is Phase.JOINED and \
-                agent.camera.no_frames_for() > STALE_ADDRESS_S:
-            # Not at that address any more. The watchdog restarts the deck so it
-            # says its new one; the window says what is happening meanwhile.
-            payload["connecting"] = True
-            unreachable = agent.camera.unreachable_for() > 0
-            if unreachable:
-                payload["reason"] = (f"The camera is no longer at {wifi.ip}. Asking the "
-                                     "drone where it is, then rejoining it — the drone keeps "
-                                     "flying as it is.")
-            else:
-                payload["reason"] = (
-                    "The drone's camera accepts the connection but sends nothing. "
-                    + ("Restarting the drone so it starts clean — about 15 s."
-                       if snapshot.state is State.IDLE else
-                       "End the session to let the drone restart."))
-        elif wifi.phase is Phase.JOINED:
-            payload["connecting"] = True
-    return payload
-
-
-@app.get("/camera/recording", dependencies=[Command])
-def camera_recording() -> dict:
-    """The session's recording, if one is running: how many frames, the latest."""
-    recording = agent.recorder.current
-    return recording.summary() if recording is not None else {"recording": False}
-
-
-@app.get("/camera/recording/frames", dependencies=[Command])
-def camera_recording_frames(
-    after: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=2000),
-    source: str | None = Query(None, pattern="^(auto|manual)$"),
-) -> dict:
-    """Recorded frames after `after`, for the backlog strip — or, with
-    source=manual, the session's manual captures (the Capture page)."""
-    recording = agent.recorder.current
-    frames = recording.after(after, limit, source) if recording is not None else []
-    return {"frames": [f.to_dict() for f in frames]}
-
-
-@app.post("/camera/capture", dependencies=[Command])
-def capture_frame() -> dict:
-    """Save the camera's newest frame into the session, by hand — the
-    Capture page's button. Works with auto-capture off. Refused outside a
-    session, and when the camera has no fresh frame (a stalled feed's last
-    picture is not what the operator is looking at now)."""
-    data = agent.camera.frame()          # None once the frame is older than STALE_S
-    if data is None:
-        status = agent.camera.status()
-        raise HTTPException(status_code=409, detail=(
-            "The camera has no fresh frame to capture. "
-            + (status.reason or "Wait for the picture to come back, then capture again.")))
-    status = agent.camera.status()
-    try:
-        frame = agent.recorder.capture_manual(data, agent.camera.content_type,
-                                              status.width or 0, status.height or 0)
-    except NotRecording as e:
-        raise HTTPException(status_code=409, detail=str(e)) from None
-    agent.session.record_capture(frame.seq)
-    return frame.to_dict()
-
-
-@app.get("/camera/recording/frame/{which}", dependencies=[Command])
-def camera_recording_frame(which: str) -> Response:
-    """One recorded frame — a number, or "latest" — read back FROM DISK, so
-    what the window shows is what was saved. 204 when there is none."""
-    recording = agent.recorder.current
-    if recording is None:
-        return Response(status_code=204)
-    if which == "latest":
-        frame = recording.latest()
-    else:
-        try:
-            frame = recording.get(int(which))
-        except ValueError:
-            raise HTTPException(status_code=404, detail="No such frame.") from None
-    if frame is None:
-        return Response(status_code=204)
-    try:
-        data = recording.path(frame).read_bytes()
-    except OSError:
-        raise HTTPException(status_code=404, detail="That frame is gone from disk.") from None
-    return Response(content=data, media_type=frame.content_type,
-                    headers={"Cache-Control": "no-store"})
-
-
-@app.get("/camera/wifi", dependencies=[Command])
-def camera_wifi() -> dict:
-    """The network the deck is set to join, and how far it got. No password."""
-    return agent.deck_wifi.state().to_dict()
-
-
-@app.put("/camera/wifi", dependencies=[Command])
-def set_camera_wifi(body: DeckWifiRequest) -> dict:
-    """Set the network the deck joins. Applied on the next drone link — or now,
-    when a session already holds one."""
-    try:
-        state = agent.deck_wifi.configure(body.ssid, body.password)
-    except WifiError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    # A link already open — a session's, or standby's — gets it now; otherwise
-    # the next link does.
-    # A connected drone is handed it now: a deck with bundle 2 (wifi-recovery.
-    # patch) moves to it in place. An older deck that joined a network this
-    # power-on answers ALREADY_APPLIED, the state says needs_restart, and the
-    # watchdog restarts it between sessions — no restart when none is needed.
-    cf = agent._cf
-    if cf is not None and agent.session.snapshot().ai_deck:
-        threading.Thread(target=agent.deck_wifi.apply, args=(cf,),
-                         name="deck-wifi", daemon=True).start()
-    return state.to_dict()
-
-
-@app.post("/camera/wifi/rejoin", dependencies=[Command])
-def rejoin_camera_wifi() -> dict:
-    """The operator's "Reconnect camera": ask the deck where it is, rejoin it,
-    and restart the drone when the deck can do neither (Agent.recover_camera)
-    — idle or in a capture session, never in a flight session. Runs in the
-    background — it can take half a minute — and the page follows the Wi-Fi
-    state.
-
-    With no AI deck detected there is nothing to ask: the drone is restarted
-    straight away, since the decks are detected when it boots. Refused, with
-    the fix, only when a flight session holds the drone."""
-    snapshot = agent.session.snapshot()
-    # The deck first: with no AI deck the camera hand-off never runs, so `_cf`
-    # is None and this said "Connect the drone first" beside a connected radio
-    # (2026-10-24).
-    if snapshot.ai_deck is False:
-        if not agent.restart_for_camera(reason="You asked to reconnect; no AI deck detected."):
-            raise HTTPException(status_code=409, detail=NO_DECK_WORDS)
-        return agent.deck_wifi.state().to_dict()
-    if agent._cf is None:
-        connected = snapshot.radio.get("state") == "connected"
-        raise HTTPException(status_code=409, detail=(
-            "The drone is still connecting — try again in a few seconds." if connected
-            else "Connect the drone first: the camera is reached through it."))
-    threading.Thread(target=agent.recover_camera, args=("You asked to reconnect.",),
-                     daemon=True, name="camera-recover").start()
-    return agent.deck_wifi.state().to_dict()
-
-
-@app.delete("/camera/wifi", dependencies=[Command])
-def forget_camera_wifi() -> dict:
-    return agent.deck_wifi.forget().to_dict()
-
-
-@app.get("/camera/frame")
-def camera_frame() -> Response:
-    """The latest frame, as an image.
-
-    Unauthenticated ON PURPOSE, and it is the narrowest route here: it is
-    read-only, it commands nothing, and the agent binds localhost. An <img> tag
-    cannot send a header, so requiring the token would mean putting it in a
-    query string — which the WebSocket deliberately avoids because a query
-    string lands in access logs. /status is already open and carries more.
-
-    204 when there is no camera: an empty body the window can distinguish from
-    a broken route, which a 404 would not.
-    """
-    frame = agent.camera.frame()
-    if frame is None:
-        return Response(status_code=204)
-    return Response(
-        content=frame,
-        media_type=agent.camera.content_type,
-        # A live feed must never be served from cache.
-        headers={"Cache-Control": "no-store"},
-    )
-
-
 @app.get("/session", dependencies=[Command])
 def session_state() -> dict:
     return agent.session.snapshot().to_dict()
@@ -914,32 +460,6 @@ def read_samples(
             session_id, names, mode=str(mode) if mode else None, limit=limit)
     except ValueError:
         raise HTTPException(status_code=404, detail="No such session on this computer.") from None
-
-
-@app.get("/history/sessions/{session_id}/frames", dependencies=[Command])
-def read_session_frames(
-    session_id: str, source: str | None = Query(None, pattern="^(auto|manual)$"),
-) -> dict:
-    """A session's recorded frames — with source=manual, its captures made
-    by hand (Sessions › a session, the Capture page after it ended)."""
-    try:
-        return {"frames": history.session_frames(session_id, source)}
-    except ValueError:
-        raise HTTPException(status_code=404, detail="No such session on this computer.") from None
-
-
-@app.get("/history/sessions/{session_id}/frames/{seq}", dependencies=[Command])
-def read_session_frame(session_id: str, seq: int) -> Response:
-    """One recorded frame of a session, read from disk."""
-    try:
-        found = history.session_frame(session_id, seq)
-    except ValueError:
-        found = None
-    if found is None:
-        raise HTTPException(status_code=404, detail="No such frame on this computer.")
-    path, ctype = found
-    return Response(content=path.read_bytes(), media_type=ctype,
-                    headers={"Cache-Control": "no-store"})
 
 
 def _signed_in_cloud() -> SupabaseCloud | None:
@@ -1072,12 +592,6 @@ def set_processing(request: ProcessingRequest) -> dict:
     return _run(lambda: agent.session.set_processing(request.on))
 
 
-@app.post("/session/capture", dependencies=[Command])
-def set_capture(request: CaptureRequest) -> dict:
-    """The auto-capture switch: record the camera's frames automatically."""
-    return _run(lambda: agent.session.set_capture_auto(request.auto))
-
-
 @app.post("/controls/frame", dependencies=[Command])
 def set_key_frame(request: KeyFrameRequest) -> dict:
     """Which way the arrow keys move the drone. Works in the air."""
@@ -1097,11 +611,11 @@ def set_mode(request: ModeRequest) -> dict:
 
 
 @app.post("/session/start", dependencies=[Command])
-def start_session(request: StartRequest | None = None) -> dict:
-    """Start a session: for flying (Control, the default) or, with
-    {"purpose": "capture"}, for taking pictures (the Capture page)."""
-    purpose = request.purpose if request is not None else "flight"
-    return _run(lambda: agent.session.start(purpose))
+def start_session() -> dict:
+    """Start a session: connect, run every check, then confirm the area. (A
+    body is ignored: until 2026-11-15 {"purpose": "capture"} opened a capture
+    session for the drone's camera, which is gone.)"""
+    return _run(agent.session.start)
 
 
 @app.post("/session/confirm", dependencies=[Command])
@@ -1470,8 +984,8 @@ def delete_mission(mission_id: str) -> dict:
 
 @app.post("/drone/connect", dependencies=[Command])
 def drone_connect() -> dict:
-    """Look for the drone now and hold it on standby — vitals and camera with
-    no session. Never arms."""
+    """Look for the drone now and hold it on standby — vitals with no
+    session. Never arms."""
     try:
         agent.session.connect_drone()
     except SessionError as e:

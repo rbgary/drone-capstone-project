@@ -89,8 +89,8 @@ THE ONE RULE EVERYTHING FOLLOWS
 - The mission controller decides WHERE NEXT and WHEN; the manual flight
   system (the tuned 50 Hz loop Manual uses) decides HOW to fly there.
 - Sequence: take off to cruise height → fly to P1 at the mission's speed →
-  arrive → settle → HOLD (readings and camera frames tagged with the point's
-  id only while holding) → next point → … → return over the start, or land
+  arrive → settle → HOLD (readings tagged with the point's id only while
+  holding; the drone carries no camera since 2026-11-15) → next point → … → return over the start, or land
   at the end point → land.
 - Any key pressed takes over at once; the mission ends and the drone is
   yours. L lands.

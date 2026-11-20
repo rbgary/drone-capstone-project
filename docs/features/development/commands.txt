@@ -1,6 +1,6 @@
 ================================================================================
 COMMANDS — every command in the project, where to run it, and what it does
-Last verified: 2026-10-24 against experiment/samuel (lab) — backend/agent/dronedeck/cli.py,
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against `dronedeck --help`: the same twelve commands, setup --reinstall main|lighthouse, process --flight|--fixture|--session|--all. Before that, 2026-10-24 against experiment/samuel (lab) — backend/agent/dronedeck/cli.py,
 web/package.json, desktop/package.json, scripts/, backend/supabase/ (migrations
 + checks/), firmware/drone-wifi/build.sh, and the gates in CLAUDE.md "Commands".
 SOURCE: backend/agent/dronedeck/cli.py
@@ -38,7 +38,7 @@ AGENT CLI — the `dronedeck` command (motors only where noted)
                                     the app has no install button or route.
                                     QUIT DroneDeck first (it holds the radio).
                                     --check (read only), --reinstall
-                                    main|lighthouse|camera,wifi. Installed app:
+                                    main|lighthouse. Installed app:
                                     …/DroneDeck.app/Contents/MacOS/
                                     dronedeck-agent setup — Set up step 2 shows
                                     this machine's exact line to copy.
@@ -71,7 +71,8 @@ AGENT CLI — the `dronedeck` command (motors only where noted)
                                     never connects. Also: --session ID (on-ground
                                     samples), --all (everything unprocessed),
                                     --fixture (the test fixture, source checkout
-                                    only), --live-point POINT (with --flight).
+                                    only). Runs after a flight lands, never in
+                                    the air.
   dronedeck mission-report --flight ID
                                     Per inspection point: leg, transit, settle,
                                     hold, drift, flown-vs-estimate, and suggested
@@ -175,7 +176,8 @@ RLS / DATABASE CHECKS — prove the policies against a running database
   python backend/supabase/checks/playback_check.py        flight_plans + playback.
   python backend/supabase/checks/notifications_check.py   Notifications: one each.
 
-FIRMWARE — the Crazyflie app (drone_wifi) on the drone's STM32
+FIRMWARE — the Crazyflie app (drone_wifi) on the drone's STM32 — kept as is
+  for its cwsetup.fw marker; its Wi-Fi is dead code (../desktop/drone-wifi.txt)
   cd firmware/drone-wifi
 
   ./build.sh                        Run the wire test, then build the stock

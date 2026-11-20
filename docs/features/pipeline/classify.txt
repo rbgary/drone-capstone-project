@@ -1,22 +1,26 @@
 ================================================================================
 CLASSIFY — blocks@1: the stretches of a flight where temperature or pressure
 departs from what was expected
-Last verified: 2026-10-09 against docs/pipeline-v2 — tests/pipeline/
+Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against pelt.py after f406443 (an AI-disclosure header, and its docstring now says numpy is the pipeline's only runtime dependency — no code change). Before that, 2026-11-15 on feat/no-camera — contract v3: classify(data,
+clean, ctx), no frames; tests/pipeline/test_classify.py passing. Before that,
+2026-10-09 against docs/pipeline-v2 — tests/pipeline/
 test_classify.py, ml/anomaly-eval/evaluate.py on the lab's flights (cleaned by
 robust@1), PELT against ruptures on 500 series.
 SOURCE: backend/agent/dronedeck/pipeline/stages/classify/blocks.py
 ================================================================================
 
 --------------------------------------------------------------------------------
-STATUS  (Last verified: 2026-10-09)
+STATUS  (Last verified: 2026-11-15)
 --------------------------------------------------------------------------------
   agent     BUILT for the sensors — blocks@1 (Samuel), its block-finding now
             run on a Tuning (the flight's constants by default); ground@1 for a
-            session on the ground (session.txt); scene@1 for the camera
-            (scene.txt)
-  NOT BUILT an image model (story 4.4, Reagan — frames are "unknown — no image
-            model yet"); minimums measured on a real heat source (the
-            hand-warmer flights) — ../../handoffs/sprint-1/done/dpp-classify.txt
+            session on the ground (session.txt). Neither labels frames any
+            more (contract v3, 2026-11-15: no camera, scene@1 removed)
+  NOT BUILT minimums measured on a real heat source (the hand-warmer
+            flights) — ../../handoffs/sprint-1/done/dpp-classify.txt
+  ELSEWHERE the image model (story 4.4, Reagan) classifies photos taken by
+            hand, each on its own — not a stage of this pipeline (Phase 5 of
+            the no-camera work; origin/feat/image-model-stage)
 
 --------------------------------------------------------------------------------
 1. WHAT IT IS
@@ -77,13 +81,9 @@ depends-on        data-pipeline.txt
                   the contract (Track, Segment, Event) and the runner
 depends-on        clean.txt
                   only usable values are fitted
-depends-on        enhance.txt
-                  a frame's quality decides its label
 consumed-by       interpret.txt
                   events become findings; the minimums ride in `features`
 consumed-by       session.txt
                   ground@1 reuses the fits, PELT and the merging, with its own Tuning
-consumed-by       scene.txt
-                  both classifiers measure the frames' view change
 consumed-by       calibrate.txt
                   MIN_EVENT_C, measured against a real heat source

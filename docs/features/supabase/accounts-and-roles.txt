@@ -98,9 +98,20 @@ INVARIANTS
   nothing of the kind. It cost a debugging session; the fix is in seed.sql.
 - GOOGLE SIGN-IN NEEDS A REDIRECT URL REGISTERED BY HAND, once, by the project
   owner: Supabase -> Authentication -> URL Configuration -> Redirect URLs, add
-  https://drone-capstone.vercel.app/auth/callback. Nothing in this repo can do
+  https://drone-capstone-project.vercel.app/auth/callback. Nothing in this repo can do
   it. Email and password work without it, so the gap shows up only when someone
   tries the Google button.
+- GOOGLE HAS NEVER BEEN SWITCHED ON (Samuel, 2026-11-16: never enabled on the
+  old project; the new project, tmswmgwomoabvftdreeb, reports google: false
+  in /auth/v1/settings). Not a loss from the database move. Until it is on,
+  "Continue with Google" (web/components/ui/login-form.tsx) sends the
+  browser to Supabase's raw JSON error — "Unsupported provider: provider is
+  not enabled", HTTP 400 — and the form's own "Could not start Google
+  sign-in" never shows: signInWithOAuth only builds the URL and redirects.
+  Turning it on: a Google Cloud OAuth client (Web application) whose
+  authorized redirect URI is https://tmswmgwomoabvftdreeb.supabase.co/auth/v1/callback,
+  its ID and secret in Authentication → Providers → Google, then the
+  redirect URL above. The secret never goes in the repo.
 
 
 LAST VERIFIED  2026-09-25, desktop sign-in only: tests/test_cloud_auth.py

@@ -1,18 +1,23 @@
-"""The contract every pipeline stage builds against — version 2.
+"""The contract every pipeline stage builds against — version 3.
 
 The same types as docs/handoffs/sprint-1/done/dpp-contract.txt — this file is the
 authority. Change a type here and every stage owner's code is affected, so a
 change is agreed first and the contract doc updated in the same commit.
 
-THE UNIT OF WORK IS THE FLIGHT (v2, 2026-10-09). Clean, enhance and classify
-run once over the whole flight, handed as one PointData whose point is
-WHOLE_FLIGHT; every reading and frame carries the inspection point it was taken
-at (point_id), so the points are a view, not a split. What changed and why:
-an anomaly is a BLOCK of readings that departs from what was expected, and a
-block can span two points or the transit between them — which a stage that
-only ever sees one point's readings cannot find (v1 analysed transit readings
-not at all). The live runner (story 4.9) runs the same stages over the flight
-so far.
+THREE STAGES, THE SENSORS ONLY (v3, 2026-11-15). clean → classify →
+interpret. The drone carries no camera (docs/features/architecture.txt,
+DECISIONS), so v2's frames, its enhance stage (clahe@1), the scene measure
+(scene@1) and every image field of a finding are gone. Photos taken by hand
+are classified on their own, outside this pipeline. A flight is processed once
+its data has arrived — there is no live run while it flies.
+
+THE UNIT OF WORK IS THE FLIGHT (v2, 2026-10-09). Clean and classify run once
+over the whole flight, handed as one PointData whose point is WHOLE_FLIGHT;
+every reading carries the inspection point it was taken at (point_id), so the
+points are a view, not a split. Why: an anomaly is a BLOCK of readings that
+departs from what was expected, and a block can span two points or the transit
+between them — which a stage that only ever sees one point's readings cannot
+find (v1 analysed transit readings not at all).
 
 UNITS: metres, seconds, hPa. Temperatures are in `FlightContext.temp_unit` —
 whatever the operator chose at launch — and a stage converts them itself
@@ -63,7 +68,6 @@ class FlightContext:
     ground_z_m: float | None                # the floor's Lighthouse z at takeoff
     started_at: datetime                    # UTC
     workdir: Path                           # the ONLY place a stage may write files
-    mode: Literal["batch", "live"] = "batch"
     #: The inspection points of the mission flown, in order; () when the
     #: flight flew no mission.
     points: tuple[InspectionPoint, ...] = ()
@@ -93,26 +97,9 @@ class Reading:
 
 
 @dataclass(frozen=True)
-class Frame:
-    """One row of frames.csv."""
-
-    seq: int
-    recorded_at: datetime
-    t_s: float                              # seconds since the flight's first row
-    path: Path                              # the original image — READ ONLY
-    width: int                              # 324 on the AI deck
-    height: int                             # 244 on the AI deck
-    x_m: float | None
-    y_m: float | None
-    z_m: float | None
-    point_id: str | None = None
-
-
-@dataclass(frozen=True)
 class PointData:
     point: InspectionPoint                  # WHOLE_FLIGHT for the whole flight
     readings: tuple[Reading, ...]           # ordered by index
-    frames: tuple[Frame, ...]               # ordered by seq; may be EMPTY
 
 
 # ── stage 1: clean (story 4.2) ───────────────────────────────────────────
@@ -158,49 +145,7 @@ class Cleaner(Protocol):
     def clean(self, data: PointData, ctx: FlightContext) -> CleanResult: ...
 
 
-# ── stage 2: enhance (story 4.3) ─────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class FrameQuality:
-    """How usable the ORIGINAL frame is, measured — never guessed."""
-
-    sharpness: float                        # variance of the Laplacian
-    brightness: float                       # mean pixel, 0..255
-    dark_share: float                       # share of pixels at 0..5, 0..1
-    bright_share: float                     # share of pixels at 250..255, 0..1
-    usable: bool
-    reason: str | None = None               # REQUIRED when not usable
-
-    def __post_init__(self) -> None:
-        if not self.usable and not self.reason:
-            raise ValueError("an unusable frame must say why")
-
-
-@dataclass(frozen=True)
-class EnhancedFrame:
-    frame: Frame
-    path: Path | None                       # enhanced image under ctx.workdir;
-                                            # None = not enhanced, use frame.path
-    method: str                             # "identity", "clahe", "fsrcnn-x2", ...
-    scale: int                              # 1, 2 or 4
-    note: str | None = None                 # why it was skipped, when path is None
-    quality: FrameQuality | None = None     # None = not measured
-
-
-@dataclass(frozen=True)
-class EnhanceResult:
-    frames: tuple[EnhancedFrame, ...]       # ONE PER INPUT FRAME, SAME ORDER
-
-
-class Enhancer(Protocol):
-    name: str
-    version: str
-
-    def enhance(self, data: PointData, ctx: FlightContext) -> EnhanceResult: ...
-
-
-# ── stage 3: classify (stories 4.4 and 4.6) ──────────────────────────────
+# ── stage 2: classify (story 4.6) ────────────────────────────────────────
 
 LabelValue = Literal["normal", "faulty", "unknown"]
 Signal = Literal["temperature", "pressure"]
@@ -218,25 +163,6 @@ class Label:
             raise ValueError("an 'unknown' label must say why")
         if self.p_faulty is not None and not 0.0 <= self.p_faulty <= 1.0:
             raise ValueError("p_faulty must be between 0 and 1")
-
-
-@dataclass(frozen=True)
-class ViewChange:
-    """Whether the camera's view changed at a frame (scene@1): the camera cannot
-    see heat, but it can see something move in front of the drone."""
-
-    seq: int                                # Frame.seq
-    score: float | None                     # None = not comparable (see note)
-    against: int | None                     # the frame it was compared with
-    note: str
-    changed: bool = False
-
-
-@dataclass(frozen=True)
-class ImageVerdict:
-    seq: int                                # Frame.seq
-    source: Literal["original", "enhanced"]
-    label: Label
 
 
 @dataclass(frozen=True)
@@ -294,29 +220,25 @@ class Event:
 
 @dataclass(frozen=True)
 class ClassifyResult:
-    images: tuple[ImageVerdict, ...]        # one per frame, same order
     sensors: Label                          # one label for the readings
     features: Mapping[str, float] = field(default_factory=dict)  # names carry units
     tracks: tuple[Track, ...] = ()
     segments: tuple[Segment, ...] = ()
     events: tuple[Event, ...] = ()
-    #: One per frame, same order, when measured (scene@1); () = not measured.
-    views: tuple[ViewChange, ...] = ()
 
 
 class Classifier(Protocol):
     name: str
     version: str
 
-    def classify(self, data: PointData, clean: CleanResult, enhanced: EnhanceResult,
+    def classify(self, data: PointData, clean: CleanResult,
                  ctx: FlightContext) -> ClassifyResult: ...
 
 
-# ── stage 4: interpret (Samuel) ──────────────────────────────────────────
+# ── stage 3: interpret (Samuel) ──────────────────────────────────────────
 
 Verdict = Literal["normal", "anomaly", "insufficient_data"]
 Severity = Literal["info", "warning", "critical"]
-ImageSupport = Literal["supports", "contradicts", "cannot_tell"]
 
 
 @dataclass(frozen=True)
@@ -325,7 +247,6 @@ class Alert:
     severity: Severity
     reason: str
     evidence_readings: tuple[int, ...] = ()
-    evidence_frames: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -338,8 +259,8 @@ class PointResult:
 
 @dataclass(frozen=True)
 class Finding:
-    """An event judged: how serious, in words, where, when, and the frames
-    taken then. The telemetry is the evidence; the frames only support it."""
+    """An event judged: how serious, in words, where and when. The readings
+    are the evidence."""
 
     id: str                                 # deterministic: re-processing upserts
     signal: Signal
@@ -359,9 +280,6 @@ class Finding:
     x_m: float | None
     y_m: float | None
     z_m: float | None
-    evidence_frames: tuple[int, ...]
-    image_support: ImageSupport
-    image_note: str
 
 
 @dataclass(frozen=True)
@@ -374,8 +292,8 @@ class Interpreter(Protocol):
     name: str
     version: str
 
-    def interpret(self, data: PointData, clean: CleanResult, enhanced: EnhanceResult,
-                  classified: ClassifyResult, ctx: FlightContext) -> InterpretResult: ...
+    def interpret(self, data: PointData, clean: CleanResult, classified: ClassifyResult,
+                  ctx: FlightContext) -> InterpretResult: ...
 
 
 # ── the flight's result ──────────────────────────────────────────────────
@@ -389,23 +307,6 @@ class StageFailure:
 
 
 @dataclass(frozen=True)
-class FrameRecord:
-    """What became of one frame: its enhanced copy, quality and label."""
-
-    seq: int
-    t_s: float
-    point_id: str | None
-    enhanced: str | None                    # path relative to the flight's workdir
-    method: str
-    quality: FrameQuality | None
-    label: Label
-    #: scene@1: how much the view changed from the frame before (None = not
-    #: comparable), and in words.
-    view_change: float | None = None
-    view_note: str | None = None
-
-
-@dataclass(frozen=True)
 class FlightResult:
     flight_id: str
     pipeline_version: str
@@ -413,8 +314,8 @@ class FlightResult:
     created_at: str
     points: tuple[PointResult, ...]
     failures: tuple[StageFailure, ...] = ()
-    #: Per point: how many readings, flags and frames it had — so a verdict can
-    #: be judged against how much evidence it rested on.
+    #: Per point: how many readings and flags it had — so a verdict can be
+    #: judged against how much evidence it rested on.
     summary: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     session_id: str | None = None
     temp_unit: str = "C"
@@ -422,6 +323,5 @@ class FlightResult:
     flags: tuple[ReadingFlag, ...] = ()
     tracks: tuple[Track, ...] = ()
     segments: tuple[Segment, ...] = ()
-    frames: tuple[FrameRecord, ...] = ()
     #: "session": flight_id is the session's id (see FlightContext.scope).
     scope: Scope = "flight"

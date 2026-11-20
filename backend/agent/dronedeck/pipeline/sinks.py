@@ -3,7 +3,6 @@ laptop.
 
     <data folder>/results/<flight id>/result.json    the verdicts
     <data folder>/results/<flight id>/work/          the stages' own files
-                                                     (enhanced frames, ...)
 
 Running the pipeline again on the same flight REPLACES result.json (atomic:
 a temporary file, then a rename) — one flight, one current result. Uploading

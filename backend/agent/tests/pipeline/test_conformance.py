@@ -4,7 +4,6 @@ The list of implementations is conformance.py; this file is the checks."""
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 import subprocess
 import sys
@@ -19,12 +18,11 @@ from dronedeck.pipeline.contracts import (
     PointData,
 )
 from dronedeck.pipeline.sources import LocalFlightSource
-from dronedeck.pipeline.stages.enhance.stub import StubEnhancer
-from tests.pipeline.conformance import CLASSIFIERS, CLEANERS, ENHANCERS
+from tests.pipeline.conformance import CLASSIFIERS, CLEANERS
 
 FIXTURE = Path(__file__).parent / "fixtures" / "data"
 FORBIDDEN = ("dronedeck.flight", "dronedeck.session", "dronedeck.api",
-             "dronedeck.sync", "dronedeck.camera")
+             "dronedeck.sync")
 
 
 @pytest.fixture(scope="module")
@@ -43,12 +41,8 @@ def ctx(tmp_path, flight) -> FlightContext:
 def points(flight):
     """What a stage may be handed: the whole flight (what the runner gives),
     each point's view, and an empty point."""
-    empty = PointData(InspectionPoint("EMPTY", None, 0, 0, 0.4), (), ())
+    empty = PointData(InspectionPoint("EMPTY", None, 0, 0, 0.4), ())
     return [flight.whole, *flight.points, empty]
-
-
-def hashes(data: PointData) -> dict[int, str]:
-    return {f.seq: hashlib.sha256(f.path.read_bytes()).hexdigest() for f in data.frames}
 
 
 def imports_of(cls) -> set[str]:
@@ -61,7 +55,7 @@ def imports_of(cls) -> set[str]:
     return set(out.stdout.split())
 
 
-ALL = [*CLEANERS, *ENHANCERS, *CLASSIFIERS]
+ALL = [*CLEANERS, *CLASSIFIERS]
 
 
 @pytest.mark.parametrize("stage", ALL, ids=lambda c: c.__name__)
@@ -96,48 +90,19 @@ class TestCleaners:
         assert cleaner().clean(data, ctx).flags == cleaner().clean(data, ctx).flags
 
 
-@pytest.mark.parametrize("enhancer", ENHANCERS, ids=lambda c: c.__name__)
-class TestEnhancers:
-    def test_one_frame_out_per_frame_in_in_order(self, enhancer, flight, ctx):
-        for data in points(flight):
-            result = enhancer().enhance(data, ctx)
-            assert tuple(f.frame for f in result.frames) == data.frames
-
-    def test_files_only_under_the_workdir_and_originals_untouched(self, enhancer, flight,
-                                                                  ctx):
-        for data in points(flight):
-            before = hashes(data)
-            result = enhancer().enhance(data, ctx)
-            for f in result.frames:
-                if f.path is None:
-                    assert f.note, "a frame not enhanced must say why"
-                else:
-                    assert ctx.workdir in f.path.parents
-                    assert f.scale in (1, 2, 4)
-            assert hashes(data) == before
-
-    def test_the_same_input_gives_the_same_output(self, enhancer, flight, ctx):
-        data = flight.whole
-        first = [(f.method, f.scale, f.path) for f in enhancer().enhance(data, ctx).frames]
-        again = [(f.method, f.scale, f.path) for f in enhancer().enhance(data, ctx).frames]
-        assert first == again
-
-
 @pytest.mark.parametrize("classifier", CLASSIFIERS, ids=lambda c: c.__name__)
 class TestClassifiers:
     def labels(self, classifier, data, ctx):
         clean = CleanResult(data.readings, ())
-        enhanced = StubEnhancer().enhance(data, ctx)
-        return classifier().classify(data, clean, enhanced, ctx)
+        return classifier().classify(data, clean, ctx)
 
-    def test_every_frame_labelled_in_order(self, classifier, flight, ctx):
+    def test_the_sensor_label_is_valid_and_says_why_when_unknown(self, classifier, flight,
+                                                                 ctx):
         for data in points(flight):
-            result = self.labels(classifier, data, ctx)
-            assert tuple(v.seq for v in result.images) == tuple(f.seq for f in data.frames)
-            for label in [result.sensors, *(v.label for v in result.images)]:
-                assert label.value in ("normal", "faulty", "unknown")
-                assert label.value != "unknown" or label.reason
-                assert "@" in label.model
+            label = self.labels(classifier, data, ctx).sensors
+            assert label.value in ("normal", "faulty", "unknown")
+            assert label.value != "unknown" or label.reason
+            assert "@" in label.model
 
     def test_the_same_input_gives_the_same_labels(self, classifier, flight, ctx):
         data = flight.whole

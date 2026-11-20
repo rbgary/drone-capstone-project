@@ -56,9 +56,6 @@ THE TICKETS — SPRINT 1
   done/dpp-clean.txt              Kevin,   4.2 — robust@1 replaced    built —
                                   Samuel   hampel@1 (2026-10-09)      follow-ups
                                                                       open
-  done/dpp-enhance.txt            Samuel,  4.3 — clahe@1; Kevin's     built —
-                                  Kevin    upscaler eval may follow   follow-ups
-                                                                      open
   done/dpp-classify.txt           Samuel,  4.6 sensors — blocks@1;    sensors
                                   Reagan   4.4 image model is Reagan's built; 4.4
                                                                       open

@@ -11,13 +11,10 @@ stop.
   Home         where you are and what to do next; the sign-in form when signed
                out. Opens first.
   Control      the keys across the top, then two columns: the console on the
-               left (vitals, camera, scene), the controls on the right (the
+               left (vitals), the controls on the right (the
                action rail and the step's own controls). IN AUTO the page is
                the mission flow instead — auto-control.txt.
-  Capture      the camera, Capture, and this session's pictures taken by hand;
-               starts and ends its own session (capture.txt)
-  Sessions     every session (who, when, how it ended) and one session's detail,
-               with its manual captures
+  Sessions     every session (who, when, how it ended) and one session's detail
   Playback     every flight — this computer's and everyone's in Supabase — and
                any one played back on the room map (mission-playback.txt)
   (standby)    signed in with no session, Home shows the drone on standby
@@ -25,9 +22,6 @@ stop.
                vitals — never recorded (sessions-and-modes.txt). The window
                clears vitals whenever the radio is not connected, so nothing
                stale reads "Live".
-  Drone Wi-Fi  which network the drone's camera is on, and changing it
-               (drone-wifi.txt). Its sidebar item carries a status glyph —
-               shape and colour — for the join state.
   Flight       position, speed, attitude, thrust
   Power        battery, will-it-arm, per-motor
   Environment  temperature and pressure
@@ -51,11 +45,10 @@ WHERE IT LIVES
   desktop/src/measure.ts                 the layout measurement (see below)
   desktop/src/pages/home/                status and the next step
   desktop/src/pages/control/             the session flow, both modes, and:
-                                           ConsolePane      the three tabs
+                                           ConsolePane      the console (Vitals)
                                            AttitudeIndicator the ADI + compass
                                            CommandLog       what we asked for
                                            VitalsTail       what it reports
-                                           CameraPane       what it can see
   desktop/src/pages/windows/             the five live sensor windows, LiveChart
   desktop/src/pages/sessions/            RecentSessions, SessionsPage, WindowLog,
                                          and the parts they share
@@ -183,20 +176,23 @@ tooltip and as a line beneath the rail, never hidden. The old page revealed
 each control when its step
 arrived, which meant the operator relearned the layout at every stage.
 
-The left column is three tabs:
+The left column is the console, Vitals under its strip (the strip carries
+the stream's status and Full screen):
 
   Vitals   the attitude indicator, then the command log, then the vitals tail
            (the current VALUES moved up into the strip — see below). IN
            MANUAL (2026-10-24): the attitude indicator, then the ROOM drawn
            from the base stations, then the command log — no vitals tail
            (manual-room-map.txt)
-  Camera   the real frame path, on a test pattern — see camera.txt
+  (Camera) DELETED 2026-11-15 with the AI deck: the drone carries no camera
+           (../architecture.txt, DECISIONS). The Capture and Drone Wi-Fi
+           pages went with it, and so did the auto-capture switch on Control
   (Scene)  DELETED 2026-10-24 (Samuel: "it's of no use"): the drone in a
            declared 4 m box. Auto never showed it; Manual's room, drawn
            from the base stations, answers the same question
 
 THE CONSOLE OPENS FULL SCREEN from its tab strip, and so does the command log
-from its own footer — a camera frame or a 3D scene in part of a split column is a
+from its own footer — a room or a horizon in part of a split column is a
 thumbnail. Both use one overlay (components/FullScreenOverlay.tsx): Escape
 closes, focus moves in on open and back to the opener on close, and the backdrop
 is inert to clicks, because a stray click dismissing what is being read mid-flight
@@ -256,7 +252,8 @@ The drone's POSE is measured; the ROOM is declared (4 × 4 × 2 m, drawn to
 scale). That is the most this airframe's sensors can support, and the distinction
 matters enough to state on the pane.
 
-Asked the drone directly (docs/flight-log.txt):
+Asked the drone directly (docs/flight-log.txt, 2026-09; the AI deck has been
+off the drone since 2026-11-15, so bcAI should read 0 — not yet re-asked):
 
   deck.bcLighthouse4   1    yes
   deck.bcAI            1    yes
@@ -417,7 +414,7 @@ INVARIANTS
   site's error path.
 - Change only the component the request is about. A shared container —
   ConsolePane, SplitPane, the Control page split — reaches every tab it hosts.
-  Before changing one, look at every console tab (Vitals, Camera, Scene) in
+  Before changing one, look at the console (Vitals, and Manual's room) in
   the harness before AND after — `?only=<section label>` isolates a section;
   there is no per-tab parameter — and drag each divider to its limits. The Vitals
   divider (`min={0.06}`, ConsolePane.tsx) must fold the command log right over
@@ -536,22 +533,19 @@ depends-on        ../backend/manual-control.txt
                   the drone (keyframe.py), from the session's `controls`
 depends-on        ../../design/layout.txt
                   the standing rule: 720–1600 px, both themes, by container
-shares-data-with  drone-wifi.txt
-                  the Drone Wi-Fi page and its sidebar badge
 depends-on        ../backend/sessions-and-modes.txt
                   Home's standby row, vitals with no session; the mode a session
                   keeps — the sidebar switch and the lock page
 consumed-by       mission-playback.txt
                   the Playback page is a sidebar page like the others
-consumed-by       capture.txt
-                  the Capture page is a sidebar page like the others; the
-                  camera feed is the window's (lib/cameraFeed.ts), not a tab's
 consumed-by       auto-control.txt
                   Auto reuses FlightDeck, Checklist, RetryPanel, HealthTestPanel,
-                  Field, Tabs and the ConsolePane (`views`)
+                  Field, Tabs and the ConsolePane
 
 
-LAST VERIFIED  2026-09-29, against desktop/src and a headless measurement pass
+LAST VERIFIED  2026-11-15 on feat/no-camera — the Camera tab, Capture and
+Drone Wi-Fi pages removed; `pnpm build` passes. The harness was NOT re-run in a
+browser this pass. 2026-09-29, against desktop/src and a headless measurement pass
 of the harness's Auto sections at 720/900/1024/1280/1600 in both themes and
 both map views, all PASS, the self-test failing as it must; Manual looked at
 at 1024 (screenshots) for the three fixes above.

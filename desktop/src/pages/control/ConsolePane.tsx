@@ -1,26 +1,20 @@
 /**
  * The left half of the Control page: what the drone is telling us.
  *
- * Two views behind one tab strip, because they answer different questions and
- * only one is wanted at a time:
- *
  *   Vitals   how it is sitting (the attitude indicator), what we asked it to
  *            do (the command log), and what it is reporting (the vitals tail)
  *            — in Manual, the room in place of the tail (ManualMap.tsx)
- *   Camera   what it can see — see camera.txt for why that is a test pattern
  *
- * There was a third, Scene: the drone in a declared 4 m box. Manual's room
- * answers the same question from the base stations, so it was deleted
- * (2026-10-24, Samuel: "it's of no use"); Auto never showed it.
+ * One view, still under its strip: the strip carries the stream's status and
+ * Full screen. There were two more behind tabs. Scene (the drone in a declared
+ * 4 m box) went 2026-10-24 — Manual's room answers it from the base stations
+ * (Samuel: "it's of no use"). Camera went 2026-11-15 with the AI deck: the
+ * drone carries no camera (docs/features/architecture.txt, DECISIONS).
  *
- * The panels are hidden rather than unmounted on a tab switch, so the command
- * log keeps its scroll position and the room its trail.
- *
- * TWO THINGS THE OPERATOR OWNS. The Vitals tab carries a draggable divider
- * between the attitude indicator and the log — drag it up mid-flight to read
- * more of the log, down to watch the horizon — and the whole console opens full
- * screen, because a camera frame or a 3D scene in part of a split column is a
- * thumbnail.
+ * TWO THINGS THE OPERATOR OWNS. A draggable divider between the attitude
+ * indicator and the log — drag it up mid-flight to read more of the log, down
+ * to watch the horizon — and the whole console opens full screen, because a
+ * room or a horizon in part of a split column is a thumbnail.
  */
 
 import { useState, type ReactNode } from "react";
@@ -32,39 +26,17 @@ import { SplitPane } from "@/components/SplitPane";
 import { TabPanel, Tabs, type TabDef } from "@/components/Tabs";
 import { StatusDot } from "@/components/ui";
 import { AttitudeIndicator } from "./AttitudeIndicator";
-import { CameraPane } from "./CameraPane";
 import { CommandLog } from "./CommandLog";
 import { VitalsTail } from "./VitalsTail";
 
-export type ConsoleTab = "vitals" | "camera";
+export type ConsoleTab = "vitals";
 
 const TABS: readonly TabDef<ConsoleTab>[] = [
   { key: "vitals", label: "Vitals" },
-  { key: "camera", label: "Camera" },
 ];
 
-const TAB_LABEL: Record<ConsoleTab, string> = {
-  vitals: "Vitals", camera: "Camera",
-};
-
-/**
- * Which tab to open on.
- *
- * Always "vitals" in the app — index.html is loaded with no query string. The
- * override exists for the harness, which has to be able to put the Camera tab
- * on screen to measure or screenshot it: it is behind a click that a headless
- * browser cannot easily make.
- */
-function initialTab(views: readonly ConsoleTab[]): ConsoleTab {
-  const wanted = new URLSearchParams(window.location.search).get("tab");
-  const asked = wanted === "camera" ? wanted : "vitals";
-  return views.includes(asked) ? asked : views[0];
-}
-
-const ALL_VIEWS: readonly ConsoleTab[] = ["vitals", "camera"];
-
 export function ConsolePane({
-  telemetry, history, logLines, onClearLog, fill = false, views = ALL_VIEWS, map,
+  telemetry, history, logLines, onClearLog, fill = false, map,
 }: {
   /** Manual: the room map, between the attitude indicator and the command
    *  log, in place of the vitals tail (ManualMap.tsx — 2026-10-24, Samuel:
@@ -79,11 +51,8 @@ export function ConsolePane({
   /** Fill the height a parent gives it (the split) instead of setting its own.
    *  Stacked, there is no parent height to fill, so it sets one. */
   fill?: boolean;
-  /** Which tabs to offer (both, unless a caller narrows it). */
-  views?: readonly ConsoleTab[];
 }) {
-  const [tab, setTab] = useState<ConsoleTab>(() => initialTab(views));
-  const tabs = TABS.filter((t) => views.includes(t.key));
+  const [tab, setTab] = useState<ConsoleTab>("vitals");
   const [full, setFull] = useState(false);
 
   /** `fullScreen` suppresses the controls that would be meaningless inside the
@@ -170,11 +139,6 @@ export function ConsolePane({
           )}
         />
       </TabPanel>
-
-      <TabPanel id="console" tabKey="camera" active={tab === "camera"} className="flex min-h-0 flex-1 flex-col">
-        <CameraPane active={tab === "camera"} />
-      </TabPanel>
-
     </>
   );
 
@@ -182,7 +146,7 @@ export function ConsolePane({
     <Tabs
       id="console"
       label="Drone console view"
-      tabs={tabs}
+      tabs={TABS}
       active={tab}
       onSelect={setTab}
       action={
@@ -225,7 +189,7 @@ export function ConsolePane({
       </section>
 
       {full && (
-        <FullScreenOverlay label={`Console · ${TAB_LABEL[tab]}`} onClose={() => setFull(false)}>
+        <FullScreenOverlay label="Console · Vitals" onClose={() => setFull(false)}>
           <div className="flex min-h-0 flex-1 flex-col bg-[var(--surface)]">
             {strip(true)}
             {body(true)}

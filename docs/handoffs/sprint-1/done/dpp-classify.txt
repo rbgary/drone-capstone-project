@@ -73,11 +73,10 @@ FOLLOW-UPS
     Yordanos): fly past a box heated with a hand warmer, and past one not
     heated. Then re-run ml/anomaly-eval/evaluate.py on them and replace the
     PROVISIONAL minimums with what a real heat source does to this sensor.
-  - PART A, Reagan: the image model (story 4.4). The camera now delivers real
-    frames — thousands on the lab laptop — so the dataset of story 4.1 can be
-    built from them. Train on the same images the stage will see (the
-    original frames, or clahe@1's enhanced copies — decide with whoever owns
-    enhance), split BY SESSION, report on a held-out session, export to ONNX,
-    and plug it in beside blocks@1: every frame's label is "unknown — no
-    image model yet" until then, and every finding's image support says
-    "cannot tell".
+  - PART A, Reagan: the image model (story 4.4). CHANGED 2026-11-15: the
+    drone carries no camera, so the model judges PHOTOS TAKEN BY HAND,
+    uploaded in the desktop app into a session (optionally at an inspection
+    point), each with its own verdict — not frames, and not beside blocks@1.
+    Reagan's stage (origin/feat/image-model-stage) is ported for photos in
+    Phase 5 of the no-camera work (Reagan agreed). Split the dataset BY
+    SESSION, report on a held-out session, export to ONNX.

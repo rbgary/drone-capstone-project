@@ -1,21 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  getEnhancedFrames,
   getFindings,
   getFlightsTelemetry,
   getPipelineResults,
   getSession,
   getSessionFindings,
   getSessionFlights,
-  getSessionFrames,
   getSessionResult,
   getSessionSamples,
 } from "@/lib/queries";
-import { FindingsList, type FrameLinks } from "@/components/processing/findings";
+import { FindingsList } from "@/components/processing/findings";
 import { FlightProcessing } from "@/components/processing/flight-processing";
 import { ErrorTable } from "@/components/processing/error-table";
-import { FrameGallery } from "@/components/flight/FrameGallery";
 import { RawReadings, SESSION_COLUMNS } from "@/components/ui/raw-readings";
 import { Stat, StatusBadge } from "@/components/ui/states";
 import { PageHeader } from "@/components/ui/page-header";
@@ -25,10 +22,8 @@ import { FLIGHTS, PROCESSED, SESSIONS } from "@/lib/routes";
 import {
   SEVERITY,
   excerptsFor,
-  frameMarks,
   marksOf,
   readFlags,
-  readFrames,
   readTracks,
   severityOf,
 } from "@/lib/pipeline";
@@ -41,13 +36,12 @@ export const metadata = { title: "Processed data · session" };
  * process whatever data comes"):
  *
  *   the anomalies     every finding of the session — its flights' and its own
- *                     on the ground — with its readings, frames and meaning
+ *                     on the ground — with its readings and meaning
  *   each flight       what ran, a verdict per point, raw vs clean against what
  *                     was expected, what went wrong (the error table), and
  *                     every reading with the marks tinted
  *   the session       its own result: the one-a-second samples around the
  *                     flights, judged on the ground — the same four parts
- *   the camera        every frame, those taken during an anomaly outlined
  *
  * The session page (app/app/sessions/[id]) still holds everything in the
  * session; this is the pipeline's view of it.
@@ -65,11 +59,9 @@ export default async function ProcessedSessionPage(props: PageProps<"/app/proces
   const { id } = await props.params;
   if (!UUID.test(id)) notFound();
 
-  const [session, flights, frames, enhanced, own, ownFindings, samples] = await Promise.all([
+  const [session, flights, own, ownFindings, samples] = await Promise.all([
     getSession(id),
     getSessionFlights(id),
-    getSessionFrames(id),
-    getEnhancedFrames(id),
     getSessionResult(id),
     getSessionFindings(id),
     getSessionSamples(id),
@@ -97,13 +89,8 @@ export default async function ProcessedSessionPage(props: PageProps<"/app/proces
   ]);
   const excerpts = excerptsFor(all, (key) => key === id
     ? readTracks(own.row?.tracks ?? []) : readTracks(resultOf.get(key)?.tracks ?? []), readings);
-  const frameLinks: FrameLinks = Object.fromEntries(
-    frames.map((f) => [f.seq, { original: f.url, enhanced: enhanced[f.seq] }]));
-  const marks = frameMarks(all);
   const sessionMarks = marksOf(ownFindings.rows, own.row ? readFlags(own.row.flags) : [],
                                samples.rows, "seq");
-  const enhancedCount = [...results.rows, ...(own.row ? [own.row] : [])]
-    .reduce((n, r) => n + readFrames(r.frames).filter((f) => f.enhanced).length, 0);
   const bySeverity = (s: string) => all.filter((f) => severityOf(f.severity) === s).length;
   const nothingProcessed = processed.length === 0 && !own.row;
 
@@ -124,13 +111,12 @@ export default async function ProcessedSessionPage(props: PageProps<"/app/proces
         />
       </div>
 
-      <section aria-label="Summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section aria-label="Summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Stat label="Flights processed" value={`${processed.length} of ${flights.length}`}
               hint={own.row ? "and the session itself" : "the session itself not yet"} />
         <Stat label="Anomalies" value={all.length
           ? `${all.length} · ${bySeverity("critical")} critical, ${bySeverity("warning")} warning`
           : "None"} />
-        <Stat label="Frames enhanced" value={`${enhancedCount} of ${frames.length}`} />
         <OwnerStat label="Run by" who={session} />
       </section>
 
@@ -160,7 +146,6 @@ export default async function ProcessedSessionPage(props: PageProps<"/app/proces
             ) : (
               <FindingsList
                 findings={all}
-                frames={frameLinks}
                 excerpts={excerpts}
                 flightOf={(flightId) => flightNumber.has(flightId)
                   ? { label: `Flight ${flightNumber.get(flightId)}`, href: `#flight-${flightId}` }
@@ -193,7 +178,7 @@ export default async function ProcessedSessionPage(props: PageProps<"/app/proces
                     </Link>
                   </span>
                 </div>
-                <FlightProcessing result={r} telemetry={rows} findings={mine} frameLinks={frameLinks} />
+                <FlightProcessing result={r} telemetry={rows} findings={mine} />
                 <div className="space-y-3">
                   <h3 className="text-base font-semibold">What went wrong</h3>
                   <ErrorTable marks={flightMarks} rows={rows} table={`flight-${f.id}-readings`}
@@ -234,7 +219,7 @@ export default async function ProcessedSessionPage(props: PageProps<"/app/proces
             ) : (
               <>
                 <FlightProcessing result={own.row} telemetry={sampleRows} findings={ownFindings.rows}
-                                  over="session" frameLinks={frameLinks} />
+                                  over="session" />
                 <div className="space-y-3">
                   <h3 className="text-base font-semibold">What went wrong</h3>
                   <ErrorTable marks={sessionMarks} rows={samples.rows} indexKey="seq"
@@ -251,11 +236,6 @@ export default async function ProcessedSessionPage(props: PageProps<"/app/proces
         </>
       )}
 
-      <section aria-labelledby="camera-heading" className="space-y-3">
-        <h2 id="camera-heading" className="text-lg font-semibold text-[var(--heading)]">Camera</h2>
-        <FrameGallery frames={frames} enhanced={enhanced} marks={marks}
-                      downloadName={`dronedeck-session-${session.started_at?.slice(0, 10) ?? "unknown"}-${id.slice(0, 8)}`} />
-      </section>
     </div>
   );
 }

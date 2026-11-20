@@ -426,7 +426,7 @@ export type Database = {
           flight_id: string | null
           id: string
           image_note: string
-          image_support: string
+          image_support: string | null
           observed: number | null
           pipeline_version: string
           point_ids: string[]
@@ -454,7 +454,7 @@ export type Database = {
           flight_id?: string | null
           id: string
           image_note?: string
-          image_support: string
+          image_support?: string | null
           observed?: number | null
           pipeline_version: string
           point_ids?: string[]
@@ -482,7 +482,7 @@ export type Database = {
           flight_id?: string | null
           id?: string
           image_note?: string
-          image_support?: string
+          image_support?: string | null
           observed?: number | null
           pipeline_version?: string
           point_ids?: string[]

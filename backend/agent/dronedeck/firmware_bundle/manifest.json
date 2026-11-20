@@ -1,7 +1,6 @@
 {
-  "bundle": 3,
   "drone_wifi": 4,
-  "platform": "Crazyflie 2.1 + AI deck",
+  "platform": "Crazyflie 2.1 (no AI deck since 2026-11-15)",
   "parts": {
     "main": {
       "file": "cf2.bin",
@@ -14,18 +13,6 @@
       "chip": "lighthouse-deck",
       "sha256": "cb14698f9e53304fc234cd393a730f66bcbd5fb59fc329f64cb6eb0ebd3cea61",
       "source": "bitcraze/crazyflie-release 2025.12.1 firmware-cf2-2025.12.1.zip (sha256 310d6985e035bebc6e55bd4cd4a2a2cc57af5b6bffdbb8311c52f7d04a96db2d) lighthouse.bin \u2014 lighthouse-fpga V6, 104093 bytes, crc32 288081812 (the image 2025.12.1 asks the deck for)"
-    },
-    "camera": {
-      "file": "aideck_gap8.bin",
-      "chip": "gap8",
-      "sha256": "13348d9303fc39baef0d99c269afa2f7c692f260f2c3b937cbf649aea6888034",
-      "source": "bitcraze/aideck-gap8-examples 2025.02 aideck_gap8_wifi_img_streamer_with_ap.bin (official release)"
-    },
-    "wifi": {
-      "file": "aideck_esp.bin",
-      "chip": "esp",
-      "sha256": "6b63aecf0622624c656667fee801e2a6e84edb7e0f156baa8737a81f7eb2cc75",
-      "source": "bitcraze/aideck-esp-firmware 2025.02 + firmware/aideck-esp close-client-once.patch, wifi-throughput.patch, wifi-recovery.patch, wifi-link.patch"
     }
   }
 }

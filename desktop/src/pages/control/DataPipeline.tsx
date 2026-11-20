@@ -56,43 +56,10 @@ export function ProcessingSwitch({ session, run }: { session: Session; run: Run 
   );
 }
 
-/**
- * The auto-capture switch, beside the DPP's, in both modes (2026-10-24). On
- * by default; off keeps the camera live and saves only what is captured by
- * hand (agent camera/recording.py). Unlike the DPP it applies at once — the
- * recording reads it on every frame.
- */
-export function CaptureSwitch({ session, run }: { session: Session; run: Run }) {
-  const auto = session.capture?.auto ?? true;
-  const chosen = session.capture?.chosen ?? false;
-  const signedOut = session.state === "signed_out";
-  const inSession = session.session_id !== null;
-  const note = signedOut
-    ? "Sign in to change it."
-    : !auto
-      ? "The camera stays on; only frames you capture by hand are saved."
-      : chosen
-        ? inSession ? "Your choice until this session ends." : "Your choice for the session you start next."
-        : "On by default.";
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <Switch
-        on={auto}
-        label="Auto-capture"
-        disabled={signedOut}
-        title={signedOut ? "Sign in first." : undefined}
-        onClick={() => void run(() => api.setCaptureAuto(!auto), auto ? "Turn auto-capture off" : "Turn auto-capture on")}
-      />
-      <span className="text-xs text-[var(--muted)]">{note}</span>
-    </div>
-  );
-}
-
 /** Which flight to show: the session's most recent flight to land, with its
  *  job if it has one; else the most recent job (a flight processed by hand). */
 function lastFlight(session: Session): { id: string; job: ProcessingJob | null } | null {
-  // Flight jobs only: a session's own job and a point judged in flight are not
-  // a flight's result.
+  // Flight jobs only: a session's own job is not a flight's result.
   const jobs = (session.processing?.jobs ?? []).filter((j) => (j.kind ?? "flight") === "flight");
   const landed = session.processing?.last_flight_id ?? null;
   if (landed) return { id: landed, job: jobs.find((j) => j.flight_id === landed) ?? null };
@@ -199,7 +166,7 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
         Flight {r.flight_id.slice(0, 8)} · processed {formatTime(r.created_at)} · pipeline {r.pipeline_version}
       </p>
       {placeholder && (
-        <Message tone="idle" text="The pipeline ran, but its classify stage is not built yet (the team's work), so every point reads “insufficient data”. The readings and frames below are real." />
+        <Message tone="idle" text="The pipeline ran, but its classify stage is not built yet (the team's work), so every point reads “insufficient data”. The readings below are real." />
       )}
       <ul className="grid gap-1.5">
         {r.points.map((p) => {
@@ -212,7 +179,7 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
                 <StatusDot tone={v.tone}>{v.text}</StatusDot>
               </span>
               <span className="text-[var(--muted)]">
-                {counts?.readings ?? 0} readings · {counts?.frames ?? 0} frames{p.reasons.length ? ` — ${p.reasons.join("; ")}` : ""}
+                {counts?.readings ?? 0} readings{p.reasons.length ? ` — ${p.reasons.join("; ")}` : ""}
               </span>
             </li>
           );
@@ -232,7 +199,6 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
                     <StatusDot tone={SEVERITY[f.severity].tone}>{SEVERITY[f.severity].text}</StatusDot>
                   </span>
                   <span>{f.sentence}</span>
-                  <span className="text-[var(--muted)]">{f.image_note}</span>
                 </li>
               ))}
             </ul>
@@ -254,7 +220,7 @@ export function FlightResults({ session, run, flightId }: { session: Session; ru
 /** The switch and the last flight's result, as one panel. */
 export function DataPipelinePanel({ session, run }: { session: Session; run: Run }) {
   return (
-    <Panel title="Data processing" note="Turns a flight's readings and frames into a verdict per inspection point. The switch is at the top of the page." bodyClassName="grid gap-3 px-4 py-3">
+    <Panel title="Data processing" note="Turns a flight's readings into a verdict per inspection point, once the flight has landed. The switch is at the top of the page." bodyClassName="grid gap-3 px-4 py-3">
       <FlightResults session={session} run={run} />
     </Panel>
   );

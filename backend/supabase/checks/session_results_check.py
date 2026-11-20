@@ -41,9 +41,10 @@ def finding(fid, session, *, flight=None, scope="session", severity="warning"):
             "sentence": "From 1:00 to 1:40 into the session, on the ground …",
             "start_index": 60, "end_index": 100, "t_start_s": 60.0, "t_end_s": 100.0,
             "unit": "C", "observed": 36.0, "expected": 34.0, "delta": 2.0, "z": 12.0,
-            "point_ids": [], "evidence_frames": [], "image_support": "cannot_tell",
-            "image_note": "No camera frames were taken during this stretch.",
-            "pipeline_version": "3"}
+            # No image columns: what the agent sends since migration
+            # 20261118000020 (results_check.py still sends them, as an older
+            # agent does — both must be accepted).
+            "point_ids": [], "pipeline_version": "3"}
 
 
 def result_row(session, count=1):

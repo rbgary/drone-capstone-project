@@ -14,16 +14,13 @@ reads it with no special case.
             HOLDING, placed so the pipeline's grouping can be tested.
 
   MADE UP   sessions/<id>/meta.json — a trimmed session naming that flight.
-            sessions/<id>/frames/ — seven generated 324×244 grayscale PNGs
-            (a gradient), not camera images. frames.csv places them: 1 before
-            the flight, 2–3 at P1, 4 in transit, 5–6 at P2, 7 after it.
             sessions/<id>/missions/<flight>.json — a three-point plan; P3 was
-            never reached, so it has no readings and no frames.
+            never reached, so it has no readings.
             fixture.json — which flight and session this is.
 
-What the fixture proves: a flight's frames are the session's frames INSIDE its
-time window (1 and 7 are not); readings and frames group by point; transit
-readings belong to no point; a point never reached is insufficient_data.
+What the fixture proves: readings group by point; transit readings belong to
+no point; a point never reached is insufficient_data. (Until 2026-11-15 it
+also held seven generated camera frames; the drone carries no camera now.)
 
 `dronedeck process --fixture` runs the whole pipeline on it and writes to
 fixtures/results/, which git ignores.

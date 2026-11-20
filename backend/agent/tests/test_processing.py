@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -78,6 +79,37 @@ class TestTheQueue:
         assert q.wait_idle()
         assert order == ["a", "b", "c"]
 
+    def test_closing_starts_nothing_that_was_still_waiting(self):
+        """The agent shutting down (rest.py lifespan) closes the queue while a
+        job runs: that one is stopped and NOTHING queued behind it starts — a
+        job started then would outlive the agent, and its result would never be
+        recorded, so the next start would run it again. Until 2026-11-16 the
+        stop was a FIFO entry and every waiting job ran after close()."""
+        started: list[str] = []
+
+        def records(flight_id: str) -> list[str]:
+            started.append(flight_id)
+            return hangs(flight_id)
+
+        q = ProcessingQueue(command=records, timeout_s=30)
+        for fid in ("a", "b", "c"):
+            q.submit(fid)
+        assert wait_for(lambda: q.job("a").state == JobState.RUNNING)
+        q.close()
+        time.sleep(1.0)                       # long enough for b to have started
+        assert started == ["a"]
+        assert q.job("a").state == JobState.FAILED          # stopped, not left running
+        assert {q.job("b").state, q.job("c").state} == {JobState.QUEUED}
+
+    def test_a_close_while_the_child_is_starting_still_stops_it(self):
+        """close() can land after the child process exists but before the queue
+        has recorded it — the one moment close() could not see it to kill it.
+        The command factory runs inside that window, so closing from it hits
+        the window every time."""
+        q = ProcessingQueue(command=lambda fid: (q.close(), hangs(fid))[1], timeout_s=30)
+        q.submit("a")
+        assert wait_for(lambda: q.job("a").state == JobState.FAILED, timeout=5.0)
+
     def test_queuing_one_already_waiting_changes_nothing(self):
         q = ProcessingQueue(command=hangs, timeout_s=5)
         first = q.submit("f1")
@@ -132,8 +164,7 @@ class TestTheSwitch:
         assert rig.session.snapshot().processing["on"] is True
         rig.session.set_mode(Mode.AUTO)
         assert rig.session.snapshot().processing == {
-            "on": True, "chosen": False, "jobs": [], "last_flight_id": None,
-            "live": {"flight_id": None, "points": {}}}
+            "on": True, "chosen": False, "jobs": [], "last_flight_id": None}
 
     def test_a_manual_flight_lands_and_is_processed_by_default(self, rig):
         start_and_confirm(rig, Mode.MANUAL)
@@ -462,37 +493,19 @@ class TestTheSessionItself:
         assert rig.queue.job("s-old").kind == "session"
 
 
-class TestALivePointVerdict:
-    """Story 4.9: a point's hold done → that point's verdict, in flight."""
+class TestNothingIsJudgedInFlight:
+    """A flight is processed once its data has arrived (2026-11-15): a point's
+    hold ending queues nothing, even with the DPP on."""
 
-    def writes_verdict(self, root):
-        def command(flight_id: str, point_id: str) -> list[str]:
-            path = root / "results" / flight_id / "live" / f"{point_id}.json"
-            body = json.dumps({"flight_id": flight_id, "point_id": point_id,
-                               "verdict": "normal", "reasons": ["fine"], "findings": []})
-            return [sys.executable, "-c",
-                    f"import pathlib; p = pathlib.Path({str(path)!r}); "
-                    f"p.parent.mkdir(parents=True, exist_ok=True); p.write_text({body!r})"]
-        return command
-
-    def test_a_completed_point_is_judged_and_shown(self, rig, tmp_path):
+    def test_a_completed_point_queues_nothing(self, rig):
         from dronedeck.mission.controller import EventKind, MissionEvent
 
-        rig.queue._live_command = self.writes_verdict(tmp_path)
         rig.session._flight_id, rig.session._flight_process = "f-air", True
-        rig.session._live_flight_id = "f-air"
-        rig.session._on_mission_event(MissionEvent(EventKind.POINT_COMPLETE, 1.0, "P1",
-                                                   "P1 complete"))
-        assert rig.queue.wait_idle()
-        live = rig.session.snapshot().processing["live"]
-        assert wait_for(lambda: rig.session.snapshot().processing["live"]["points"]
-                        .get("P1", {}).get("verdict") == "normal")
-        assert live["flight_id"] == "f-air"
-
-    def test_a_flight_not_being_processed_is_not_judged_in_flight(self, rig):
-        from dronedeck.mission.controller import EventKind, MissionEvent
-
-        rig.session._flight_id, rig.session._flight_process = "f-air", False
         rig.session._on_mission_event(MissionEvent(EventKind.POINT_COMPLETE, 1.0, "P1",
                                                    "P1 complete"))
         assert rig.queue.jobs() == []
+        assert "live" not in rig.session.snapshot().processing
+
+    def test_there_is_no_live_kind_of_job(self, rig):
+        with pytest.raises(ValueError):
+            rig.queue.submit("f-air", kind="live")

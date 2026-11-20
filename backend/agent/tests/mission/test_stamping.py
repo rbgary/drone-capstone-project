@@ -1,12 +1,8 @@
-"""The inspection point reaches every reading and frame, the upload survives a
-database that has not had the migration yet, and the guard flies a room's own
-fence."""
+"""The inspection point reaches every reading, the upload survives a database
+that has not had the migration yet, and the guard flies a room's own fence."""
 
 from __future__ import annotations
 
-import csv
-
-from dronedeck.camera.recording import COLUMNS, FrameRecording
 from dronedeck.mission.plan.geofence import Geofence
 from dronedeck.safety.flight_guard import FlightGuard, GuardContext, Reason
 from dronedeck.sync.cloud import SupabaseCloud, without_empty_point_id
@@ -29,25 +25,6 @@ class TestReadings:
 
     def test_the_column_is_always_in_the_row_so_the_csv_header_has_it(self):
         assert "point_id" in a_row(None).to_dict()
-
-
-class TestFrames:
-    def test_frames_are_stamped_only_while_a_point_is_held(self, tmp_path):
-        holding: dict[str, str | None] = {"now": None}
-        rec = FrameRecording("s1", tmp_path, point_id=lambda: holding["now"])
-        rec.add(b"a", "image/png", 324, 244)
-        holding["now"] = "P1"
-        rec.add(b"b", "image/png", 324, 244)
-        rows = list(csv.DictReader((tmp_path / "frames.csv").open()))
-        # Columns are only ever appended, so older readers keep their places.
-        assert COLUMNS[-4:] == ["point_id", "source", "why", "change"]
-        assert [r["point_id"] for r in rows] == ["", "P1"]
-
-    def test_a_failing_point_source_never_costs_a_frame(self, tmp_path):
-        def broken() -> str | None:
-            raise RuntimeError("boom")
-        rec = FrameRecording("s1", tmp_path, point_id=broken)
-        assert rec.add(b"a", "image/png", 324, 244) is not None
 
 
 class TestUpload:

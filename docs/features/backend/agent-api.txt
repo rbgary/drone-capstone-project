@@ -26,15 +26,15 @@ ENDPOINTS
   open, no token
     GET  /health                    liveness, for the window and /setup
     GET  /status                    state, mode, drone, sync summary
-    GET  /camera                    camera status (see desktop/camera.txt)
-    GET  /camera/frame              latest frame, or 204 — an <img> sends no header
 
   token required (header X-Agent-Token)
     GET  /session                   the full session state
     POST /auth/sign-in              email + password -> operator
     POST /auth/sign-out
     POST /session/mode              {"mode": "auto" | "manual"}
-    POST /session/start             connect + run the checks
+    POST /session/start             connect + run the checks (a body is ignored;
+                                    {"purpose": "capture"} meant a camera session
+                                    until 2026-11-15)
     POST /session/confirm           the area is clear
     POST /session/prop-test         Start test
     POST /session/program           Hover test {height_m, hold_s, ambient}
@@ -53,29 +53,15 @@ ENDPOINTS
     POST /sync/now                  push whatever is waiting
     POST /drone/connect             hold the drone on standby now — never arms
     POST /drone/disconnect          free the radio until Connect (409 mid-session)
-    GET  /camera/recording          the session's recording: count, latest frame
-    GET  /camera/recording/frames   ?after=&limit=&source=auto|manual — frame
-                                    list for the backlog, or the manual captures
-    POST /camera/capture            save the newest frame into the session, by
-                                    hand (409: no session, or no fresh frame)
-    POST /session/capture           the auto-capture switch {auto}
-    GET  /history/sessions/{id}/frames      an ended session's frames ?source=
-    GET  /history/sessions/{id}/frames/{n}  one of them, from disk
-    GET  /camera/recording/frame/N  one recorded frame, or "latest", FROM DISK;
-                                    204 when none. Token required: session data
-    POST /camera/wifi/rejoin        ask the deck where it is, then rejoin it — never
-                                    a restart; 409 with no AI deck detected
-                                    ("switch it off and on" — checked FIRST: with
-                                    no deck the camera hand-off never runs, and
-                                    "connect the drone first" was said beside a
-                                    connected radio), or with no drone
-    GET  /camera/wifi               the deck's network and join progress; no password
-    PUT  /camera/wifi               {ssid, password} — see desktop/drone-wifi.txt
-    DELETE /camera/wifi             forget it
+
+  REMOVED 2026-11-15 (the drone carries no camera): GET /camera, GET
+  /camera/frame, /camera/recording[/frames|/frame/N], POST /camera/capture,
+  POST /session/capture, GET /history/sessions/{id}/frames[/{n}], and
+  GET/PUT/DELETE /camera/wifi with POST /camera/wifi/rejoin. Each is a 404.
 
   WS /ws/live
     first message {"type":"auth","token":...}; then out: telemetry (10 Hz),
-    session, sync, camera_wifi; in: {"type":"intent","keys":{...}} and heartbeats.
+    session, sync; in: {"type":"intent","keys":{...}} and heartbeats.
 
 
 DECISIONS
@@ -105,12 +91,6 @@ DECISIONS
 
 INVARIANTS
 
-- GET /camera carries `connecting` — true while the agent is working towards a
-  picture (the deck joining or rejoining, or the camera reconnecting to a
-  joined deck); the window shows a spinner and the reason, not "no signal".
-- GET /camera's reason names the drone first. With no frames AND no radio link
-  it says the drone is not connected (off, flat battery) rather than a network
-  theory about an address the drone may no longer hold.
 - DRONEDECK_STANDBY=0 stops the agent holding the drone between sessions. The
   API tests set it: a background radio loop would race every test.
 
@@ -204,8 +184,6 @@ consumed-by       ../missions/floor-plans.txt
                   the plan routes; the token and the CORS method list shape them
 consumed-by       ../pipeline/data-pipeline.txt
                   the processing switch and the result routes
-consumed-by       ../desktop/drone-wifi.txt
-                  /camera/wifi carries the drone's network
 consumed-by       ../desktop/desktop-app.txt
                   /health probe after a failed command; CORS for the window
 

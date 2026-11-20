@@ -1,8 +1,17 @@
 ================================================================================
-RESULTS ON THE WEB — every processed flight's result, findings and enhanced
-frames uploaded, shown on the session and flight pages, and notified
-Last verified: 2026-10-24 — the manual section, the download and the paged
-listing: web typecheck, lint and build; lib/frame-zip.ts run for real in Node
+RESULTS ON THE WEB — every processed flight's result and findings uploaded,
+shown on the session and flight pages, and notified
+Last verified: 2026-11-18 on feat/no-camera — the camera removed from the
+web (Phase 6a): web typecheck, lint and build; tests/test_results_upload.py
+(no image columns sent); migration 20261118000020 APPLIED to the hosted
+project and checked there read-only; on the local stack all 20 migrations
+from scratch and every check (rls 15, results 11 sending the image columns,
+session_results 12 sending none, notifications 16, owner 10, playback 20,
+hosted_schema_check 49 true); the session, flight, processed-session and
+processed pages rendered against a planted flight with an OLD-style finding
+(frames, image_support, a camera note) and a new one — both findings shown,
+no camera text anywhere, and looked at by the owner in a browser. 2026-11-15 — the agent half: no frames uploaded.
+2026-10-24 — the manual section, the download and the paged listing: web typecheck, lint and build; lib/frame-zip.ts run for real in Node
 against a local server (progress, a missing file reported, the manual name,
 cancel, index.csv, the zip's own CRC check). NOT yet seen in a browser against
 the hosted data. 2026-10-11 — re-read after sync/cloud.py changed for playback (#109); it only gained the playback upload and reads; the results upload is unchanged. Before that:
@@ -18,7 +27,18 @@ SOURCE: backend/agent/dronedeck/sync/results.py
 --------------------------------------------------------------------------------
 STATUS  (Last verified: 2026-10-09)
 --------------------------------------------------------------------------------
-  agent     BUILT — queued by `dronedeck process`, uploaded by the syncer
+  agent     BUILT — queued by `dronedeck process`, uploaded by the syncer.
+            Since pipeline "4" (2026-11-15) a result carries no frames; since
+            2026-11-18 a finding is sent without the retired image columns
+            (evidence_frames, image_support, image_note)
+  database  migration 20261118000020 (image_support optional) APPLIED to
+            the hosted project 2026-11-18 — the agent that sends no image
+            columns is safe to ship. A database WITHOUT it refuses every
+            finding from this agent (the results wait in the outbox)
+  web       NO CAMERA (2026-11-18): no frames, no Original / Enhanced, no
+            camera note, for old results as for new — old camera evidence is
+            not to stay on the website (the team, 2026-11-16). The images
+            stay in the bucket. Photos taken by hand: Phase 6b
   database  BUILT — migrations 20261009000015 (owners), 0016 (results), 0017
             (notifications); proved on the local stack, APPLIED to the
             hosted database 2026-10-09 and checked there read-only (tables
@@ -35,18 +55,19 @@ STATUS  (Last verified: 2026-10-09)
 --------------------------------------------------------------------------------
 1. WHAT IT IS
 --------------------------------------------------------------------------------
-The owner's ask: on the web, the dirty data against the clean, the grayscale
-frame against the enhanced, what it means — grouped by session (a session is
+The owner's ask: on the web, the dirty data against the clean (and, until
+the camera went in 2026-11, the grayscale frame against the enhanced), what
+it means — grouped by session (a session is
 the superset of its flights) — and notifications that stay until read.
 Then (2026-10-09, after a flight whose processed data could not be found): a
-PAGE OF ITS OWN for the processed data, every anomaly listed with its readings,
-its frames and what it means, and the anomalies HIGHLIGHTED in the readings
-table and on the frames, the meaning on hover.
+PAGE OF ITS OWN for the processed data, every anomaly listed with its readings
+and what it means, and the anomalies HIGHLIGHTED in the readings table, the
+meaning on hover.
 
 --------------------------------------------------------------------------------
 2. WHERE IT LIVES
 --------------------------------------------------------------------------------
-backend/agent/dronedeck/sync/results.py       result.json → rows; frame paths
+backend/agent/dronedeck/sync/results.py       result.json → rows
 backend/agent/dronedeck/sync/syncer.py        _send_results (LAST in a pass)
 backend/agent/dronedeck/sync/cloud.py         upsert_result, upsert_findings,
                                                 delete_findings_except
@@ -54,6 +75,7 @@ backend/agent/tests/test_results_upload.py
 backend/agent/dronedeck/cli.py                `process --all` (_process_all)
 backend/supabase/migrations/20261009000016_pipeline_results.sql
 backend/supabase/migrations/20261009000017_notifications.sql
+backend/supabase/migrations/20261118000020_findings_without_camera.sql
 backend/supabase/checks/results_check.py, notifications_check.py
 web/lib/pipeline.ts                             the result's JSON, read safely
 web/components/processing/                      findings, flight processing,
@@ -65,55 +87,49 @@ web/app/app/processed/page.tsx                  Processed data: all anomalies,
 web/app/app/processed/[id]/page.tsx             one session's processed data
 web/components/ui/hint.tsx                      the anomaly tooltip
 web/components/ui/raw-readings.tsx              rows tinted, jump-to list
-web/components/flight/FrameGallery.tsx          frames outlined, "Only anomaly
-                                                frames", "Captured manually"
-                                                chips, Select to download
-web/lib/frame-zip.ts                            the chosen frames as one zip,
-                                                in the browser
 web/lib/queries.ts                              getProcessedOverview,
-                                                getStretchReadings, getFrameLinks
+                                                getStretchReadings
 web/app/app/sessions/[id]/page.tsx, web/app/app/flights/[id]/page.tsx
 
 --------------------------------------------------------------------------------
 3. DECISIONS
 --------------------------------------------------------------------------------
 • LAPTOP FIRST, THEN UP (CLAUDE.md invariant 6): result.json is the record;
-  the outbox (Kind.RESULTS) uploads it once the flight's own row is up,
-  enhanced frames from a cursor, then the result, the findings, and the
-  retraction of findings a re-process no longer makes.
+  the outbox (Kind.RESULTS) uploads it once the flight's own rows are up —
+  not its log file, which may be waiting on file storage
+  (../backend/offline-sync.txt, FILE STORAGE NEVER HOLDS BACK THE ROWS): the
+  result, the findings, and the retraction of findings a re-process no
+  longer makes. Nothing here waits on file storage: a result carries no
+  frames since pipeline "4".
 • TWO TABLES: pipeline_results (the whole result per flight, replaced on
   re-process) and pipeline_findings (one row each, ids made on the laptop).
 • NOTIFICATIONS ARE ROWS, made by a database trigger per operator for each
   warning-or-worse finding FIRST inserted — persistent until read, never
   twice; Realtime only delivers them at once. Each operator reads and marks
   only their own.
-• THE PAGES: findings first (sentence, when, where, change, camera note,
-  frames original | enhanced); then per flight the verdicts, what was
-  cleaned, and per signal a Clean / Raw switch with the stretches shaded and
-  named; the camera with Original / Enhanced / Side by side; on the session
-  page every flight's raw telemetry beside its 1 Hz vitals. "Zone health"
+• THE PAGES: findings first (sentence, when, where, change); then per
+  flight the verdicts, what was cleaned, and per signal a Clean / Raw switch
+  with the stretches shaded and named; on the session page every flight's
+  raw telemetry beside its 1 Hz vitals. "Zone health"
   (greenhouse) is gone; the predictions table stays.
-• CAPTURED MANUALLY, AND DOWNLOAD (2026-10-24, Samuel). The session page shows
-  the pictures taken by hand on the desktop's Capture page in a section of
-  their own above the camera (frames.csv's source column; ../desktop/
-  capture.txt), and every frame gallery — session, flight, processed — has
-  "Select to download": tick frames or Select all, then one zip with an
-  index.csv of when, where and how each was taken. Built IN THE BROWSER from
-  the signed links the page already holds: nothing new is exposed and no
-  server route streams a session's images. Images are stored, not deflated
-  again. A link that has expired (they last an hour) is reported, not
-  silently dropped: the zip carries the rest and says how many are missing.
-• EVERY FRAME IS LISTED (2026-10-24). The bucket was listed with limit 2 000,
-  so a session past about seventeen minutes lost the rest of its camera on
-  the web without a word. Listing and signing are now paged (1 000 a time).
+• THE CAMERA, REMOVED (2026-11-18, no-camera Phase 6a). Gone from every
+  page: the frames on a finding and its camera note; the Camera and
+  "Captured manually" sections (FrameGallery.tsx: Original / Enhanced / Side
+  by side, frames outlined by the anomaly they were taken during, "Select to
+  download" as one zip built in the browser by lib/frame-zip.ts); the Frames
+  row of a flight's processing; and a click on a chart showing the frame
+  nearest that moment (2026-10-11). Phase 6b adapts the gallery and the zip
+  for photos — from git, `git show 4a3c6f4:web/components/flight/
+  FrameGallery.tsx` and `…:web/lib/frame-zip.ts` (with the paged listAll /
+  signAll of lib/queries.ts, and the fflate dependency).
 • PROCESSED DATA IS A PAGE OF ITS OWN (/app/processed, in the sidebar): every
   anomaly, worst first, each card carrying its readings (at most 10 of the
   stretch: first, last, the peak, evenly between — measured, expected, the
-  difference; the stored value too when it differs, i.e. pressure), its
-  frames original | enhanced, and its meaning; "What counts as an anomaly"
+  difference; the stored value too when it differs, i.e. pressure), and its
+  meaning; "What counts as an anomaly"
   in the classifier's own numbers; then the sessions with processed flights.
   Per session (/app/processed/<id>): the anomalies, each processed flight's
-  processing and EVERY reading, then the camera. The session and flight
+  processing and EVERY reading. The session and flight
   pages keep everything too and link here.
 • MARKS — COLOUR IS THE DATA, DEPTH IS HOW SEVERE (the owner, 2026-10-09).
   Everything highlighted is a mark (web/lib/pipeline.ts): an ANOMALY (a
@@ -124,17 +140,7 @@ web/app/app/sessions/[id]/page.tsx, web/app/app/flights/[id]/page.tsx
   either theme); the severity's shape (● ▲ ■) and its word are always beside
   it, and the meaning is a tooltip on hover, keyboard focus or a tap (hint.tsx,
   WCAG 1.4.13). The same key everywhere: the readings, the error table, the
-  charts' bands, the frames (components/ui/mark-legend.tsx).
-• A CLICK ON A CHART SHOWS THE CAMERA THEN (2026-10-11, the owner: a spike,
-  then what the drone was looking at). On the temperature and pressure charts
-  (components/processing/signal-panel.tsx) a click picks the frame nearest
-  that moment — the result's frames, already on the charts' clock — and shows
-  it under the chart, original beside enhanced, with a dashed line where it
-  sits, previous / next, and its note (unreadable, or the scene's). More than
-  1 s from the click, it says how far. Pages pass their frame links
-  (FlightProcessing frameLinks); without them a chart is not clickable.
-  Verified by the web gates only (typecheck, lint, build) — not yet clicked on
-  a real processed flight in a browser.
+  charts' bands (components/ui/mark-legend.tsx).
 • THE READINGS TABLE (components/ui/raw-readings.tsx): the columns the pipeline
   processes by default, grouped (Reading · Position · Power · Temperature ·
   Pressure) — "Show all columns" adds the ones it only stores. 25 rows a page,
@@ -155,7 +161,7 @@ web/app/app/sessions/[id]/page.tsx, web/app/app/flights/[id]/page.tsx
 4. INVARIANTS
 --------------------------------------------------------------------------------
 • Results go LAST in a sync pass: a database without the tables never stalls
-  sessions, flights, frames or vitals.
+  sessions, flights or vitals.
 • A finding's start_index/end_index are telemetry `index` values, inclusive
   (the agent's Reading.index) — the readings table tints exactly those rows.
 • Every recorded flight before 2026-10-09 is normal: `process --all` over the
@@ -178,8 +184,6 @@ depends-on        data-pipeline.txt
                   result.json, written by `dronedeck process`
 depends-on        interpret.txt
                   the findings uploaded and notified
-depends-on        enhance.txt
-                  the enhanced copies uploaded beside the originals
 depends-on        ../backend/offline-sync.txt
                   the outbox and the order of a sync pass
 depends-on        ../supabase/data-model.txt
@@ -189,7 +193,5 @@ consumed-by       ../frontend/operator-dashboard.txt
                   /app/notifications
 depends-on        session.txt
                   the session's own result, uploaded beside its flights'
-depends-on        ../desktop/capture.txt
-                  frames.csv's source column: which uploaded frames were captured by hand
 shares-data-with  ../../design/components.txt
                   the readings table, the error table, the mark legend
