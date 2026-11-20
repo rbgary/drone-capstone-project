@@ -1,3 +1,7 @@
+This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). Every graceful stop now ends stop, then notify, so the drone no longer
+locks after a landing; the emergency stop still latches.
+
 This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
 (Claude Opus 5.5, Anthropic, 2026). It records that the manual-control lock was removed;
 anyone on the team may now change how the keys fly the drone.
@@ -349,6 +353,24 @@ DECISIONS
 
 
 INVARIANTS
+
+- EVERY GRACEFUL STOP IS STOP, THEN NOTIFY (2026-11-20, _stop_and_release):
+  landed (assisted or on the barometer), disarmed on the ground, the loop shut
+  down. A lone send_stop_setpoint LOCKED the drone after landings —
+  supervisor.info 580 two seconds after EVERY mission landed on 2026-11-20
+  (and 2026-10-05). Why, from the firmware the drone runs (2025.12.1
+  supervisor.c, supervisor_state_machine.c): the supervisor counts the drone
+  as flying for 2 s after any motor was above idle; the stop is the last
+  setpoint it ever gets, so after 0.5 s the commander watchdog moves it to
+  warning-level-out, which has no path to "landed", and at 2 s to free fall,
+  then LOCKED — cleared only by a restart. send_notify_setpoint_stop after
+  the stop lets the stopped high-level commander write a fresh motors-off
+  setpoint every tick, so the watchdog never fires. The EMERGENCY STOP is the
+  exception: it is meant to latch, and Reset drone clears it. Tests pin both
+  (test_manual.py). FLOWN 2026-11-20 (session 2214d12f, mission a9ac115d):
+  the landing read 542, then 526 (ready) three seconds later — no 580. One
+  mission landing so far; a second mission in the same session without
+  Reset drone is not yet on record.
 
 - Send ONE zero-thrust setpoint before any other. The firmware's rpyt commander
   locks thrust until it sees thrust = 0, then silently holds every later

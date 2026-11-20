@@ -1,3 +1,7 @@
+# This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). Pins that a completed hover test records no abort
+# reason, and that a hover test refuses a drone whose motors are locked.
+
 """The operating session: nothing flies without an operator, checks and a
 confirmed area, and every flight ends recorded."""
 
@@ -356,6 +360,47 @@ class TestProgram:
         assert flight["status"] == "completed" and flight["ended_at"]
         assert flight["created_by"] == "user-1"
         assert flight["csv_path"].endswith(".csv")
+
+    def test_a_completed_hover_test_records_no_abort_reason(self, rig, monkeypatch):
+        """str(Reason.NONE) is "none", and every reader takes a non-empty reason
+        as an abort: the Sessions page showed "Aborted: none" (2026-11-20)."""
+        monkeypatch.setattr(
+            "dronedeck.session.run_hover_test",
+            lambda flight, program: ProgramResult(Outcome.COMPLETED, Reason.NONE, "done"),
+        )
+        start_and_confirm(rig, Mode.AUTO)
+        run_program(rig, height_m=0.3, hold_s=5)
+        flight = next(rig.outbox.pending(Kind.FLIGHT)).payload
+        assert flight["abort_reason"] is None
+        assert rig.session.history is not None
+        assert rig.session.history.meta.flights[-1].abort_reason is None
+
+    def test_a_locked_drone_is_refused_before_anything_arms(self, rig, monkeypatch):
+        """2026-11-20, flight f86b8c62: right after a mission the supervisor
+        read 580 (LOCKED), the hover test flew with thrust 0, and the height
+        guard ended it as if it had flown badly."""
+        flown: list = []
+        monkeypatch.setattr(
+            "dronedeck.session.run_hover_test",
+            lambda flight, program: flown.append(program) or ProgramResult(
+                Outcome.COMPLETED, Reason.NONE, "done"),
+        )
+        start_and_confirm(rig, Mode.AUTO)
+        rig.link.stream.snapshot = lambda: Snapshot(
+            MappingProxyType({"supervisor.info": 580}), 1.0)
+        assert [b["code"] for b in rig.session.program_blockers()] == ["motors"]
+        assert "Reset drone" in rig.session.program_blockers()[0]["fix"]
+        rig.session.set_mode(Mode.AUTO)
+        with pytest.raises(SessionError, match="locked its motors"):
+            rig.session.run_program()
+        assert flown == []
+        assert rig.session.snapshot().state is State.READY
+
+    def test_a_ready_drone_has_no_program_blockers(self, rig):
+        start_and_confirm(rig, Mode.AUTO)
+        rig.link.stream.snapshot = lambda: Snapshot(
+            MappingProxyType({"supervisor.info": 526}), 1.0)
+        assert rig.session.program_blockers() == []
 
     def test_a_guard_abort_is_recorded_as_aborted(self, rig, monkeypatch):
         monkeypatch.setattr(
@@ -858,6 +903,37 @@ class TestHistory:
         rows = history.read_samples(session_id, ["pm.vbat", "not.a.variable"])
         assert rows[0]["pm.vbat"] == 3.95
         assert rows[0]["not.a.variable"] is None
+
+    def test_an_old_none_abort_reason_reads_as_no_reason(self, tmp_path):
+        """Records saved before 2026-11-20 carry abort_reason "none" for a
+        completed hover test; they read as no reason, and are not rewritten.
+        A real reason is kept."""
+        import json
+
+        from dronedeck import history
+
+        folder = tmp_path / "s-old"
+        folder.mkdir()
+        meta = {
+            "id": "s-old", "operator_id": "u", "operator_email": "a@b.c",
+            "operator_name": None, "drone_hardware_id": None, "mode": "auto",
+            "assisted": True, "started_at": "2026-11-20T20:55:20+00:00",
+            "flights": [
+                {"id": "f1", "mode": "auto", "program": "hover-test",
+                 "started_at": "2026-11-20T20:55:32+00:00", "outcome": "completed",
+                 "abort_reason": "none"},
+                {"id": "f2", "mode": "auto", "program": "hover-test",
+                 "started_at": "2026-11-20T20:09:16+00:00", "outcome": "landed_by_guard",
+                 "abort_reason": "height_error"},
+            ],
+        }
+        written = json.dumps(meta)
+        (folder / "meta.json").write_text(written)
+
+        record = history.read_session("s-old", root=tmp_path)
+        assert record is not None
+        assert [f["abort_reason"] for f in record["flights"]] == [None, "height_error"]
+        assert (folder / "meta.json").read_text() == written
 
     def test_a_session_id_cannot_walk_out_of_the_folder(self):
         from dronedeck import history

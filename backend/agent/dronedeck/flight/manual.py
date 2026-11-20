@@ -1,3 +1,9 @@
+# This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). Every graceful stop (landed, disarmed on the
+# ground, shut down) now hands the setpoint priority back to the high-level commander
+# after the stop setpoint, so the firmware's watchdog no longer locks the motors after
+# a landing; the emergency stop still latches.
+
 """Manual control loop — assisted, gentle, and landed gracefully.
 
 The rule this file exists to enforce is unchanged: **the operator sends intent;
@@ -617,8 +623,29 @@ class ManualController:
         if state is ControlState.FLYING:
             return
         if state is ControlState.ARMED:
-            self._commander.send_stop_setpoint()
+            self._stop_and_release()
             log.info("manual control: disarmed on the ground")
+
+    def _stop_and_release(self) -> None:
+        """Motors off, then hand the setpoint priority back — every graceful stop.
+
+        A stop setpoint alone LOCKS the drone after a landing (supervisor.info
+        580 two seconds after every mission landed, 2026-10-05 and 2026-11-20;
+        firmware 2025.12.1 supervisor.c and supervisor_state_machine.c). The
+        firmware counts the drone as flying for 2 s after any motor was above
+        idle; the lone stop is the last setpoint it ever gets, so 0.5 s later
+        the commander watchdog moves it to warning-level-out — which has no
+        path to "landed" — and at 2 s to free fall, then LOCKED, cleared only
+        by a restart. Relaxing the priority lets the stopped high-level
+        commander write a fresh motors-off setpoint every tick, so the
+        watchdog never fires and the supervisor goes flying → landed → ready.
+        The same stop-then-notify the cflib examples end on.
+
+        Not used by emergency_stop: that one is meant to latch, and Reset
+        drone clears it over the radio.
+        """
+        self._commander.send_stop_setpoint()
+        self._commander.send_notify_setpoint_stop()
 
     def emergency_stop(self) -> None:
         """Stop the motors now. Acts immediately, not on the next tick."""
@@ -662,7 +689,7 @@ class ManualController:
             self._thread.join(timeout=2.0)
             self._thread = None
         if self.state is not ControlState.LANDED:
-            self._commander.send_stop_setpoint()
+            self._stop_and_release()
 
     def _run(self) -> None:
         """Tick on a fixed schedule, not a fixed sleep.
@@ -701,7 +728,7 @@ class ManualController:
                     self.stats.heartbeat_timeouts += 1
                     self._state = ControlState.IDLE
                     log.warning("manual control: app went quiet while armed — disarming")
-                    send = self._commander.send_stop_setpoint
+                    send = self._stop_and_release
                 else:
                     intent = self._intent
                     # Before liftoff only W lifts: S has nothing to lower yet.
@@ -735,7 +762,7 @@ class ManualController:
                     if self._landing_until is not None and now >= self._landing_until:
                         self._state = ControlState.LANDED
                         self._landing_until = None
-                        send = self._commander.send_stop_setpoint
+                        send = self._stop_and_release
                     elif not self._landing_started:
                         self._landing_started = True
                         send = self._start_landing_commands
@@ -750,7 +777,7 @@ class ManualController:
                         if now - self._touchdown_at >= TOUCHDOWN_HOLD_S:
                             self._state = ControlState.LANDED
                             self._touchdown_at = None
-                            send = self._commander.send_stop_setpoint
+                            send = self._stop_and_release
                         else:
                             send = self._zdistance_setpoint_locked(Intent(), dt)
                     else:

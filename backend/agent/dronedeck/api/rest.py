@@ -1,3 +1,7 @@
+# This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). GET /session/program/blockers reports why the
+# drone would refuse the Hover test now (its motor lock), for the Hover test panel.
+
 """The agent's local HTTP and WebSocket API.
 
 This is what the desktop app talks to. It binds to **localhost by default**: it
@@ -924,6 +928,13 @@ def validate_draft(body: dict = Body(...)) -> dict:  # noqa: B008
     except (NotFound, PlanError) as e:
         raise _plan_refusal(e) from None
     return _mission_view(mission, room)
+
+
+@app.get("/session/program/blockers", dependencies=[Command])
+def program_blockers() -> dict:
+    """Why the drone itself would refuse the Hover test now (its motor lock),
+    with what to do — the same list run_program refuses on."""
+    return {"blockers": agent.session.program_blockers()}
 
 
 @app.get("/missions/{mission_id}/blockers", dependencies=[Command])

@@ -1,3 +1,7 @@
+This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records Auto's three-button action rail;
+the Hover demo moved to step ① Plan as the Hover test.
+
 PAGES AND WINDOWS — what the desktop app shows
 ==============================================
 
@@ -159,13 +163,15 @@ in the air. In Auto the movement keys are dimmed and said to be inactive rather
 than removed — L still lands in both modes — because a control that disappears
 between modes is one the operator has to relearn.
 
-The right column opens with the ACTION RAIL: four buttons, always in the same
-place whatever step the session is on — Battery & motor test, the mode slot,
-Start session, End session.
+The right column opens with the ACTION RAIL, always in the same place
+whatever step the session is on — in Manual four buttons (Battery & motor
+test, the mode slot, Start session, End session), in Auto three (no mode slot).
 
-THE MODE SLOT FOLLOWS THE MODE AND THE STEP. In Auto it is the preset Hover
-demo. In Manual it is Start motors until the props are turning, and then
-"Hover at N m" — which is NOT the Auto program. That one needs a position
+THE MODE SLOT IS MANUAL'S. Until 2026-11-20 Auto's was the preset "Hover demo";
+it moved to step ① Plan as the Hover test, beside its own settings
+(auto-control.txt, DECISIONS), and Auto's rail has no second slot. In Manual it
+is Start motors until the props are turning, and then
+"Hover at N m" — which is NOT the Auto Hover test. That one needs a position
 estimate and is refused without base stations; this one asks the manual
 controller to rise and hold (../backend/manual-control.txt), so it works on the
 barometer, which is the state this drone is usually in. The height field beside
