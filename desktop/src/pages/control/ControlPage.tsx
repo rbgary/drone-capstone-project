@@ -1,3 +1,8 @@
+// This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+// (Claude Opus 5.5, Anthropic, 2026). In Auto the Actions column drops to three
+// buttons: the Hover demo moved to step ① as the Hover test, and the Auto settings
+// panel no layout rendered is removed.
+
 /**
  * Control: sign in, run the checks, confirm the area, then fly.
  *
@@ -21,8 +26,9 @@
  * Retry in place of the flying controls: every check again, in this session,
  * before anything can fly — the drone holds its motors after a tumble.
  *
- * Auto shows the preset programs; Manual shows arming and the keys. Both run
- * the same checks and need the same confirmation, because the risk is the same.
+ * Manual shows arming and the keys; Auto's Hover test lives on its own page, in
+ * step ① of the mission flow (auto/HoverTestPanel.tsx). Both run the same
+ * checks and need the same confirmation, because the risk is the same.
  *
  * AUTO HAS ITS OWN LAYOUT (auto/AutoControl.tsx, since 2026-09-28): the Mission
  * flow — ① Plan → ② Position → ③ Flyable space → ④ Auto-correct → ⑤ Fly — on the left, where the operator works,
@@ -72,7 +78,6 @@ export function ControlPage({
   // Held here because two subtrees need them: the action rail, which starts a
   // flight, and the step panels, which set one up.
   const [height, setHeight] = useState("0.30");
-  const [hold, setHold] = useState("10");
   const [ambient, setAmbient] = useState("22C");
 
   if (session === null) {
@@ -109,7 +114,6 @@ export function ControlPage({
           <ControlColumn
                   session={session} telemetry={telemetry} run={run}
                   height={height} setHeight={setHeight}
-                  hold={hold} setHold={setHold}
                   ambient={ambient} setAmbient={setAmbient}
                 />
         </div>
@@ -117,7 +121,7 @@ export function ControlPage({
         <AutoControl
           session={session} telemetry={telemetry} history={history} intent={intent} run={run}
           logLines={logLines} onClearLog={onClearLog} wide={wide}
-          height={height} hold={hold} ambient={ambient} setAmbient={setAmbient}
+          height={height} ambient={ambient} setAmbient={setAmbient}
           start={autoStart}
         />
       ) : wide ? (
@@ -165,13 +169,12 @@ export function ControlPage({
                 intent={intent} mode={session.mode}
                 telemetry={telemetry} session={session}
                 run={run} ready={session.state === "ready" && !session.retry_required}
-                height={height} hold={hold} ambient={ambient}
+                height={height} ambient={ambient}
               />
               <div className="grid content-start gap-5 pt-4">
                 <ControlColumn
                   session={session} telemetry={telemetry} run={run}
                   height={height} setHeight={setHeight}
-                  hold={hold} setHold={setHold}
                   ambient={ambient} setAmbient={setAmbient}
                 />
               </div>
@@ -186,12 +189,11 @@ export function ControlPage({
             intent={intent} mode={session.mode}
             telemetry={telemetry} session={session}
             run={run} ready={session.state === "ready" && !session.retry_required}
-            height={height} hold={hold} ambient={ambient}
+            height={height} ambient={ambient}
           />
           <ControlColumn
                   session={session} telemetry={telemetry} run={run}
                   height={height} setHeight={setHeight}
-                  hold={hold} setHold={setHold}
                   ambient={ambient} setAmbient={setAmbient}
                 />
           <ConsolePane
@@ -209,16 +211,15 @@ export function ControlPage({
 
 // ── the right column ─────────────────────────────────────────────────
 
-function ControlColumn({ session, telemetry, run, height, setHeight, hold, setHold, ambient, setAmbient }: {
+function ControlColumn({ session, telemetry, run, height, setHeight, ambient, setAmbient }: {
   session: Session;
   telemetry: Telemetry | null;
   run: Run;
   height: string; setHeight: (v: string) => void;
-  hold: string; setHold: (v: string) => void;
   ambient: string; setAmbient: (v: string) => void;
 }) {
   // The flight parameters live here, not inside a panel, because the action
-  // rail's Hover demo button is their trigger and the ambient temperature is
+  // rail's Hover at button is their trigger and the ambient temperature is
   // shared with arming in Manual.
   const showFlightControls =
     (session.state === "ready" || session.state === "busy") && !session.retry_required;
@@ -235,20 +236,13 @@ function ControlColumn({ session, telemetry, run, height, setHeight, hold, setHo
       {showFlightControls && (
         <>
           {session.health_test && <HealthTestPanel result={session.health_test} />}
-          {session.mode === "auto" ? (
-            <AutoControls
-              session={session}
-              height={height} setHeight={setHeight}
-              hold={hold} setHold={setHold}
-              ambient={ambient} setAmbient={setAmbient}
-            />
-          ) : (
-            <ManualControls
-              session={session} telemetry={telemetry}
-              ambient={ambient} setAmbient={setAmbient}
-              height={height} setHeight={setHeight}
-            />
-          )}
+          {/* Auto never renders this column once signed in (it has its own
+              layout, auto/AutoControl.tsx), so only Manual's controls are here. */}
+          <ManualControls
+            session={session} telemetry={telemetry}
+            ambient={ambient} setAmbient={setAmbient}
+            height={height} setHeight={setHeight}
+          />
         </>
       )}
 
@@ -266,23 +260,24 @@ function ControlColumn({ session, telemetry, run, height, setHeight, hold, setHo
 }
 
 /**
- * The four things an operator presses, always in the same order and the same
- * place, whatever step the session is on.
+ * The things an operator presses (four in Manual, three in Auto), always in
+ * the same order and the same place, whatever step the session is on.
  *
  * A control that cannot act right now is DISABLED WITH THE REASON, never hidden
  * and never silently dead (WCAG 2.2 AA, and Apple HIG on the same point). The
  * old page hid each of these until its step arrived, which meant the operator
  * relearned the layout at every stage.
  *
- * Slot two follows the mode: a Hover demo button in Manual would be permanently
- * disabled, which is worse than showing the thing Manual actually needs.
+ * Manual has a second slot — Start motors, then Hover at — because those are
+ * how Manual flies. Auto has three buttons (2026-11-20): its Hover test moved
+ * to step ① of the mission flow (auto/HoverTestPanel.tsx), beside its own
+ * settings, and a slot that never acts in Auto would only be clutter.
  */
-function ActionRail({ session, run, ready, height, hold, ambient }: {
+function ActionRail({ session, run, ready, height, ambient }: {
   session: Session;
   run: Run;
   ready: boolean;
   height: string;
-  hold: string;
   ambient: string;
 }) {
   const busy = session.state === "busy";
@@ -301,19 +296,8 @@ function ActionRail({ session, run, ready, height, hold, ambient }: {
     return null;
   };
 
-  const modeSlot: RailAction = session.mode === "auto"
-    ? {
-        label: "Hover demo",
-        variant: "primary",
-        disabled: !ready || !session.assisted,
-        reason: !session.assisted && flightReason() === null
-          ? "The drone cannot see the base stations, so a preset flight would fly blind. Switch to Manual, or get the stations seen and start again."
-          : flightReason(),
-        onClick: () => void run(
-          () => api.runProgram(Number(height), Number(hold), ambient),
-          `Hover demo — ${height} m for ${hold} s`,
-        ),
-      }
+  const modeSlot: RailAction | null = session.mode === "auto"
+    ? null
     : session.activity === "manual"
       ? {
           // Once the props are turning, the useful button is the one that gets
@@ -348,7 +332,7 @@ function ActionRail({ session, run, ready, height, hold, ambient }: {
       // would be a lie; the results below are split into two tiles instead.
       onClick: () => void run(api.healthTest, "Battery & motor test"),
     },
-    modeSlot,
+    ...(modeSlot ? [modeSlot] : []),
     {
       label: session.state === "starting" ? "Starting…" : "Start session",
       variant: "start",
@@ -386,7 +370,7 @@ function ActionRail({ session, run, ready, height, hold, ambient }: {
       ))}
       {/* The flying action's reason is SHOWN, not only a tooltip: it is the
           line that explains why nothing happens (2026-10-01). */}
-      {modeSlot.disabled && modeSlot.reason && (
+      {modeSlot?.disabled && modeSlot.reason && (
         <p role="status" className="mt-1 border-l-2 pl-2 text-xs" style={{ borderColor: TONE_COLOR.warning }}>
           {modeSlot.reason}
         </p>
@@ -747,52 +731,6 @@ export function HealthTestPanel({ result }: { result: HealthTest }) {
 
 // ── auto ─────────────────────────────────────────────────────────────
 
-function AutoControls({ session, height, setHeight, hold, setHold, ambient, setAmbient }: {
-  session: Session;
-  height: string;
-  setHeight: (v: string) => void;
-  hold: string;
-  setHold: (v: string) => void;
-  ambient: string;
-  setAmbient: (v: string) => void;
-}) {
-  const running = session.activity === "program";
-
-  return (
-    <Panel
-      title="Hover demo"
-      note="Rises straight up, holds a steady height, then lands where it started. The checks run again in the air: it lands by itself on low battery, lost positioning or drift."
-    >
-      {!session.assisted ? (
-        <Message
-          tone="warning"
-          text="A preset flight needs the drone to know where it is, and it cannot see the base stations — it would fly blind. Switch to Manual in the sidebar to fly it by hand, or get the base stations seen and start the session again."
-        />
-      ) : running ? (
-        <div className="grid gap-2">
-          <Spinner label={`${session.flight?.phase ?? "flying"} ${session.flight?.detail ?? ""}`} />
-          <p className="text-sm text-[var(--muted)]">
-            Use <strong>Land</strong> at the top to come down early.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-3">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Height (m)" value={height} onChange={setHeight}
-                   type="number" step="0.05" min="0.1" max="1" />
-            <Field label="Hold (s)" value={hold} onChange={setHold}
-                   type="number" step="1" min="1" max="60" />
-            <Field label="Room temp" value={ambient} onChange={setAmbient} hint="74F or 22C" />
-          </div>
-          <p className="text-xs text-[var(--muted)]">
-            Press <strong>Hover demo</strong> in Actions above to fly it with these values.
-          </p>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
 export function Field({
   label, value, onChange, hint, ...input
 }: {
@@ -897,7 +835,7 @@ function ManualControls({ session, telemetry, ambient, setAmbient, height, setHe
  * into the flight loop. They light from `intent`, which is the same state the
  * agent is being sent — so a cap lit here is a key the drone knows about.
  */
-export function FlightDeck({ intent, mode, telemetry, session, run, ready, height, hold, ambient }: {
+export function FlightDeck({ intent, mode, telemetry, session, run, ready, height, ambient }: {
   intent: Intent;
   mode: Session["mode"];
   telemetry: Telemetry | null;
@@ -905,7 +843,6 @@ export function FlightDeck({ intent, mode, telemetry, session, run, ready, heigh
   run: Run;
   ready: boolean;
   height: string;
-  hold: string;
   ambient: string;
 }) {
   const land = KEY_LABELS.find((b) => b.keys.every((k) => !k.field));
@@ -967,7 +904,7 @@ export function FlightDeck({ intent, mode, telemetry, session, run, ready, heigh
             <p className="eyebrow pb-1.5">Actions</p>
             <ActionRail
               session={session} run={run} ready={ready}
-              height={height} hold={hold} ambient={ambient}
+              height={height} ambient={ambient}
             />
           </div>
         )}

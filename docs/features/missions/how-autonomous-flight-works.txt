@@ -1,3 +1,6 @@
+This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). The motor lock after a landing is fixed, and flown once on 11/20 without locking.
+
 HOW AUTONOMOUS FLIGHT WORKS — the whole system, briefly
 As of 2026-10-10, on main (built on experiment/samuel, 2026-10-05).
 Detail for each part lives in the doc named in brackets.
@@ -79,8 +82,10 @@ THE ONE RULE EVERYTHING FOLLOWS
 - Before Start, the agent lists EVERY reason it would refuse, each with what
   to do (session not ready, wrong mode, no position, drone's motors LOCKED,
   plan unsafe, battery too low for the path). Start refuses on the first.
-- A LOCKED drone (its supervisor locks after some landings; only a restart
-  clears it) is named, with Reset drone beside it.
+- A LOCKED drone (only a restart clears it) is named, with Reset drone
+  beside it. Landings no longer lock it since 2026-11-20 (manual.py; flown
+  that day, 542 -> 526 after the landing); an emergency stop still does, on
+  purpose.
   [missions/mission-controller.txt, backend/sessions-and-modes.txt]
 
 ================================================================================
@@ -124,9 +129,6 @@ HOW IT CONNECTS, IN ONE LINE EACH
 ================================================================================
 KNOWN, NOT YET SOLVED
 ================================================================================
-- After some landings the drone locks its motors (the landing ends at ~5 cm
-  with motors high, then cuts). The landing is in manual.py, which is
-  locked — Samuel's decision. Today: Reset drone between missions if asked.
 - The second station is in the lab (2026-10-24, channel 2) and ② Position
   measures both from one press now (../desktop/auto-control.txt) — but the
   lab drone's deck saw NO light that day (all four sensors 0, nothing stored),

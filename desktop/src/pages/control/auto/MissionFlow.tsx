@@ -1,6 +1,13 @@
+// This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+// (Claude Opus 5.5, Anthropic, 2026). Step ① Plan now shows the Hover test panel
+// above the mission list.
+
 /**
  * The Auto flow, in the order the operator works (2026-10-05, Samuel):
  * ① Plan → ② Position → ③ Flyable space → ④ Auto-correct → ⑤ Fly.
+ *
+ * ① also offers the Hover test above the mission list (HoverTestPanel.tsx,
+ * 2026-11-20): flown instead of a mission, so it needs none chosen.
  *
  * Adapted from the Zoomaa booking flow (booking_flow_screen.dart): one screen,
  * a step bar across the top, back always allowed, forward only once the step
@@ -30,6 +37,7 @@ import { MissionStep } from "./plan/MissionStep";
 import { StepBar, type FlowStep, type StepState } from "./StepBar";
 import { PositionStep } from "./PositionStep";
 import { FlightPlanCheck } from "./FlightPlanCheck";
+import { HoverTestPanel } from "./HoverTestPanel";
 import { useStation } from "@/components/StationStages";
 
 const CHOSEN_KEY = "dronedeck.auto.mission";
@@ -121,7 +129,8 @@ export function MissionFlow({ session, run, telemetry, history, ambient, setAmbi
 
       {step === 1 && (
         <MissionStep run={run} telemetry={telemetry} selectedId={chosen?.id ?? null} onUse={choose}
-                     openEditor={start?.view === "edit" ? start.missionId : undefined} heightClass={heightClass} />
+                     openEditor={start?.view === "edit" ? start.missionId : undefined} heightClass={heightClass}
+                     aside={<HoverTestPanel session={session} run={run} ambient={ambient} setAmbient={setAmbient} />} />
       )}
       {step === 2 && <PositionStep session={session} run={run} onContinue={() => setStep(3)} />}
       {step === 3 && chosen && (

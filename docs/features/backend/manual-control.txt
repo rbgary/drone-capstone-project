@@ -1,15 +1,25 @@
+This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). Every graceful stop now ends stop, then notify, so the drone no longer
+locks after a landing; the emergency stop still latches.
+
+This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records that the manual-control lock was removed;
+anyone on the team may now change how the keys fly the drone.
+
 MANUAL CONTROL — assisted flying from held keys
 ===============================================
 
-LOCKED — 2026-09-30, by the owner (Samuel): "no one should change the manual
-flight control unless I want to make that change". It flies right as it is.
-Do not change how the keys fly the drone — not the keys, the lean, the speeds,
-Shift, or the tuning — without Samuel's say-so in writing. The files are
-fingerprinted (backend/agent/tests/test_manual_control_lock.py) and need his
-review (.github/CODEOWNERS); CLAUDE.md, "Manual flight control is locked".
+NO LONGER LOCKED (2026-11-04, the team). From 2026-09-30 these files were
+locked to Samuel, after a day of well-meant changes that each lost the drone
+in the lab; the lock was a fingerprint test, a CI workflow, CODEOWNERS and a
+CLAUDE.md rule. Samuel left the team and the team removed all four: anyone on
+it may change manual flight. What decides how the keys fly: flight/manual.py,
+flight/keyframe.py, flight/tuning.py, desktop/src/lib/keys.ts and arrows.ts,
+pages/control/ArrowFrame.tsx and App.tsx's keyboard handler. A change to them
+is worth re-flying the ladder in ../../flight-log.txt before relying on it.
 
 
-HOW TO FLY IT (what the operator does, as locked)
+HOW TO FLY IT (what the operator does)
 
   Start           the props idle on the floor. Nothing lifts yet.
   W / S           up / down. Hold W to take off. Let go: it holds that height.
@@ -344,6 +354,24 @@ DECISIONS
 
 INVARIANTS
 
+- EVERY GRACEFUL STOP IS STOP, THEN NOTIFY (2026-11-20, _stop_and_release):
+  landed (assisted or on the barometer), disarmed on the ground, the loop shut
+  down. A lone send_stop_setpoint LOCKED the drone after landings —
+  supervisor.info 580 two seconds after EVERY mission landed on 2026-11-20
+  (and 2026-10-05). Why, from the firmware the drone runs (2025.12.1
+  supervisor.c, supervisor_state_machine.c): the supervisor counts the drone
+  as flying for 2 s after any motor was above idle; the stop is the last
+  setpoint it ever gets, so after 0.5 s the commander watchdog moves it to
+  warning-level-out, which has no path to "landed", and at 2 s to free fall,
+  then LOCKED — cleared only by a restart. send_notify_setpoint_stop after
+  the stop lets the stopped high-level commander write a fresh motors-off
+  setpoint every tick, so the watchdog never fires. The EMERGENCY STOP is the
+  exception: it is meant to latch, and Reset drone clears it. Tests pin both
+  (test_manual.py). FLOWN 2026-11-20 (session 2214d12f, mission a9ac115d):
+  the landing read 542, then 526 (ready) three seconds later — no 580. One
+  mission landing so far; a second mission in the same session without
+  Reset drone is not yet on record.
+
 - Send ONE zero-thrust setpoint before any other. The firmware's rpyt commander
   locks thrust until it sees thrust = 0, then silently holds every later
   setpoint at zero. Missed, it cost a lab session: the app said the props were
@@ -397,8 +425,7 @@ stopped from — so it arrives instead of coasting past. The goal's velocity is
 computed in the room's frame — the frame the arrows move the point in too —
 and added as it is; the heading never bends it.
 
-fly_to(…, speed_m_s) (2026-10-01, Samuel's ask — re-fingerprinted in
-test_manual_control_lock.py): a mission's own travel speed, refused unless
+fly_to(…, speed_m_s) (2026-10-01, Samuel's ask): a mission's own travel speed, refused unless
 0 < speed ≤ MOVE_SPEED_M_S; None keeps MOVE_SPEED_M_S. It is the only thing
 that changed in manual.py — nothing the keys do.
 

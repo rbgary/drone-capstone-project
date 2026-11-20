@@ -1,3 +1,7 @@
+// This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+// (Claude Opus 5.5, Anthropic, 2026). Adds api.programBlockers, the Hover test's motor
+// lock as the agent reports it.
+
 /**
  * Talking to the flight agent running on this computer.
  *
@@ -609,6 +613,11 @@ export const api = {
   measureStation: () => command<{ message: string; stations?: number[]; cleared?: number[] }>("/station/measure"),
   /** Every reason Start would refuse this mission now, with what to do —
    *  the same list Start refuses on (agent Session.mission_blockers). */
+  /** Why the drone itself would refuse the Hover test now — its motor lock —
+   *  with what to do (agent Session.program_blockers, the list run_program
+   *  refuses on). */
+  programBlockers: () =>
+    command<{ blockers: MissionBlocker[] }>("/session/program/blockers", undefined, "GET"),
   missionBlockers: (missionId: string) =>
     command<{ blockers: MissionBlocker[] }>(`/missions/${encodeURIComponent(missionId)}/blockers`, undefined, "GET"),
   /** The DPP switch for this session. */

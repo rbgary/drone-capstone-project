@@ -1,3 +1,11 @@
+<!-- This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It keeps both plan lines when merging the 11/4
+flight-stability survey with main's no-camera plan. -->
+
+<!-- This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It adds a router line for the flight stability
+and two-station survey in plans/. -->
+
 # Docs router
 
 One line per doc. Read this first, then open only what your work touches.
@@ -120,6 +128,8 @@ are the only thing that survives a session.
 [plans/2026-10-09-data-pipeline-v2.txt](plans/2026-10-09-data-pipeline-v2.txt) — the plan for the pipeline built whole: clean, enhance, classify, interpret, results on the web, notifications and owners. What shipped is in features/pipeline/.
 
 [plans/2026-10-09-pipeline-completion.txt](plans/2026-10-09-pipeline-completion.txt) — the pipeline completed: the session processed too, the camera's part (scene@1), live verdicts, calibration, the marks and the error table — and what is still owed.
+
+[plans/2026-11-04-flight-stability-two-stations.txt](plans/2026-11-04-flight-stability-two-stations.txt) — not yet a plan: the open needs the code and docs record for stable flight, take-off, turns and landing with two base stations, which are locked, hardware or buildable now.
 
 [plans/2026-11-16-no-camera-phases-5-7.txt](plans/2026-11-16-no-camera-phases-5-7.txt) — **what is next for the no-camera work**: where Phases 0–4 stand on feat/no-camera, what Reagan hands over before Phase 5 (the photo classifier), then photos in the desktop app (5), on the web (6) and the docs sweep (7).
 

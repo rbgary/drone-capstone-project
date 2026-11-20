@@ -1,3 +1,13 @@
+# This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). The Hover test refuses a drone whose motors are
+# locked, reports that lock for the app (program_blockers), and records no abort
+# reason when it completes.
+
+# This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). The station status reports the position
+# uncertainty rounded up to 0.1 cm, so a reading the 5 cm check refuses never displays
+# as within the limit.
+
 """An operating session: one operator, one drone, from sign-in to sign-off.
 
 This is what the desktop app drives, and the only thing that flies a drone.
@@ -81,7 +91,12 @@ from dronedeck.processing import SESSION, Job, JobState, ProcessingQueue
 from dronedeck.safety.flight_guard import Action as GuardAction
 from dronedeck.safety.flight_guard import Reason as GuardReason
 from dronedeck.safety.flight_guard import Verdict as GuardVerdict
-from dronedeck.safety.flight_guard import assess_positioning, position_trusted, station_ids
+from dronedeck.safety.flight_guard import (
+    assess_positioning,
+    position_trusted,
+    station_ids,
+    uncertainty_cm,
+)
 from dronedeck.sync import auth_store, flight_playback
 from dronedeck.sync.cloud import AuthError, Cloud, CloudTimeout, Operator
 from dronedeck.sync.outbox import Kind, Outbox, new_id
@@ -1073,6 +1088,13 @@ class Session:
                 "now — it would fly blind. Switch to Manual to fly it by hand, or get "
                 "the base stations seen and run the checks again."
             )
+        # The motor lock, read now — never assumed from the opening checks. A
+        # hover test flown on a LOCKED drone (2026-11-20, flight f86b8c62, right
+        # after a mission) went armed -> flying with thrust 0 and was ended by
+        # the height guard 8 s later, as if it had flown badly.
+        blocked = self._program_blockers()
+        if blocked:
+            raise SessionError(f"{blocked[0].message} {blocked[0].fix}")
         try:
             program = HoverTest(height_m=height_m, hold_s=hold_s)
         except ValueError as e:
@@ -1085,6 +1107,19 @@ class Session:
             )
         self._set(state=State.BUSY, activity="program", message=None)
         self._start_worker("program", lambda: self._do_program(program, ambient))
+
+    def program_blockers(self) -> list[dict[str, str]]:
+        """Why the Hover test would be refused by the drone itself right now —
+        its motor lock — with what to do. The Hover test panel polls this to
+        offer Reset drone, as ⑤ Fly does from mission_blockers; run_program
+        refuses on the same list, so the two can never disagree."""
+        return [b.to_dict() for b in self._program_blockers()]
+
+    def _program_blockers(self) -> list[Blocker]:
+        held = self._motors_held()
+        if held is None:
+            return []
+        return [Blocker("motors", held, "Press Reset drone: it restarts and checks itself again.")]
 
     def _do_program(self, program: HoverTest, ambient: str) -> None:
         _, audit = self._require_operator()
@@ -1112,9 +1147,14 @@ class Session:
         finally:
             self.flight = None
 
+        completed = result.outcome is Outcome.COMPLETED
+        # No abort reason on a flight that completed. str(Reason.NONE) is
+        # "none", which every reader takes as a reason: the Sessions page
+        # showed a completed hover test as "Aborted: none" (2026-11-20).
         self._finish_flight(
-            status="completed" if result.outcome is Outcome.COMPLETED else "aborted",
-            outcome=str(result.outcome), abort_reason=str(result.reason),
+            status="completed" if completed else "aborted",
+            outcome=str(result.outcome),
+            abort_reason=None if completed else str(result.reason),
         )
         audit.record(
             Action.PROGRAM_RUN,
@@ -1122,7 +1162,6 @@ class Session:
             session_id=self._snapshot.session_id, flight_id=flight_id,
             detail={"program": program.key, **result.to_dict()},
         )
-        completed = result.outcome is Outcome.COMPLETED
         self._set(state=State.READY, activity=None, retry_required=not completed,
                   message=result.message if completed else
                   f"{result.message} Press Retry to check the drone again before flying.")
@@ -1326,7 +1365,9 @@ class Session:
             "received": list(status.received),
             "measured": list(status.with_geometry),
             "usable": list(status.usable),
-            "uncertainty_cm": (round(max(variances) ** 0.5 * 100, 1)
+            # Rounded UP to 0.1 cm (2026-11-04), so a refused reading never
+            # shows as "within 5.0 cm (under 5 needed)".
+            "uncertainty_cm": (uncertainty_cm(max(variances))
                                if len(variances) == 3 else None),
             "ready": status.ready,
             # The same chain, per station (2026-10-24: two stations in the

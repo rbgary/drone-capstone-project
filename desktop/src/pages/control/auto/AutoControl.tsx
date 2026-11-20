@@ -1,3 +1,7 @@
+// This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+// (Claude Opus 5.5, Anthropic, 2026). The Hover test's hold time no longer passes
+// through here: the test moved to step ① with its own settings.
+
 /**
  * The Control page in Auto: the mission on the left, the monitor on the right.
  *
@@ -48,7 +52,7 @@ const AIRBORNE = new Set(["mission", "manual", "program"]);
 
 export function AutoControl({
   session, telemetry, history, intent, run, logLines, onClearLog, wide,
-  height, hold, ambient, setAmbient, start,
+  height, ambient, setAmbient, start,
 }: {
   session: Session;
   telemetry: Telemetry | null;
@@ -59,7 +63,6 @@ export function AutoControl({
   onClearLog: () => void;
   wide: boolean;
   height: string;
-  hold: string;
   ambient: string;
   setAmbient: (value: string) => void;
   /** Harness only: open on a given step. Never set by the app. */
@@ -70,7 +73,7 @@ export function AutoControl({
   const [full, setFull] = useState(start?.full ?? false);
   const deck = (
     <FlightDeck intent={intent} mode={session.mode} telemetry={telemetry} session={session}
-                run={run} ready={ready} height={height} hold={hold} ambient={ambient} />
+                run={run} ready={ready} height={height} ambient={ambient} />
   );
   const flow = (
     <FullScreenFrame full={full} onExit={() => setFull(false)} session={session} run={run}>

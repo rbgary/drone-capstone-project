@@ -1,3 +1,8 @@
+# This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). Graceful stops now end stop -> notify_stop (the
+# hand-back that keeps the drone from locking after a landing); new tests pin that,
+# and that the emergency stop still latches.
+
 """Manual control loop.
 
 Every test here is about something going wrong or being done gently, because
@@ -264,7 +269,7 @@ class TestGracefulLanding:
         rig.ctl.land()
         rig.run(LAND_S + 0.2)
         assert rig.ctl.state is ControlState.LANDED
-        assert rig.cmd.kinds()[-1] == "stop"
+        assert rig.cmd.kinds()[-2:] == ["stop", "notify_stop"]
         rig.ctl.arm()
         assert rig.ctl.state is ControlState.ARMED
 
@@ -281,8 +286,31 @@ class TestGracefulLanding:
         rig.run(0.2)
         rig.ctl.land()
         assert rig.ctl.state is ControlState.IDLE
-        assert rig.cmd.kinds()[-1] == "stop"
+        assert rig.cmd.kinds()[-2:] == ["stop", "notify_stop"]
         assert rig.lands == []
+
+
+    def test_a_landing_hands_priority_back_so_the_drone_does_not_lock(self):
+        """A lone stop setpoint is the last one the firmware ever gets; with
+        the motors above idle in the last 2 s its supervisor stays "flying",
+        the commander watchdog fires and it LOCKS (supervisor.info 580 two
+        seconds after every mission landed, 2026-11-20). The notify after the
+        stop hands control to the stopped high-level commander, which keeps
+        the setpoint fresh, so the supervisor goes landed -> ready."""
+        rig = Rig()
+        rig.fly_to(0.3)
+        rig.ctl.land()
+        rig.run(LAND_S + 0.2)
+        kinds = rig.cmd.kinds()
+        last_stop = len(kinds) - 1 - kinds[::-1].index("stop")
+        assert kinds[last_stop + 1:] == ["notify_stop"]
+
+    def test_shutting_the_loop_down_on_the_ground_releases_too(self):
+        rig = Rig()
+        rig.ctl.arm()
+        rig.run(0.2)
+        rig.ctl.stop()
+        assert rig.cmd.kinds()[-2:] == ["stop", "notify_stop"]
 
 
 class TestHeartbeat:
@@ -300,7 +328,7 @@ class TestHeartbeat:
         rig.ctl.arm()
         rig.run(HEARTBEAT_TIMEOUT_S + 0.1, heartbeat=False)
         assert rig.ctl.state is ControlState.IDLE
-        assert rig.cmd.kinds()[-1] == "stop"
+        assert rig.cmd.kinds()[-2:] == ["stop", "notify_stop"]
 
     def test_heartbeat_keeps_it_flying(self):
         rig = Rig()
@@ -330,6 +358,15 @@ class TestEmergencyStop:
         rig.ctl.emergency_stop()
         assert rig.cmd.kinds()[-1] == "stop"
         assert rig.ctl.state is ControlState.STOPPED
+
+    def test_an_emergency_stop_still_latches(self):
+        """Not released: the emergency stop is meant to hold the motors, and
+        Reset drone clears it (decision 2026-11-20)."""
+        rig = Rig()
+        rig.fly_to(0.3)
+        count = len(rig.cmd.kinds())
+        rig.ctl.emergency_stop()
+        assert "notify_stop" not in rig.cmd.kinds()[count:]
 
     def test_nothing_is_sent_after_a_stop(self):
         rig = Rig()
@@ -453,7 +490,7 @@ class TestUnassisted:
         rig.run(start / LAND_RATE_M_S + 1.0 + TOUCHDOWN_HOLD_S + 0.2)
         assert rig.ctl.state is ControlState.LANDED
         assert rig.lands == []
-        assert rig.cmd.kinds()[-1] == "stop"
+        assert rig.cmd.kinds()[-2:] == ["stop", "notify_stop"]
 
     def test_a_quiet_app_descends_rather_than_drops(self):
         rig = Rig(assisted=False)

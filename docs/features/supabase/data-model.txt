@@ -1,3 +1,7 @@
+This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records migration 20261120000021: a flight's
+abort_reason is never 'none'.
+
 DATA MODEL — the tables and what ties them together
 ===================================================
 
@@ -29,6 +33,11 @@ WHERE IT LIVES
                                                              the hosted project
                                                              2026-11-18; proven on the
                                                              local stack the same day
+  backend/supabase/migrations/20261120000021_flights_abort_reason_none.sql
+                                                             abort_reason 'none' -> null,
+                                                             once and by trigger; NOT YET
+                                                             APPLIED to the hosted project,
+                                                             not run on any database
   backend/supabase/checks/hosted_schema_check.sql            read-only: does a database
                                                              hold what 0001–0019 make
   web/types/database.ts                                      generated types —
@@ -141,6 +150,13 @@ THE TABLES
                 abort_reason, ground_z_m, ambient_start, temp_unit, csv_path,
                 and operator_email / operator_name stamped like sessions' from
                 created_by — or, when that is empty, the session's operator.
+                abort_reason is NULL when the flight did not end early — never
+                'none'. Until 2026-11-20 the agent saved a completed hover test
+                with 'none' (Reason.NONE as text) and every reader showed it as
+                "Aborted: none". The trigger flights_abort_reason_none turns
+                'none' into null on insert and update, so an agent not yet
+                updated is corrected, not refused (a check would make its
+                upload fail and retry forever). Migration 20261120000021.
   telemetry     one row per 10 Hz sample, UNIQUE (flight_id, index), with the
                 position, attitude, motion, power and environment columns the
                 stream publishes.

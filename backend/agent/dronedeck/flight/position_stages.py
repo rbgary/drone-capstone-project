@@ -1,3 +1,9 @@
+# This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). A decoded station whose place is not stored is
+# reported as the blocker only when too few stations are usable, matching the agent's
+# positioning readiness so the stage note never contradicts the Continue button; the
+# "not settled" note shows the uncertainty rounded up to 0.1 cm.
+
 """Where the chain from base-station light to a position breaks — the FIRST
 stage that is not done, in words, with its fix.
 
@@ -21,7 +27,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from dronedeck.safety.flight_guard import MAX_READY_VARIANCE_M2, PositioningStatus
+from dronedeck.safety.flight_guard import (
+    MAX_READY_VARIANCE_M2,
+    PositioningStatus,
+    required_stations,
+    uncertainty_cm,
+)
 
 
 @dataclass(frozen=True)
@@ -63,8 +74,11 @@ def first_blocker(status: PositioningStatus, *, deck_detected: bool | None,
         return Blocker(
             "decoded", f"Light reaches the deck{lit}, but no station's sweep is decoded.",
             "Give each base station its own channel — Ch 1 and Ch 2 (Set up, step 3).")
+    # Only a blocker while too few stations are usable — the same rule as
+    # PositioningStatus.problems() (2026-11-04). With enough usable, a second
+    # station merely in view does not stop the drone being placed.
     unmeasured = [s for s in status.received if s not in status.with_geometry]
-    if unmeasured:
+    if unmeasured and len(status.usable) < required_stations():
         names = " and ".join(channel(s) for s in unmeasured)
         return Blocker(
             "stored", f"{names} is decoded, but its place is not stored.",
@@ -72,7 +86,7 @@ def first_blocker(status: PositioningStatus, *, deck_detected: bool | None,
             "then Measure.")
     variances = [v for v in status.variance_m2 if v is not None]
     if len(variances) < 3 or max(variances) > MAX_READY_VARIANCE_M2:
-        worst = f" (about {max(variances) ** 0.5 * 100:.0f} cm)" if variances else ""
+        worst = f" (about {uncertainty_cm(max(variances)):.1f} cm)" if variances else ""
         return Blocker(
             "settled", f"The position has not settled yet{worst}.",
             "Keep the drone still in view of the stations for a few seconds.")

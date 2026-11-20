@@ -1,0 +1,122 @@
+This file was created on 11/4/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It collects the open needs the code and docs record
+for stable flight, take-off, directional changes and landing with two base stations.
+
+FLIGHT STABILITY WITH TWO BASE STATIONS — the open needs, not yet a plan
+================================================================================
+
+THE ASK (Hannah, 2026-11-04): stabilize the drone's flight and allow smooth
+take-off, directional changes and landing with two base stations. Hard to test
+without the hardware, so the first step was to find what the code and docs
+already record as needed. This is that survey. Nothing in it is built yet.
+Each item names where it is recorded, so it can be re-checked against the code
+before work starts.
+
+TWO FACTS THAT SHAPE ALL OF IT
+
+1. TAKE-OFF, MOVING AND LANDING ALL GO THROUGH THE MANUAL FLIGHT SYSTEM —
+   flight/manual.py, flight/keyframe.py, flight/tuning.py. Missions fly
+   through it too: the mission controller gives it goals (hold_at, fly_to,
+   land) and never flies the drone itself (missions/mission-controller.txt).
+   Those files were locked to Samuel until 2026-11-04, when the team removed
+   the lock (features/backend/manual-control.txt): anyone may change them now.
+   Items marked MANUAL FILES below are in them — re-fly the ladder in
+   flight-log.txt after changing any of them.
+2. SEVERAL CAUSES ARE HARDWARE. On 2026-10-24, with two stations up, the
+   positioning deck saw no light on any of its four sensors
+   (flight-log.txt, "TWO STATIONS UP, AND THE DECK SEES NO LIGHT"), and no
+   flight with base-station positioning has run on the current drone.
+
+
+--------------------------------------------------------------------------------
+STABILITY
+--------------------------------------------------------------------------------
+- THRUST HEADROOM. The old drone needed ~81 % of full thrust to hover
+  (~53,000 of 65,535), the AI deck on top as the payload — little left to
+  level or turn with. Not measured on the current drone.
+  [features/backend/flight-status.txt, UPDATES 6 and 7]  HARDWARE: fly without
+  the AI deck, or fit the thrust upgrade.
+- THE TUNING IS PROVISIONAL. tuning.py's height-loop gains are "starting
+  values from two flights … not a finished tune", measured on the OLD drone,
+  barometer only. UPDATE 7: re-verify before any mission.
+  [features/backend/flight-tuning.txt]  MANUAL FILES; needs flight traces.
+- POSITION ASSISTANCE IS WHAT MADE IT SMOOTH. The flights held to 1.3–1.8 cm
+  were assisted (base stations with geometry); nearly every rough one was
+  barometer-only. Getting the stations working is the largest stability gain,
+  and it is not code. [flight-status.txt, UPDATE 5]
+- THE MISSION CONSTANTS ARE GUESSES. ARRIVE_M 0.10, SETTLE_S 1.0,
+  SETTLE_TIMEOUT_S 10.0, TRANSIT_MARGIN_S 5.0 — "each a guess until the lab
+  replaces it with a measurement".
+  [backend/agent/dronedeck/mission/controller/mission_controller.py,
+   handoffs/sprint-1/done/mission-verification.txt]  Not locked; needs lab
+  flights, then `dronedeck mission-report` suggests values.
+
+--------------------------------------------------------------------------------
+TAKE-OFF
+--------------------------------------------------------------------------------
+- FIXED, NEVER FLOWN: the controller rebuilt before every flight (so a crash's
+  wound-up integrators do not carry into the next take-off), beam blackouts
+  ridden out to 3 s on the filter's own variance, telemetry gaps to 2.0 s.
+  [flight-status.txt, UPDATE 5, "WHAT IS FIXED BUT HAS NOT FLOWN"]  Lab check,
+  not new code.
+
+--------------------------------------------------------------------------------
+LANDING — the clearest code-level need
+--------------------------------------------------------------------------------
+- THE DRONE LOCKS ITSELF AFTER SOME LANDINGS. Flight 0fca5fb4 (2026-10-05):
+  the manual system declared "landed" at z 0.055 m with thrust ~47,600 and
+  motor m1 ~59,900 — still 5.5 cm up, motors high — then cut them; within six
+  minutes supervisor.info read LOCKED, cleared only by a restart. Three
+  re-flights then ran armed → flying → landing with thrust 0. Whether the cut
+  from 5 cm is what trips the lock is NOT YET MEASURED. Today the mission path
+  refuses and offers Reset drone.
+  [missions/mission-controller.txt, "FOUND, NOT FIXED";
+   missions/how-autonomous-flight-works.txt, "KNOWN, NOT YET SOLVED"]  MANUAL FILES
+  (the landing is manual.py's).
+- A TOTAL RADIO LOSS STILL DROPS THE DRONE: the firmware cuts the motors at
+  about 2 s and does not glide. Only a lost downlink can be landed gently.
+  [flight-status.txt, UPDATE 5]  Firmware behaviour.
+
+--------------------------------------------------------------------------------
+DIRECTIONAL CHANGES
+--------------------------------------------------------------------------------
+- THE LEG TIMEOUT (T8) treats a 3-D leg as flown at the mission's speed, but
+  the height moves at CLIMB_RATE_M_S (0.15 m/s): a 0.7 m climb at Brisk
+  (0.20 m/s) takes ~4.7 s against 3.5 s + TRANSIT_MARGIN_S — only the margin
+  absorbs it. The mission report already plans legs the planner's way, so the
+  report and T8 disagree. [missions/mission-controller.txt, "FOUND, NOT
+  FIXED"]  OUTSIDE THE MANUAL FILES; testable in the simulator (tests/sim_drone.py,
+  tests/mission/test_controller.py).
+- THE EARLIER ARROW COMPLAINTS ("the wrong way", "drifts sideways") were traced
+  to having no position, not to the key mapping. [flight-status.txt, UPDATE 6]
+
+--------------------------------------------------------------------------------
+TWO BASE STATIONS
+--------------------------------------------------------------------------------
+- NEVER FLOWN WITH TWO. ② Position measures every station from one press now
+  (it used to keep the first and erase the second) — not yet run on the drone.
+  [flight-log.txt 2026-10-24; features/desktop/auto-control.txt]
+- ONE STATION IS THE DEFAULT. A room with two does not insist on both unless
+  DRONEDECK_MIN_STATIONS=2 is set; flight_guard.py calls requiring both "worth
+  doing wherever they exist" — only two give an occluded deck somewhere else
+  to look. [backend/agent/dronedeck/safety/flight_guard.py, required_stations]
+  OUTSIDE THE MANUAL FILES; small and testable. (Since 2026-11-04 an extra unmeasured
+  station no longer blocks ② Position — features/backend/flight-safety.txt.)
+- A MOVED STATION IS NOT DETECTED. Base-station geometry is not re-checked at
+  Start: if a station moved since the room was drawn, absolute positions mean
+  something else. The fix — the room's geometry fingerprint — is designed and
+  NOT BUILT. [missions/floor-plans.txt; missions/mission-controller.txt,
+  DECISIONS]  OUTSIDE THE MANUAL FILES; testable without the drone.
+
+
+--------------------------------------------------------------------------------
+WHAT CAN BE DONE BEFORE LAB TIME
+--------------------------------------------------------------------------------
+  No hardware, outside the manual files, testable now
+    1. the T8 leg-timeout fix
+    2. requiring both stations in a two-station room
+    3. the geometry fingerprint
+  In the manual files; need lab flights
+    the landing lock, the tuning, take-off and turn smoothness
+  Needs hardware, no code
+    the deck seeing light, the thrust headroom, measuring the mission constants
