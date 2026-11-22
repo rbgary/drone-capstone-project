@@ -3,9 +3,14 @@ DATA MODEL — the tables and what ties them together
 
 WHAT IT IS
 
-One Postgres schema in Supabase, written by the agent on the operator's laptop
-and read by the web dashboard. Nothing is written by the browser except mission
-plans.
+One Postgres schema in Supabase. The agent on the operator's laptop writes
+everything a flight produces (sessions, flights, telemetry, samples, plans,
+traces, pipeline results, audit events) and the web dashboard reads it. The
+web writes too, all through web/lib/mutations.ts: the public site's content
+(projects, project_members, team_members, gallery_albums, gallery_items,
+site_pages, and images to portfolio-images), queued missions, deleting a
+flight, and marking a notification read. (Until 2026-11-22 this said the
+browser wrote nothing but mission plans — drift.)
 
 
 WHERE IT LIVES
@@ -144,10 +149,20 @@ THE TABLES
   telemetry     one row per 10 Hz sample, UNIQUE (flight_id, index), with the
                 position, attitude, motion, power and environment columns the
                 stream publishes.
+  pipeline_session_results  ONE ROW PER PROCESSED SESSION (migration
+                20261009000018): a session's own pipeline result, as
+                pipeline_results is a flight's. See the scope invariant below.
   audit_events  append-only history. No foreign keys — see ../backend/audit-trail.txt
-  zones         the greenhouse areas a mission visits.
+  zones         rectangular areas of the room (label, x/y bounds), from the
+                greenhouse brief. Only the seed writes them; the web reads them
+                beside predictions.
   missions      a queued plan, claimed by the agent through claim_mission().
-  predictions   zone-level crop-health estimates.
+                The web queues them and the agent can read the queue, but no
+                flight claims one: Auto runs from the desktop app only
+                (../architecture-at-a-glance.txt, DESIGNED BUT NOT WIRED).
+  predictions   zone-level crop-health estimates. Only the seed writes them:
+                the model needed camera photos and the drone has none
+                (../architecture-at-a-glance.txt). The web still reads them.
   projects      the public portfolio: slug, title, summary, cover, a BlockNote
                 write-up, draft/published. See ../frontend/portfolio.txt.
   team_members  people on /team and beside projects: name, role, photo,
@@ -196,12 +211,24 @@ INVARIANTS
   before) or to a session (scope 'session', no flight). A check holds every
   finding to one of the two; a trigger deletes a session's own findings with
   the session, since findings.session_id is "on delete set null". Proved
-  locally (session_results_check.py 12/12); NOT YET on the hosted project.
+  locally (session_results_check.py 12/12). On the hosted project
+  (tmswmgwomoabvftdreeb) with the rest since 2026-11-18: `migration list`
+  shows all 20 on both sides (THE MIGRATION HISTORY DID NOT MOVE, above).
+  This line said "NOT YET on the hosted project" until 2026-11-22 — drift.
 
 - telemetry.point_id (migration 20260928000012_telemetry_point_id.sql, text,
   indexed with flight_id where set): the inspection point a reading was taken
   at. Applied to the hosted project (this doc said otherwise until
   2026-10-09: the live migration list had it).
+
+
+LAST VERIFIED  2026-11-22 on docs/supabase (main 01deebf), against the code
+               only: the 22 tables and four buckets in migrations 0001–0020,
+               and who writes and reads each — backend/agent/dronedeck/sync/
+               cloud.py, web/lib/queries.ts, web/lib/mutations.ts,
+               web/lib/upload.ts. The live database was NOT queried, so the
+               operator data and auth.users on tmswmgwomoabvftdreeb are still
+               unchecked (THE HOSTED PROJECT MOVED, above).
 
 RELATED
 
