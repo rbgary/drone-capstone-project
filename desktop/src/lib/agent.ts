@@ -420,6 +420,15 @@ export type Telemetry = {
   /** x and y are a place: a station the drone can use and a tight Kalman
    *  spread (agent flight_guard.position_trusted). False = a number only. */
   positioned?: boolean;
+  /** The agent's battery report (safety/battery_monitor.py): the linear
+   *  percentage (read with the motors off, held in flight) and whether it has
+   *  stayed under its threshold — 30 % on the ground, 3.40 V under load.
+   *  Absent from an older agent. */
+  battery?: {
+    percent: number | null; vbat: number | null; low: boolean; threshold_percent: number;
+    /** Under load the warning is a voltage, not a percentage (battery_monitor.py). */
+    flight_threshold_v: number; motors_on: boolean;
+  };
   at: number;
 };
 

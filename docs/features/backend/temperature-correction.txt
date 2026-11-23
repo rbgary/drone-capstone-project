@@ -1,0 +1,117 @@
+TEMPERATURE CORRECTION — the barometer reads the room plus the drone's own heat
+================================================================================
+SOURCE: backend/agent/dronedeck/telemetry/correction.py (ThermalEngine)
+        backend/agent/dronedeck/telemetry/heat_bias.py  (CPU + thrust bias)
+Last verified: 2026-11-04 — tests only (tests/test_correction.py,
+tests/test_heat_bias.py, tests/test_thermal_bench.py). Nothing here has been measured on the drone.
+
+--------------------------------------------------------------------------------
+1. WHAT IT IS
+--------------------------------------------------------------------------------
+The BMP388 sits on the main board beside the STM32 and the motor drivers. Its
+temperature is the room PLUS heat the drone makes. ThermalEngine is Matthew's
+engine from the previous team (flight_sensor_test_with_recovery_and_geofencing.py
+and lawnmower_flight.py, class ThermalEngine), ported with its constants
+unchanged: one offset measured at startup, scaled by a three-step thrust table
+(idle 1.00, under 35000 thrust 0.62, above it 0.78), re-estimated only with
+the motors off. Validated by that team at 0.12 °F mean absolute error against
+a 72 °F reference. Its constants are not changed without new data.
+
+--------------------------------------------------------------------------------
+2. CPU AND THRUST HEAT BIASES (SPRINT 3, TASK 7 — Yordanos) — STARTER
+--------------------------------------------------------------------------------
+Goal: "reflected temperature values remain stable over time if the ambient
+room conditions do not change".
+
+Two biases the step table cannot follow (heat_bias.py):
+
+  CPU WARM-UP   the board keeps warming for minutes after power-on, so the
+                startup offset is too small later and the reading creeps up.
+                cpu(t) = A · (1 − e^(−t/τ))
+  THRUST HEAT   motor and driver heat arrives and leaves slowly; the table
+                switches instantly. thrust fraction through a first-order lag
+                with gain G and time constant τ_thrust.
+
+The engine subtracts how much each has GROWN since it started. It is OPT-IN:
+ThermalEngine(..., heat_bias=HeatBiasModel(HeatBiasTuning(...))). With no
+model, or the default all-zero tuning, the output is exactly as before, and
+nothing in the agent passes a model yet.
+
+Measured in simulation only (a 22.00 °C room, a board warming 1.5 °C with
+τ = 240 s): after 15 minutes the plain engine reads 22.55 °C, with the model
+22.00 °C. Real coefficients have to come from the drone.
+
+FITTING. Record a motors-off bench run (task 8 below makes one), then:
+    python -m dronedeck.telemetry.heat_bias fit recording.csv
+prints A, τ and the fit error. The thrust terms need a recording with the
+motors running at known thrust — not fitted yet.
+
+FIRST FIT (2026-11-07): bench run thermal-bench-20261107-155544.csv, 5 min,
+room 71.3 °F. Plain engine: 72.0 °F -> 73.1 °F (crept +1.1 °F), mean error
+1.0 °F. Fit: A = 6.14 °C, τ = 130 s, rms 0.09 °C → heat_bias.py
+BENCH_CPU_WARMUP. Replayed with it: 71.3 -> 71.4 °F, mean error 0.05 °F —
+fitted and checked on the SAME run; a second run must confirm it.
+`dronedeck thermal-test` uses it by default (--no-warmup: without).
+
+NOT DONE
+  - a second bench run to confirm BENCH_CPU_WARMUP
+  - flights: the model counts from when the engine starts, which is power-on
+    on the bench but TAKEOFF in a flight (reader.py makes the engine per
+    flight) — minutes into a warm drone it would over-correct by degrees.
+    Needs time since power-on, or a model driven by the raw reading itself
+  - fitting G and τ_thrust from a flight
+  - TRANSITION's re-based expected_raw ignores the bias (correction.py,
+    _update_estimates) — harmless while the bias is zero, revisit when fitted
+
+--------------------------------------------------------------------------------
+3. THE BENCH TEST — SENSORS ONLY (SPRINT 3, TASK 8 — Yordanos) — STARTER
+--------------------------------------------------------------------------------
+Goal: "run the ThermalEngine test outside of flight missions, with the motors
+stationary".
+
+Matthew's flight_sensor_test_with_recovery_and_geofencing.py ran SensorLogger
+during a two-layer serpentine flight. telemetry/bench.py is the same engine
+with the flight removed; the CLI opens the link read-only (as `stations` does),
+never arms and sends no setpoint:
+
+    ./dronedeck thermal-test --minutes 10 --ambient 74F --reference 74.2F
+
+It samples at 2 Hz (Matthew's LOG_PERIOD_MS = 500), writes
+flights/thermal-bench/thermal-bench-<time>.csv in the data folder, prints a
+line every 10 s, and ends with a summary: corrected temperature at the start
+and end (one-minute means), the drift between them, and the mean absolute
+error against --reference. A sample with any motor turning is kept in the CSV
+(motors_on=1), left out of the summary, and warned about.
+
+The CSV is what section 2's fit reads.
+
+NOT DONE: run on the drone (no lab session yet); a desktop button for it.
+
+--------------------------------------------------------------------------------
+4. THE TAKEOFF COOLING RAMP — ON BY DEFAULT (2026-11-07 — Yordanos)
+--------------------------------------------------------------------------------
+Measured: two lab missions on 2026-11-07 (7148a651, fca56de0), room 71.1 °F
+on a thermometer. With the step table the corrected reading was 4.5 °F warm
+at takeoff, 1.5-1.9 °F at 16-20 s, 0.4 °F at 45 s — the same curve in both
+flights. The error follows TIME SINCE TAKEOFF, not hold time: the board takes
+tens of seconds to cool to where the 0.78 / 0.62 scale assumes it already is.
+
+Change (correction.py, CorrectionTuning.flight_cooling_tau_s = 20 s): in
+flight the scale slides from scale_idle (1.00) to its band's value,
+    scale(t) = 1.00 + (target − 1.00) · (1 − e^(−t/τ)),
+t from the first sample with thrust; landing (thrust 0) restarts it. The end
+values 0.78 / 0.62 are Matthew's, unchanged. 0 restores the instant step.
+
+Fit: both flights replayed through ThermalEngine at τ = 0 (old), 5-40 s.
+τ = 20 s: mean in-flight error 2.4 °F -> 0.2 °F; per-point means within
+0.4 °F (old: up to 3.3 °F). Short holds (1-5 s) are fine — no warm-up hold
+needed.
+
+NOT DONE: confirmed on a new mission (built from branch
+heat-bias-correction); only two flights, one room.
+
+--------------------------------------------------------------------------------
+RELATED
+--------------------------------------------------------------------------------
+  telemetry-stream.txt   where pm/baro values come from
+  ../../flight-log.txt   lab readings
