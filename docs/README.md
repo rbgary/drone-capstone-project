@@ -85,7 +85,7 @@ Feature docs are plain `.txt`, grouped by the surface they describe.
 | [features/supabase/data-model.txt](features/supabase/data-model.txt) | The tables and what ties them together |
 | [features/supabase/rls-and-grants.txt](features/supabase/rls-and-grants.txt) | Authorization, and the 15-check proof that it holds |
 | [features/supabase/accounts-and-roles.txt](features/supabase/accounts-and-roles.txt) | One account for web and desktop; creating an operator |
-| [features/supabase/storage-and-backfill.txt](features/supabase/storage-and-backfill.txt) | The two buckets and the CSV backfill |
+| [features/supabase/storage-and-backfill.txt](features/supabase/storage-and-backfill.txt) | The four buckets and the CSV backfill |
 
 ## Development — how work here is done
 

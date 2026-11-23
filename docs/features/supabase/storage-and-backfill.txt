@@ -20,7 +20,10 @@ Four buckets:
                 Operators insert, read, and update (frames.csv is replaced
                 once at the session's end). NOTHING WRITES IT since 2026-11-15
                 (the drone carries no camera; the agent's frame upload was
-                removed). What is there stays, and the web still reads it.
+                removed), and nothing reads it either: no code in web/,
+                desktop/ or the agent names the bucket (checked 2026-11-22;
+                this said "the web still reads it" until then — drift).
+                What is there stays.
                 The hand-taken photos are to go here next, under
                 <session id>/photos/ (the no-camera work, Phase 5).
 
