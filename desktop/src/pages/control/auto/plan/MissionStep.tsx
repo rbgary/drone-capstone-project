@@ -1,3 +1,7 @@
+// This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+// (Claude Opus 5.5, Anthropic, 2026). The mission list takes an `aside`, shown
+// above the list only, where step ① puts the Hover test.
+
 /**
  * Step ① of the Auto flow: choose the mission to fly.
  *
@@ -19,7 +23,7 @@
  * content (desktop design rule, and pages-and-windows.txt).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Run } from "@/App";
 import {
   api, AgentError, type MissionView, type PlanLimits, type RoomView, type Telemetry, type XY,
@@ -47,7 +51,7 @@ export function dronePosition(telemetry: Telemetry | null): XY | null {
   return x === undefined || y === undefined ? null : [x, y];
 }
 
-export function MissionStep({ run, telemetry, selectedId, onUse, openEditor, heightClass }: {
+export function MissionStep({ run, telemetry, selectedId, onUse, openEditor, heightClass, aside }: {
   run: Run;
   telemetry: Telemetry | null;
   selectedId: string | null;
@@ -56,6 +60,10 @@ export function MissionStep({ run, telemetry, selectedId, onUse, openEditor, hei
   openEditor?: string;
   /** The room map's height — taller in full screen. */
   heightClass?: string;
+  /** Shown above the list, on the list only — the list is home, so this is
+   *  what the step offers besides a mission (the Hover test, 2026-11-20).
+   *  Never shown while one mission is open or being edited. */
+  aside?: ReactNode;
 }) {
   const [view, setView] = useState<View>({ kind: "list" });
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -99,12 +107,15 @@ export function MissionStep({ run, telemetry, selectedId, onUse, openEditor, hei
 
   if (error) {
     return (
-      <Panel title="Missions">
-        <div className="grid gap-3">
-          <Message tone="critical" text={error} />
-          <div><Button onClick={() => void load()}>Try again</Button></div>
-        </div>
-      </Panel>
+      <div className="grid content-start gap-3">
+        {aside}
+        <Panel title="Missions">
+          <div className="grid gap-3">
+            <Message tone="critical" text={error} />
+            <div><Button onClick={() => void load()}>Try again</Button></div>
+          </div>
+        </Panel>
+      </div>
     );
   }
   if (!loaded) return <SkeletonPanel lines={4} />;
@@ -160,18 +171,21 @@ export function MissionStep({ run, telemetry, selectedId, onUse, openEditor, hei
   }
 
   return (
-    <MissionList
-      missions={missions} rooms={rooms} limits={limits} selectedId={selectedId} justSaved={justSaved}
-      onView={(id) => { setJustSaved(null); setView({ kind: "view", id }); }}
-      onEdit={edit}
-      onNew={(room) => {
-        setJustSaved(null);
-        const fresh = room ?? blankRoom(limits);
-        setView({ kind: "edit", draft: {
-          room: fresh, mission: blankMission(fresh, limits, drone), roomIsNew: room === null, missionIsNew: true,
-        } });
-      }}
-    />
+    <div className="grid content-start gap-3">
+      {aside}
+      <MissionList
+        missions={missions} rooms={rooms} limits={limits} selectedId={selectedId} justSaved={justSaved}
+        onView={(id) => { setJustSaved(null); setView({ kind: "view", id }); }}
+        onEdit={edit}
+        onNew={(room) => {
+          setJustSaved(null);
+          const fresh = room ?? blankRoom(limits);
+          setView({ kind: "edit", draft: {
+            room: fresh, mission: blankMission(fresh, limits, drone), roomIsNew: room === null, missionIsNew: true,
+          } });
+        }}
+      />
+    </div>
   );
 }
 

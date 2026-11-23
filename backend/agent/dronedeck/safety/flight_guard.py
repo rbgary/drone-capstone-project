@@ -1,3 +1,9 @@
+# This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). Positioning readiness no longer fails on a received
+# base station that cannot be used yet (no calibration or stored place) when enough other
+# stations are usable; readiness then rests on the 5 cm position-uncertainty check. Adds
+# uncertainty_cm(), which shows that uncertainty rounded up to 0.1 cm in every message.
+
 """Is it safe to fly, and is it safe to keep flying?
 
 Two questions, one module, both answered from the live telemetry stream.
@@ -85,6 +91,16 @@ def required_stations() -> int:
 # Filter position variance, m². 0.0025 m² is a 5 cm standard deviation. The
 # crash reading at rest was ~4.4 m².
 MAX_READY_VARIANCE_M2 = 0.0025
+
+
+def uncertainty_cm(variance_m2: float) -> float:
+    """A variance as the standard deviation an operator reads, in cm, to 0.1 —
+    ROUNDED UP (2026-11-04). Rounded to nearest, 5.04 cm read "5.0 cm (under 5
+    needed)" and was refused, which looked like a reading under the limit being
+    turned away. Rounded up, a refused reading always shows above 5.0. The
+    inner round() keeps float noise (0.0004 ** 0.5 * 100 = 2.0000000000000004)
+    from being rounded up to 2.1."""
+    return math.ceil(round(math.sqrt(variance_m2) * 1000, 6)) / 10
 
 # ── in-flight policy ─────────────────────────────────────────────────────
 
@@ -252,7 +268,15 @@ class PositioningStatus:
                 "held up and miss it on the floor — raise it (about 1.5–2 m) and "
                 "tilt it down at the spot, with nothing in between."
             )
-        elif self.received_without_geometry:
+        elif self.received_without_geometry and len(self.usable) < required_stations():
+            # ONLY WHEN TOO FEW ARE USABLE (2026-11-04). The drone builds its
+            # position from the stations it can use; one it has no calibration
+            # or place for is ignored by its estimator, so it cannot make the
+            # position worse. With enough usable stations, an extra one that is
+            # merely in view (the room's second, not yet measured) no longer
+            # blocks: the uncertainty check below decides. A room that insists
+            # on two (DRONEDECK_MIN_STATIONS=2) is still told to measure it.
+            #
             # Two different things are missing here and only one needs a person.
             # CALIBRATION is the station's own factory data, broadcast over the
             # air and picked up on its own after some seconds of clear line of
@@ -298,16 +322,16 @@ class PositioningStatus:
         if len(variances) < 3:
             out.append("The position filter's uncertainty is not available.")
         elif max(variances) > MAX_READY_VARIANCE_M2:
-            worst_cm = max(variances) ** 0.5 * 100
+            worst_cm = uncertainty_cm(max(variances))
             limit_cm = MAX_READY_VARIANCE_M2 ** 0.5 * 100
             if out:
                 out.append(
-                    f"Until then the position is uncertain by about {worst_cm:.0f} cm, "
+                    f"Until then the position is uncertain by about {worst_cm:.1f} cm, "
                     f"where under {limit_cm:.0f} cm is needed."
                 )
             else:
                 out.append(
-                    f"Position is uncertain by about {worst_cm:.0f} cm; it must be "
+                    f"Position is uncertain by about {worst_cm:.1f} cm; it must be "
                     f"under {limit_cm:.0f} cm. Keep the drone still and wait for the "
                     f"base stations to lock on."
                 )

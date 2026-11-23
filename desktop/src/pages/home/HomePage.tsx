@@ -1,3 +1,7 @@
+// This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+// (Claude Opus 5.5, Anthropic, 2026). The Auto getting-started step names the
+// Hover test (renamed from Hover demo).
+
 /**
  * Home: what the operator sees when the app opens.
  *
@@ -56,7 +60,7 @@ function steps(mode: Mode): string[] {
     "Start the session",
     "Let the checks run",
     "Confirm the area is clear",
-    mode === "auto" ? "Battery & motor test, then Hover demo" : "Start the motors, then hold W to rise",
+    mode === "auto" ? "Battery & motor test, then a Hover test or a mission" : "Start the motors, then hold W to rise",
   ];
 }
 

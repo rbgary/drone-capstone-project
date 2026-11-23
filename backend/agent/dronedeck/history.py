@@ -1,3 +1,7 @@
+# This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). An old flight record whose abort reason is the
+# text "none" is read as having no abort reason.
+
 """The session history kept on this laptop.
 
 Every session leaves a folder the desktop app can read back, online or not:
@@ -69,6 +73,15 @@ class FlightSummary:
     #: "queued", "running", "done" or "failed".
     processing: str | None = None
     processing_error: str | None = None
+
+    def __post_init__(self) -> None:
+        # Until 2026-11-20 a completed hover test was saved with the text
+        # "none" (the guard's Reason.NONE) — read everywhere as an abort,
+        # "Aborted: none". Old records are corrected as they are read, never
+        # rewritten; Supabase does the same with a trigger (migration
+        # 20261120000021).
+        if self.abort_reason == "none":
+            self.abort_reason = None
 
 
 @dataclass

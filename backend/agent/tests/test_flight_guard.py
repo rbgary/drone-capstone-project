@@ -1,3 +1,9 @@
+# This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). Replaces the test that an unmeasured received
+# station always blocks with three: it does not block a settled position, the 5 cm check
+# still applies, and a room requiring two stations is still told to measure the second.
+# Adds tests for uncertainty_cm()'s round-up.
+
 """Positioning readiness and the in-flight guard.
 
 Several cases replay the lab crash of 2026-09-16 from real readings: the
@@ -20,6 +26,7 @@ from dronedeck.safety.flight_guard import (
     Reason,
     assess_positioning,
     station_ids,
+    uncertainty_cm,
 )
 from dronedeck.telemetry.stream import Snapshot
 
@@ -58,6 +65,16 @@ class TestStationIds:
         assert station_ids(None) == ()
 
 
+class TestUncertaintyCm:
+    def test_rounds_up_so_a_refused_reading_never_shows_as_five(self):
+        assert uncertainty_cm(0.00254) == 5.1             # 5.04 cm, refused
+        assert uncertainty_cm(0.0025) == 5.0              # exactly the limit, allowed
+
+    def test_float_noise_is_not_rounded_up(self):
+        assert uncertainty_cm(0.0004) == 2.0              # not 2.1
+        assert uncertainty_cm(0.0001) == 1.0
+
+
 class TestPositioningReadiness:
     def test_the_lab_capture_that_preceded_the_crash_is_not_ready(self):
         status = assess_positioning(snap(**{
@@ -75,13 +92,36 @@ class TestPositioningReadiness:
     def test_two_received_valid_stations_and_low_variance_is_ready(self):
         assert assess_positioning(snap()).ready
 
-    def test_a_received_station_without_geometry_blocks_flight(self):
+    def test_an_unmeasured_extra_station_does_not_block_a_settled_position(self):
+        """2026-11-04: Ch 1 measured and settled under 5 cm, Ch 2 in view but
+        not yet measured. The drone's estimator ignores a station it has no
+        place for, so the 5 cm check decides — Continue is not held back."""
         status = assess_positioning(snap(**{
-            "lighthouse__bsReceive": 0b111, "lighthouse__bsCalVal": 0b111,
-            "lighthouse__bsGeoVal": 0b011,
+            "lighthouse__bsReceive": 0b11, "lighthouse__bsCalVal": 0b11,
+            "lighthouse__bsGeoVal": 0b01,
+        }))
+        assert status.usable == (0,)
+        assert status.received_without_geometry == (1,)
+        assert status.ready
+        assert status.problems() == []
+
+    def test_an_unmeasured_extra_station_still_needs_a_settled_position(self):
+        status = assess_positioning(snap(**{
+            "lighthouse__bsReceive": 0b11, "lighthouse__bsCalVal": 0b11,
+            "lighthouse__bsGeoVal": 0b01,
+            "kalman__varPX": 0.0036, "kalman__varPY": 0.0004, "kalman__varPZ": 0.0004,
         }))
         assert not status.ready
-        assert status.received_without_geometry == (2,)
+        assert "6.0 cm" in " ".join(status.problems())
+
+    def test_a_room_that_insists_on_two_is_told_to_measure_the_second(self, monkeypatch):
+        monkeypatch.setenv("DRONEDECK_MIN_STATIONS", "2")
+        status = assess_positioning(snap(**{
+            "lighthouse__bsReceive": 0b11, "lighthouse__bsCalVal": 0b11,
+            "lighthouse__bsGeoVal": 0b01,
+        }))
+        assert not status.ready
+        assert status.received_without_geometry == (1,)
         said = " ".join(status.problems())
         # Names the app step that fixes it, not a terminal command.
         assert "② Position" in said

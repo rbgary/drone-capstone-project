@@ -1,3 +1,7 @@
+This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). The Hover test refuses a locked drone, and a completed one records
+no abort reason.
+
 SESSIONS AND MODES — who is flying, in which mode, and how it ends
 ==================================================================
 
@@ -75,7 +79,12 @@ in the one mode that could not fly, and filtered the history to the mode the
 operator was not using. Tests that exercise Auto now set the mode explicitly,
 which is what a test about Auto should do anyway.
 
-  auto    Hover test (rise, hold a steady height, land where it started)
+  auto    Hover test (rise, hold a steady height, land where it started) —
+          refused while the drone's motors are LOCKED, before anything arms
+          (2026-11-20; Session.program_blockers, GET
+          /session/program/blockers, the list run_program refuses on). A
+          completed one records NO abort reason: str(Reason.NONE) was saved
+          as "none", which every reader showed as "Aborted: none".
   both    Battery & motor test (each motor on its own, then the battery under
           all four — the firmware's two health tests)
   manual  Start (props idle on the ground), then held keys fly it — or Hover,

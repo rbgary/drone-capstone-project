@@ -1,3 +1,7 @@
+// This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
+// (Claude Opus 5.5, Anthropic, 2026). After a mission lands, the result offers End
+// session as the primary action, shown exactly when the flight strip shows it.
+
 /**
  * Step ⑤ of the Auto flow: fly the mission (the session and its checks come
  * first, in CheckStep, until the drone is ready and knows where it is).
@@ -100,6 +104,11 @@ export function FlyStep({ session, run, telemetry, mission, ambient, setAmbient,
   const progress = session.mission?.id === mission.id ? session.mission : null;
   const flying = session.activity === "mission";
   const finished = progress !== null && TERMINAL.includes(progress.state) && !flying;
+  // End session shows exactly when the flight strip's does (FlightStrip.tsx):
+  // in a session, nothing in the air (App.tsx `flying`), not already ending.
+  const airborne = ["manual", "program", "mission"].includes(session.activity ?? "");
+  const canEnd = !["signed_out", "idle"].includes(session.state) && !airborne
+    && session.state !== "ending";
   const drone = dronePosition(telemetry);
   // Where this flight took off: fixed for the flight, so the start does not
   // follow the drone round the room.
@@ -207,7 +216,18 @@ export function FlyStep({ session, run, telemetry, mission, ambient, setAmbient,
       {finished && progress && (
         <div className="grid gap-2">
           <Message tone={OUTCOME[progress.state]?.tone ?? "idle"} text={OUTCOME[progress.state]?.text ?? progress.state} />
-          <div><Button onClick={onPlanAnother}>Plan or pick another mission</Button></div>
+          {canEnd && (
+            // The flight is already saved and queued when it lands
+            // (Session._finish_flight) — ending adds the session's own wrap-up,
+            // so the line must not say the flight waits for it.
+            <p className="text-sm">This flight is saved and uploading. End the session when you're done flying.</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {canEnd && (
+              <Button variant="primary" onClick={() => void run(api.endSession, "End session")}>End session</Button>
+            )}
+            <Button onClick={onPlanAnother}>Plan or pick another mission</Button>
+          </div>
         </div>
       )}
 
