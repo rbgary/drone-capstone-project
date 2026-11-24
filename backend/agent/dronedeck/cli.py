@@ -9,6 +9,7 @@ click in.
     dronedeck hover --height 0.3 --secs 10 --ambient 74F
     dronedeck mission --id <mission id> --dry-run
     dronedeck process --flight <flight id>   # the data pipeline
+    dronedeck gauge photo.jpg --out readings # read the pressure gauge in photos
     dronedeck mission-report --flight <flight id> [--json]
     dronedeck serve                       # the local API for the desktop app
     dronedeck thermal-test --minutes 10 --ambient 74F   # sensors only, no motors
@@ -134,6 +135,17 @@ def build_parser() -> argparse.ArgumentParser:
     which.add_argument("--all", action="store_true",
                        help="every flight and session this laptop recorded that has no "
                             "current result")
+
+    gauge = sub.add_parser(
+        "gauge", help="read the pressure and system status gauges in a photo or a folder of "
+                     "photos; never connects")
+    gauge.add_argument("path", type=Path, help="an image (PNG, JPG, HEIC) or a folder of them")
+    gauge.add_argument("--out", type=Path,
+                       help="write <name>_read.png (both gauges and both verdicts on one "
+                            "picture) per photo and results.csv here")
+    gauge.add_argument("--label", help="the name drawn on the picture (default: the file's name)")
+    gauge.add_argument("--json", action="store_true",
+                       help="print one JSON object per photo (what the gauge worker reads)")
 
     calibrate = sub.add_parser(
         "calibrate",
@@ -607,6 +619,56 @@ def cmd_process(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_gauge(args: argparse.Namespace) -> int:
+    """The pressure-gauge pipeline over photos on disk (pipeline/gauge). The web's
+    batches are read by the agent's gauge worker, which runs this per photo."""
+    import csv
+
+    from dronedeck.pipeline.gauge import EXTENSIONS, UnreadableImage, read_photo
+
+    if args.path.is_dir():
+        files = sorted(p for p in args.path.iterdir() if p.suffix.lower() in EXTENSIONS)
+    else:
+        files = [args.path]
+    if not files:
+        print(f"  no photos ({', '.join(EXTENSIONS)}) in {args.path}")
+        return 2
+    if args.out:
+        args.out.mkdir(parents=True, exist_ok=True)
+    rows, unreadable = [], 0
+    for i, file in enumerate(files):
+        try:
+            result = read_photo(file.read_bytes(), args.label or file.stem)
+        except (UnreadableImage, OSError) as e:
+            unreadable += 1
+            if args.json:
+                print(json.dumps({"file": file.name, "failed": str(e)}), flush=True)
+            else:
+                print(f"{i:3d}     -- kPa  cannot read {file.name}: {e}")
+            continue
+        row = result.to_row()
+        if args.out:
+            (args.out / f"{file.stem}_read.png").write_bytes(result.annotated_png)
+        if args.json:
+            print(json.dumps({"file": file.name, **row}), flush=True)
+        else:
+            kpa = "  -- " if result.kpa is None else f"{result.kpa:5.0f}"
+            value = " -- " if result.system.value is None else f"{result.system.value:4.0f}"
+            print(f"{i:3d}  pressure {kpa} kPa {result.pressure.label:8}  "
+                  f"system {value} {result.system.label:8}  {file.name}", flush=True)
+        rows.append([file.name, "" if result.kpa is None else f"{result.kpa:.0f}",
+                     result.pressure.label,
+                     "" if result.system.value is None else f"{result.system.value:.0f}",
+                     result.system.label])
+    if args.out:
+        with open(args.out / "results.csv", "w", newline="", encoding="utf-8") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(["filename", "pressure_kpa", "pressure_state", "system_value",
+                             "system_state"])
+            writer.writerows(rows)
+    return 1 if unreadable == len(files) else 0
+
+
 def _process_all() -> int:
     """`process --all`: every recorded flight whose result is missing or from
     an older pipeline, oldest first, each queued for the web. A flight with no
@@ -788,6 +850,9 @@ SELFTEST_MODULES = (
     "supabase",                                         # sign-in, sync
     "cryptography.hazmat.bindings._rust",               # its native half, via PyJWT
     "numpy",                                            # geometry
+    "cv2",                                              # the gauge pipeline's image reader
+    "PIL.Image",                                        # the gauge pipeline's decoder
+    "pillow_heif",                                      # …and iPhone HEIC photos
     "cflib.localization.lighthouse_geo_estimation_manager",   # geometry (scipy)
     "cflib.localization",                               # geometry, config writer
     "cflib.crazyflie.mem.lighthouse_memory",            # geometry
@@ -967,6 +1032,7 @@ def main(argv: list[str] | None = None) -> int:
         "hover": cmd_hover,
         "mission": cmd_mission,
         "process": cmd_process,
+        "gauge": cmd_gauge,
         "mission-report": cmd_mission_report,
         "calibrate": cmd_calibrate,
         "serve": cmd_serve,

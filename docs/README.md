@@ -65,6 +65,7 @@ Feature docs are plain `.txt`, grouped by the surface they describe.
 | [features/pipeline/classify.txt](features/pipeline/classify.txt) | blocks@1: stretches where temperature or pressure departs from what was expected |
 | [features/pipeline/interpret.txt](features/pipeline/interpret.txt) | findings@1: each stretch judged and put into words, a verdict per point |
 | [features/pipeline/session.txt](features/pipeline/session.txt) | The session itself processed — its 1 Hz samples around the flights, judged on the ground (ground@1), Auto and Manual |
+| [features/pipeline/gauge.txt](features/pipeline/gauge.txt) | The gauge pipeline: a batch of photos uploaded on the web → a kPa reading and an annotated dial each, stored in Supabase (`gauge_batches`, `gauge_images`, bucket `gauge-photos`); the agent's worker reads them; the web's contract |
 | [features/pipeline/calibrate.txt](features/pipeline/calibrate.txt) | `dronedeck calibrate`: the hand-warmer flights measured, thresholds recommended — the lab procedure |
 | [features/pipeline/results.txt](features/pipeline/results.txt) | Results on the web: the Processed data page (`/app/processed`), anomalies highlighted in the readings and on the frames with their meaning, the session and flight pages, notified until read |
 

@@ -27,6 +27,9 @@ from typing import Any, Protocol
 log = logging.getLogger(__name__)
 
 TELEMETRY_BUCKET = "flight-logs"
+#: Private — migration 20261123000022_gauge_batches.sql. Uploaded photos and their
+#: annotated readings (pipeline/gauge).
+GAUGE_BUCKET = "gauge-photos"
 BACKFILL_FUNCTION = "import-flight-log"
 
 
@@ -689,3 +692,91 @@ class SupabaseCloud:
             self._table("missions").update(values).eq("id", mission_id).execute()
         except Exception as e:
             raise CloudError(f"could not update the mission: {type(e).__name__}") from e
+
+    # ── pressure-gauge photo batches (migration 20261123000022) ──────────
+
+    _GAUGE_HINT = " — apply migration 20261123000022_gauge_batches.sql"
+
+    def _gauge_error(self, what: str, e: Exception) -> CloudError:
+        hint = self._GAUGE_HINT if "gauge_" in str(e) else ""
+        return CloudError(f"could not {what}: {type(e).__name__}{hint}")
+
+    def gauge_requeue_stale(self, claimed_before: str) -> None:
+        """Photos an agent claimed and never finished (it closed mid-read) go
+        back to pending, so another run reads them."""
+        try:
+            (self._table("gauge_images")
+             .update({"status": "pending", "claimed_at": None})
+             .eq("status", "processing").lt("claimed_at", claimed_before).execute())
+        except Exception as e:
+            raise self._gauge_error("requeue stale gauge photos", e) from e
+
+    def gauge_pending(self, limit: int) -> list[dict[str, Any]]:
+        """The oldest photos waiting to be read, of batches the web has released."""
+        try:
+            response = (
+                self._table("gauge_images")
+                .select("id, batch_id, filename, original_path, gauge_batches!inner(status)")
+                .eq("status", "pending")
+                .in_("gauge_batches.status", ["queued", "processing"])
+                .order("created_at").limit(limit).execute()
+            )
+        except Exception as e:
+            raise self._gauge_error("read the gauge photo queue", e) from e
+        rows = list(getattr(response, "data", None) or [])
+        for row in rows:
+            row.pop("gauge_batches", None)
+        return rows
+
+    def gauge_claim(self, image_id: str, claimed_at: str) -> bool:
+        """Take one pending photo. Atomic: the update only matches while it is
+        still pending, so two agents never read the same photo."""
+        try:
+            response = (self._table("gauge_images")
+                        .update({"status": "processing", "claimed_at": claimed_at})
+                        .eq("id", image_id).eq("status", "pending").execute())
+        except Exception as e:
+            raise self._gauge_error("claim a gauge photo", e) from e
+        return bool(getattr(response, "data", None))
+
+    def gauge_download(self, object_path: str) -> bytes:
+        try:
+            data = self._connect().storage.from_(GAUGE_BUCKET).download(object_path)
+        except Exception as e:
+            raise CloudError(f"could not download a gauge photo: {type(e).__name__}") from e
+        return bytes(data)
+
+    def gauge_upload(self, object_path: str, data: bytes, content_type: str) -> None:
+        """The annotated picture; reading a batch again replaces it."""
+        try:
+            self._connect().storage.from_(GAUGE_BUCKET).upload(
+                object_path, data, {"content-type": content_type, "upsert": "true"})
+        except Exception as e:
+            raise CloudError(f"could not upload the annotated photo: {type(e).__name__}") from e
+
+    def gauge_save_image(self, image_id: str, values: dict[str, Any]) -> None:
+        try:
+            self._table("gauge_images").update(values).eq("id", image_id).execute()
+        except Exception as e:
+            raise self._gauge_error("save a gauge reading", e) from e
+
+    def gauge_image_statuses(self, batch_id: str) -> list[str]:
+        """The status of every photo in a batch (paged past PostgREST's cap)."""
+        statuses: list[str] = []
+        try:
+            while True:
+                page = (self._table("gauge_images").select("status").eq("batch_id", batch_id)
+                        .order("created_at").order("id")
+                        .range(len(statuses), len(statuses) + PAGE - 1).execute())
+                rows = list(getattr(page, "data", None) or [])
+                statuses += [str(r["status"]) for r in rows]
+                if len(rows) < PAGE:
+                    return statuses
+        except Exception as e:
+            raise self._gauge_error("count a gauge batch", e) from e
+
+    def gauge_update_batch(self, batch_id: str, values: dict[str, Any]) -> None:
+        try:
+            self._table("gauge_batches").update(values).eq("id", batch_id).execute()
+        except Exception as e:
+            raise self._gauge_error("update a gauge batch", e) from e
