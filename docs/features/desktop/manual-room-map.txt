@@ -1,3 +1,6 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It re-dates the doc after PR #10 and PR #9; nothing in it changed.
+
 This file was modified on 11/4/2026 with the assistance of Claude Code in VS Code
 (Claude Opus 5.5, Anthropic, 2026). It notes, in two lines that mention it, that the
 team removed the manual-control lock.
@@ -5,7 +8,7 @@ team removed the manual-control lock.
 ================================================================================
 MANUAL ROOM MAP — the room drawn from the two base stations, the drone in it,
 and where each arrow key moves it, on the Manual page
-Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/api/rest.py after 53186d2 (/station/space still served; the camera routes it never named are gone). Before that, 2026-10-24 against manual/room-map — agent tests, desktop build,
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read after PR #10 and PR #9: ControlPage.tsx's changes are Auto's (the Hover demo off the rail); manual_space, MANUAL_SPACE_FLOOR_M, GET /station/space, SessionMeta.unassisted_reason, TestStationSpace and Look again as named. Before that, 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/api/rest.py after 53186d2 (/station/space still served; the camera routes it never named are gone). Before that, 2026-10-24 against manual/room-map — agent tests, desktop build,
 harness screenshots. NOT yet flown: no manual flight with both stations heard
 has run on it.
 SOURCE: desktop/src/pages/control/ManualMap.tsx

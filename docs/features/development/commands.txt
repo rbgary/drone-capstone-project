@@ -1,6 +1,9 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It adds thermal-test's --no-warmup flag and re-dates the doc against `dronedeck --help`.
+
 ================================================================================
 COMMANDS — every command in the project, where to run it, and what it does
-Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against `dronedeck --help`: the same twelve commands, setup --reinstall main|lighthouse, process --flight|--fixture|--session|--all. Before that, 2026-10-24 against experiment/samuel (lab) — backend/agent/dronedeck/cli.py,
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read against `dronedeck --help` after PR #9: THIRTEEN commands now (thermal-test added). DRIFT FIXED: thermal-test's --no-warmup was missing. Before that, 2026-11-19 on docs/no-camera (main 540114c) — re-read against `dronedeck --help`: the same twelve commands, setup --reinstall main|lighthouse, process --flight|--fixture|--session|--all. Before that, 2026-10-24 against experiment/samuel (lab) — backend/agent/dronedeck/cli.py,
 web/package.json, desktop/package.json, scripts/, backend/supabase/ (migrations
 + checks/), firmware/drone-wifi/build.sh, and the gates in CLAUDE.md "Commands".
 SOURCE: backend/agent/dronedeck/cli.py
@@ -53,7 +56,9 @@ AGENT CLI — the `dronedeck` command (motors only where noted)
                                     drone sees, live. --seconds N to auto-stop.
   dronedeck thermal-test          The temperature correction on the bench:
                                     sensors only, never arms. --minutes,
-                                    --ambient, --reference, --out. Writes a CSV
+                                    --ambient, --reference, --out, --no-warmup
+                                    (leave out the fitted CPU warm-up correction,
+                                    on by default). Writes a CSV
                                     for `python -m dronedeck.telemetry.heat_bias
                                     fit` (backend/temperature-correction.txt).
   dronedeck geometry              Measure where the base stations are; no

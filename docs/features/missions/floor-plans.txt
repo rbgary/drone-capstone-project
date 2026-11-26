@@ -1,6 +1,9 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It re-dates the doc after PR #10; nothing in it changed.
+
 ================================================================================
 FLOOR PLANS AND MISSIONS — what the drone flies, checked before it can fly
-Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/api/rest.py after 53186d2, MIN_HOLD_S 2.0; DRIFT FIXED: the 2 s hold still counted ~7 camera frames. Before that, 2026-10-25 for the 2 s hold: tests/mission (358) and a saved
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read against backend/agent/dronedeck/api/rest.py after PR #10 (it adds GET /session/program/blockers only): the room and mission routes unchanged, MIN_HOLD_S 2.0. Before that, 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/api/rest.py after 53186d2, MIN_HOLD_S 2.0; DRIFT FIXED: the 2 s hold still counted ~7 camera frames. Before that, 2026-10-25 for the 2 s hold: tests/mission (358) and a saved
 mission edited, saved and reopened in the real editor on the agent. 2026-10-11 — re-read after rest.py changed for mission playback; its room and mission routes are unchanged. Before that:
 2026-10-09 against docs/pipeline-v2 — re-checked after
 api/rest.py moved (the processing resume in the lifespan): no room or mission

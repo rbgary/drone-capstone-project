@@ -1,10 +1,13 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It re-dates the doc after PR #9 and against the rest of PR #10; nothing in it changed.
+
 This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
 (Claude Opus 5.5, Anthropic, 2026). It records the Hover test's move to step ① Plan,
 Auto's three-button Actions column, and End session after a mission lands.
 
 ================================================================================
 CONTROL IN AUTO — plan a mission, check the drone, fly it
-Last verified: 2026-11-20 on feat/ui-updates for the Hover test only (moved to ① Plan; pnpm build, then flown from the panel in the rebuilt app — flight 1f6434f2, completed, no abort reason). 2026-11-19 on docs/no-camera (main 540114c) — re-read against desktop/src/lib/agent.ts after Phases 1–3 (FlightResult has no frames; api.playback, api.flights as named); the Fly step's verdict line corrected to after landing. Before that, 2026-10-25 for the number boxes and edit → save → reopen (real
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read against desktop/src/lib/agent.ts after PR #9 (Telemetry.battery, read by VitalsNow — backend/flight-safety.txt — not by Auto's steps) and against PR #10's FlyStep, MissionFlow and HoverTestPanel: End session after a landing and the panel asking GET /session/program/blockers every 2 s, as written. Before that, 2026-11-20 on feat/ui-updates for the Hover test only (moved to ① Plan; pnpm build, then flown from the panel in the rebuilt app — flight 1f6434f2, completed, no abort reason). 2026-11-19 on docs/no-camera (main 540114c) — re-read against desktop/src/lib/agent.ts after Phases 1–3 (FlightResult has no frames; api.playback, api.flights as named); the Fly step's verdict line corrected to after landing. Before that, 2026-10-25 for the number boxes and edit → save → reopen (real
 editor on the agent, headless Chrome, 17 checks). 2026-10-24 for the tripods on the map (harness, both views and
 themes, screenshots; the layout at five widths 10 PASS) and ② Position's two stations only (every station from
 one press, per-station rows), against agent/two-base-stations — test_geometry.py,

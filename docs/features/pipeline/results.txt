@@ -1,7 +1,10 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It re-dates the doc after PR #9; nothing in it changed.
+
 ================================================================================
 RESULTS ON THE WEB — every processed flight's result and findings uploaded,
 shown on the session and flight pages, and notified
-Last verified: 2026-11-18 on feat/no-camera — the camera removed from the
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read against backend/agent/dronedeck/cli.py after PR #9 (it adds thermal-test only; process and mission-report unchanged). Before that, 2026-11-18 on feat/no-camera — the camera removed from the
 web (Phase 6a): web typecheck, lint and build; tests/test_results_upload.py
 (no image columns sent); migration 20261118000020 APPLIED to the hosted
 project and checked there read-only; on the local stack all 20 migrations

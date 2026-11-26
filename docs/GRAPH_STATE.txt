@@ -1,9 +1,18 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records the STALE pass after PR #9 and PR #10
+(11 docs re-read and re-dated, three lines of drift fixed), and migration 0021 applied.
+
 ================================================================================
 GRAPH STATE — WHAT IS OUT OF SYNC, AND WHAT THAT STOPS
 Read this BEFORE starting a feature. It is the one file that says whether the
 docs can be trusted for the area you are about to work in.
 Generated from `python3 graph_check.py` plus what passes noticed by hand.
-Last run: 2026-11-19 on docs/no-camera (main 540114c, after PR #5 landed the
+Last run: 2026-11-26 on docs/stale-pass (main 48d41aa, after PR #9 the
+thermal and low-battery work, PR #10 feat/ui-updates, PR #13 the 0021 docs)
+— 47 docs. DANGLING 0 · ONE-WAY 0 · STALE 0 (was 11: each re-read against
+the diff that set it off and re-dated; drift fixed in temperature-correction.txt
+and commands.txt). UNMERGED BRANCH 2, both notes about this branch.
+Earlier: 2026-11-19 on docs/no-camera (main 540114c, after PR #5 landed the
 no-camera work and PR #6 the repo move) — 46 docs. DANGLING 0 · ONE-WAY 0 ·
 STALE 0 (was 16: every one re-read against the diff that set it off and
 re-dated; one drift fixed, floor-plans.txt's ~7 camera frames a hold).
@@ -125,6 +134,14 @@ and why it did not apply)
 --------------------------------------------------------------------------------
 RESOLVED
 --------------------------------------------------------------------------------
+2026-11-26  STALE 11 -> 0 after PR #9 and PR #10 merged 2026-11-22 without
+            re-dating the docs they touched. Each re-read against the files
+            and commits that flagged it. DRIFT FIXED: temperature-correction.txt
+            (thermal-test does pass a heat-bias model; the cooling ramp is on
+            main; `./dronedeck` is not a command), commands.txt (thirteen
+            commands; thermal-test's --no-warmup). The other nine needed only
+            the date: the changes missed what they describe, or (auto-control,
+            manual-room-map, mission-controller) PR #10 had updated the prose.
 2026-11-26  Migration 20261120000021 pushed to the hosted project (dry run
             listed 0021 alone) and verified: no abort_reason 'none' left, the
             trigger flights_abort_reason_none exists, `migration list` shows
