@@ -1,6 +1,9 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It re-dates the doc after PR #9; nothing in it changed.
+
 ================================================================================
 CALIBRATION — the hand-warmer flights, measured
-Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/cli.py (cmd_calibrate unchanged by the camera removal). Before that, 2026-10-09 against dpp/calibrate — the fixture flight with a
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read against backend/agent/dronedeck/cli.py after PR #9 (it adds thermal-test only; cmd_calibrate unchanged). Before that, 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/cli.py (cmd_calibrate unchanged by the camera removal). Before that, 2026-10-09 against dpp/calibrate — the fixture flight with a
 3 °C and a 0.3 °C heat source planted at P1. NOT YET MEASURED: no real
 hand-warmer flight has been flown.
 SOURCE: backend/agent/dronedeck/pipeline/calibrate.py

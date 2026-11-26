@@ -1,8 +1,11 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It corrects three lines against the code after PR #9: who passes a heat-bias model, where the cooling ramp lives, and the thermal-test command.
+
 TEMPERATURE CORRECTION — the barometer reads the room plus the drone's own heat
 ================================================================================
 SOURCE: backend/agent/dronedeck/telemetry/correction.py (ThermalEngine)
         backend/agent/dronedeck/telemetry/heat_bias.py  (CPU + thrust bias)
-Last verified: 2026-11-04 — tests only (tests/test_correction.py,
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read against telemetry/correction.py and heat_bias.py after e75d6f4 and PR #9: BENCH_CPU_WARMUP 6.14 °C / 130 s, flight_cooling_tau_s 20 s, SAMPLE_PERIOD_S 0.5, the bench CSV path, as written. DRIFT FIXED: thermal-test does pass a heat-bias model (only flights run without); the cooling ramp is on main, not only its branch; `./dronedeck` was the package folder, not a command. A docs pass: no tests or drone run. Before that, 2026-11-04 — tests only (tests/test_correction.py,
 tests/test_heat_bias.py, tests/test_thermal_bench.py). Nothing here has been measured on the drone.
 
 --------------------------------------------------------------------------------
@@ -34,8 +37,10 @@ Two biases the step table cannot follow (heat_bias.py):
 
 The engine subtracts how much each has GROWN since it started. It is OPT-IN:
 ThermalEngine(..., heat_bias=HeatBiasModel(HeatBiasTuning(...))). With no
-model, or the default all-zero tuning, the output is exactly as before, and
-nothing in the agent passes a model yet.
+model, or the default all-zero tuning, the output is exactly as before.
+Only `dronedeck thermal-test` passes one (BENCH_CPU_WARMUP, section 3); a
+flight's engine (reader.py) still runs without. (This said "nothing in the
+agent passes a model yet" until 2026-11-26: drift from the 2026-11-07 fit.)
 
 Measured in simulation only (a 22.00 °C room, a board warming 1.5 °C with
 τ = 240 s): after 15 minutes the plain engine reads 22.55 °C, with the model
@@ -74,7 +79,7 @@ during a two-layer serpentine flight. telemetry/bench.py is the same engine
 with the flight removed; the CLI opens the link read-only (as `stations` does),
 never arms and sends no setpoint:
 
-    ./dronedeck thermal-test --minutes 10 --ambient 74F --reference 74.2F
+    dronedeck thermal-test --minutes 10 --ambient 74F --reference 74.2F
 
 It samples at 2 Hz (Matthew's LOG_PERIOD_MS = 500), writes
 flights/thermal-bench/thermal-bench-<time>.csv in the data folder, prints a
@@ -107,8 +112,8 @@ Fit: both flights replayed through ThermalEngine at τ = 0 (old), 5-40 s.
 0.4 °F (old: up to 3.3 °F). Short holds (1-5 s) are fine — no warm-up hold
 needed.
 
-NOT DONE: confirmed on a new mission (built from branch
-heat-bias-correction); only two flights, one room.
+NOT DONE: confirmed on a new mission (on main since PR #9, 2026-11-22;
+built first on branch heat-bias-correction); only two flights, one room.
 
 --------------------------------------------------------------------------------
 RELATED

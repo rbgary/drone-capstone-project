@@ -1,6 +1,9 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It re-dates the doc after PR #9 and PR #10; nothing in it changed.
+
 ================================================================================
 THE SESSION, PROCESSED — whatever a session records, not only its flights
-Last verified: 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/cli.py (process --session unchanged). Before that, 2026-11-15 on feat/no-camera — contract v3: a session's run
+Last verified: 2026-11-26 on docs/stale-pass (main 48d41aa) — re-read against cli.py, session.py and history.py after PR #9 and PR #10 (thermal-test, the battery report, the Hover test's motor lock, no abort reason on a completed flight): process --session, the End session queue, interrupted_sessions and recorded_sessions unchanged. Before that, 2026-11-19 on docs/no-camera (main 540114c) — re-read against backend/agent/dronedeck/cli.py (process --session unchanged). Before that, 2026-11-15 on feat/no-camera — contract v3: a session's run
 reads its samples only (no frames), tests/pipeline/test_session.py passing.
 2026-10-11 — re-read after session.py changed for playback (#109). Before that:
 2026-10-09 against dpp/session … data/session-results — 179
