@@ -125,6 +125,10 @@ and why it did not apply)
 --------------------------------------------------------------------------------
 RESOLVED
 --------------------------------------------------------------------------------
+2026-11-26  Migration 20261120000021 pushed to the hosted project (dry run
+            listed 0021 alone) and verified: no abort_reason 'none' left, the
+            trigger flights_abort_reason_none exists, `migration list` shows
+            0001–0021 on both sides (supabase/data-model.txt).
 2026-11-19  NO-CAMERA WORK IN PHASES (WARN since 2026-11-15): PR #5 merged
             Phases 0–4 and 6a into main 2026-11-18, and the docs sweep on
             docs/no-camera brought the architecture docs, CLAUDE.md, the

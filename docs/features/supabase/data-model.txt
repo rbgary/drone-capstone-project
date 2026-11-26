@@ -1,6 +1,6 @@
-This file was modified on 11/20/2026 with the assistance of Claude Code in VS Code
-(Claude Opus 5.5, Anthropic, 2026). It records migration 20261120000021: a flight's
-abort_reason is never 'none'.
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records that migration 20261120000021 (a
+flight's abort_reason is never 'none') is applied to the hosted project.
 
 DATA MODEL — the tables and what ties them together
 ===================================================
@@ -40,9 +40,9 @@ WHERE IT LIVES
                                                              local stack the same day
   backend/supabase/migrations/20261120000021_flights_abort_reason_none.sql
                                                              abort_reason 'none' -> null,
-                                                             once and by trigger; NOT YET
-                                                             APPLIED to the hosted project,
-                                                             not run on any database
+                                                             once and by trigger; APPLIED
+                                                             to the hosted project
+                                                             2026-11-26 (below)
   backend/supabase/checks/hosted_schema_check.sql            read-only: does a database
                                                              hold what 0001–0019 make
   web/types/database.ts                                      generated types —
@@ -85,6 +85,18 @@ Windows whose network has IPv6. From WSL, which has no IPv6 route (Kevin's
 machine), it is refused (ECONNREFUSED to a 2600:… address): use the Session
 pooler instead (Dashboard › Connect › Session pooler, port 5432, user
 postgres.<project ref>). Either works with every `supabase` command here.
+
+0021 (abort_reason 'none' -> null) applied to the hosted project 2026-11-26
+with `db push --db-url` over the Session pooler, after a dry run listed only
+0021. Verified after: no flight has abort_reason = 'none' (count 0), the
+trigger flights_abort_reason_none exists, and `migration list` shows
+0001–0021 on both sides. ITS UPDATE RE-STAMPS THE OWNER: 0021's one-time
+`update public.flights` also fires flights_stamp_owner (0015), which re-reads
+operator_email / operator_name from profiles and sets both to null when no
+profile matches. Since the accounts' move was never verified (above), the
+flights the update would touch were checked first for an owner with no
+profile (0), so no flight lost who ran it. Any later migration that updates
+sessions or flights re-stamps them the same way: run that check first.
 
 Applied to the old hosted project (fuwojlqpavvfgmqardfo) through 0019 (this line
 said 0017 until 2026-10-11 — drift: 0018 was already live). 0015–0017
