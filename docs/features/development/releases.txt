@@ -1,3 +1,7 @@
+This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+(Claude Opus 5.5, Anthropic, 2026). It records the Rust compiler pin (rust-toolchain.toml)
+and why Rust 1.100 turned the Linux install red.
+
 RELEASES — how a commit becomes an installed app
 ================================================
 
@@ -31,6 +35,8 @@ WHERE IT LIVES
   desktop/scripts/sidecar.mjs             `pnpm sidecar` → build_sidecar.py
   backend/agent/packaging/build_sidecar.py  freezes and verifies the agent
   .github/workflows/desktop-install.yml   runs install.mjs on the four machines
+  rust-toolchain.toml                     the Rust compiler every machine and CI
+                                          builds with (2026-11-26)
   .github/workflows/agent-tests.yml       the agent's gates: ruff, mypy, pytest —
                                           the mission simulator's scenarios
                                           included (2026-10-11)
@@ -40,7 +46,7 @@ WHERE IT LIVES
 WHEN CI RUNS
 
   push to main or a pull request touching desktop/**, backend/agent/**,
-    scripts/** or the workflow itself
+    scripts/**, rust-toolchain.toml or the workflow itself
   "Run workflow" by hand
 
   agent-tests.yml: push to main or a pull request touching backend/agent/**
@@ -96,6 +102,35 @@ INVARIANTS
 - The builds are unsigned. A Mac that builds the app itself does not
   quarantine it, so Gatekeeper does not ask; Windows does not warn for a
   program it built and installed itself either.
+
+
+THE RUST COMPILER IS PINNED (2026-11-26)
+
+The lockfiles hold every package at one version, but until 2026-11-26 CI took
+whatever Rust was newest (dtolnay/rust-toolchain@stable). Rust 1.100
+(released 2026-11-12) moved build-script output one folder deeper:
+target/<profile>/build/<pkg>-<hash>/out became .../build/<pkg>/<hash>/out.
+The tauri-build in Cargo.lock (2.6.3) finds target/<profile>/ by going up a
+fixed three folders from OUT_DIR, so on 1.100 it copies the frozen agent into
+target/release/build/ instead of beside the app. Mac and Windows install
+from Tauri's bundle and passed; Linux installs from target/release/ and
+failed on every run from 2026-11-15 with "target/release/dronedeck-agent is
+missing". Nothing in the repo had changed. (The runner also moved to a newer
+Ubuntu, glibc 2.43, around then. That was not the cause.)
+
+The fix pins the compiler instead of updating Tauri: rust-toolchain.toml at
+the repo root names 1.99.1, the stable before 1.100. rustup reads it inside
+the repo, downloading that version on the first build, and CI installs the
+same one. A machine's default Rust is untouched outside the repo. Rust
+installed without rustup (Homebrew's rust, a distro package) ignores the
+file. setup.mjs tells people to use rustup.rs.
+
+TO MOVE PAST 1.99: raise the channel AND update Tauri in the same pull
+request. tauri-build 2.7.6 (2026-11-18) finds the folder by name, so it works
+on either layout. Update the tauri crates in Cargo.lock and the @tauri-apps
+packages in pnpm-lock.yaml together: the build checks that their versions
+match. A change to rust-toolchain.toml runs desktop-install, so the pull
+request proves it on all four machines.
 
 
 KNOWN DIVERGENCE (2026-09-25)

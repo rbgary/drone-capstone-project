@@ -1,3 +1,7 @@
+# This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). Rust now comes from rust-toolchain.toml, not
+# the newest stable, and a change to that file runs this workflow.
+
 # Prove the terminal install works on every kind of machine it is meant for.
 #
 # DroneDeck is installed from a terminal, not downloaded (decided
@@ -35,12 +39,14 @@ on:
       - "backend/agent/**"
       - "scripts/**"
       - ".github/workflows/desktop-install.yml"
+      - "rust-toolchain.toml"
   pull_request:
     paths:
       - "desktop/**"
       - "backend/agent/**"
       - "scripts/**"
       - ".github/workflows/desktop-install.yml"
+      - "rust-toolchain.toml"
   workflow_dispatch:
 
 permissions:
@@ -83,7 +89,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - uses: dtolnay/rust-toolchain@stable
+      # The compiler rust-toolchain.toml pins, not the newest stable — the
+      # lockfiles hold the packages and this holds the compiler, so CI builds
+      # with what everyone builds with. Rust 1.100 broke the Linux install with
+      # the tauri-build in Cargo.lock (that file says how). Every runner image
+      # ships rustup; with no argument it installs the version the file names.
+      - name: Rust (the version rust-toolchain.toml pins)
+        run: |
+          rustup toolchain install
+          rustc -V
 
       - uses: pnpm/action-setup@v4
         with:
