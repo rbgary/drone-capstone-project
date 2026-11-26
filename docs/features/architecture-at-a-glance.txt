@@ -103,8 +103,8 @@ DESIGNED BUT NOT WIRED
                           restarts, uploaded, shown on the web and notified
                           (pipeline/data-pipeline.txt). NOT wired: the photo
                           classifier (story 4.4, over photos taken by hand).
-                          The hosted database has every migration (0015–0017
-                          applied 2026-10-09)
+                          The hosted database has every migration (through
+                          0021, applied 2026-11-26)
 
   Web-queued missions     queued_missions() / claim_mission() exist and are
                           never called; Auto runs from the desktop app only
