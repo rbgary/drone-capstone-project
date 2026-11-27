@@ -1,0 +1,26 @@
+# This file was modified on 11/26/2026 with the assistance of Claude Code in VS Code
+# (Claude Opus 5.5, Anthropic, 2026). It pins the Rust compiler so CI and every
+# machine build the desktop app with the same one.
+
+# The Rust compiler the desktop app is built with — on every machine and in CI.
+#
+# The lockfiles pin every package; this pins the compiler, which they cannot.
+# rustup reads this file and downloads the version on the first build inside
+# the repo; a machine's own default Rust is untouched everywhere else.
+#
+# Why 1.99.1 and not "stable": Rust 1.100 (2026-11-12) moved build-script
+# output from target/<profile>/build/<pkg>-<hash>/out to .../build/<pkg>/<hash>/out.
+# The tauri-build in Cargo.lock (2.6.3) finds target/<profile>/ by going up a
+# fixed three folders from there, so on 1.100 it copies the frozen agent into
+# target/release/build/ instead of beside the app — and the Linux install
+# fails with "target/release/dronedeck-agent is missing" (desktop-install CI,
+# red from 2026-11-15). tauri-build 2.7.6 finds the folder by name instead.
+#
+# To move past 1.99: update the Tauri crates and @tauri-apps packages in the
+# same pull request. See docs/features/development/releases.txt, "THE RUST
+# COMPILER IS PINNED".
+
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
