@@ -55,6 +55,7 @@ from dronedeck.api.tokens import HEADER, load_or_create_token
 from dronedeck.drone_setup import DroneSetup, SetupError
 from dronedeck.flight import basestation
 from dronedeck.flight.manual import CLIMB_RATE_M_S, MAX_HEIGHT_M, MOVE_SPEED_M_S
+from dronedeck.gauge_worker import GaugeWorker
 from dronedeck.mission.plan.fit import FlyingPlan
 from dronedeck.mission.plan.floorplan import DEFAULT_CLEARANCE_M, PlanError, Room
 from dronedeck.mission.plan.geofence import DEFAULT_Z_MAX_M, DEFAULT_Z_MIN_M
@@ -195,6 +196,10 @@ class Agent:
             lambda: self.cloud if self.cloud.operator is not None else None,
             on_status=lambda status: self.hub.publish("sync", status.to_dict()),
         )
+        #: Reads the pressure-gauge photos users upload on the web (gauge_worker.py).
+        #: Started in the lifespan, with the syncer; idle while no one is signed in.
+        self.gauge = GaugeWorker(
+            lambda: self.cloud if self.cloud.operator is not None else None)
         self.session = Session(
             cloud=self.cloud, outbox=self.outbox, syncer=self.syncer,
             publish=self.hub.publish,
@@ -241,6 +246,8 @@ async def lifespan(api: FastAPI):
         # Supabase the first time their updated app starts.
         playback_upload.queue_past_flights(agent.outbox)
     agent.syncer.start()
+    if resume:                       # like the processing resume: never in a test
+        agent.gauge.start()
     # Signing back in is a network call; the API must answer /health while it
     # happens, so it runs beside startup rather than in front of it.
     threading.Thread(target=_restore_sign_in, daemon=True, name="restore-sign-in").start()
@@ -269,6 +276,7 @@ async def lifespan(api: FastAPI):
     except Exception:
         log.exception("could not end the session cleanly")
     agent.syncer.stop()
+    agent.gauge.stop()
     agent.session.processing.close()
     if finished is not None:
         finished.set()

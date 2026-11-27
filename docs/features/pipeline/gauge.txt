@@ -1,0 +1,183 @@
+================================================================================
+THE GAUGE PIPELINE — a batch of uploaded photos in; a pressure reading AND a
+system status reading per photo out, on ONE picture, stored and shown on the web
+Last verified: 2026-11-23 — agent ruff clean, mypy no new errors, pytest
+(tests/pipeline/test_gauge.py, tests/test_gauge_worker.py) green; the refactor
+checked against the original scripts (pressure and system status, greyscale and
+colour readers) on synthetic photos: identical results.
+NOT YET RUN: the migration against a Supabase stack, the worker against a real
+database, the frozen sidecar, and the reader on REAL gauge photos (the repo has
+none; the tests draw a dial). Do those before calling it shipped.
+SOURCE: backend/agent/dronedeck/pipeline/gauge/photo.py
+================================================================================
+
+--------------------------------------------------------------------------------
+1. WHAT IT IS
+--------------------------------------------------------------------------------
+A user uploads a batch of photos of the gauges on the web. Each photo shows TWO
+gauges, the pressure gauge with the system status gauge below it. Each is
+stored in Supabase, read by the pipeline, and comes back as TWO readings — the
+pressure in kPa (0-600) and the system status (0-100), each with a band: ok,
+warning or danger — and ONE annotated picture holding both dials, with both
+results in its top right corner (the pressure line above the system status
+line, each in its band's colour). The readings are stored on the photo's row,
+so the page reads them from the database.
+
+This is a SECOND pipeline beside the flight's (data-pipeline.txt): its unit of
+work is an uploaded photo, not a recorded flight, and it has no stages to plug
+in. It came from five scripts the pipeline owner wrote
+(imageReticleTest, pressureReader, pressureReaderColor, systemStatusReader,
+systemStatusReaderColor); they are now the modules below, and the scripts are
+gone. The two gauges used to be read by separate scripts that each drew their
+own picture; one photo now makes one picture.
+
+--------------------------------------------------------------------------------
+2. WHERE IT LIVES
+--------------------------------------------------------------------------------
+backend/agent/dronedeck/pipeline/gauge/
+    reticle.py   the drone camera's crosshair, inpainted away   (imageReticleTest)
+    dial.py      the dial's geometry, the 0-600 kPa scale, the greyscale
+                 reader, Reading and its bands                   (pressureReader)
+    color.py     multiscale dial search, hub-based needle read   (pressureReaderColor)
+    status.py    the system status gauge, greyscale; found below the
+                 pressure gauge                                  (systemStatusReader)
+    status_color.py  the same, multiscale, for colour photos     (systemStatusReaderColor)
+    annotate.py  THE picture: both dials marked, both results top right
+    photo.py     read_photo(bytes) -> PhotoResult: THE entry point
+backend/agent/dronedeck/gauge_worker.py   claims photos from Supabase, reads
+                                          each in a child process, writes back
+backend/agent/dronedeck/sync/cloud.py     the gauge_* calls (end of the file)
+backend/agent/dronedeck/cli.py            `dronedeck gauge PATH [--out DIR]`
+backend/supabase/migrations/20261123000022_gauge_batches.sql
+backend/agent/tests/pipeline/test_gauge.py, tests/test_gauge_worker.py
+
+--------------------------------------------------------------------------------
+3. THE FLOW
+--------------------------------------------------------------------------------
+    browser ── uploads photos, queues the batch ──▶ Supabase
+    agent   ── polls ─▶ claims a photo ─▶ downloads ─▶ reads ─▶ writes back ─▶ Supabase
+    browser ── watches the batch fill in (realtime) ──▶ each photo and its kPa
+
+The browser never talks to the agent: the laptop with the dongle is not on the
+web, and the reader is OpenCV, which Edge Functions cannot run. So the agent
+polls, as it does for everything (CLAUDE.md, "the constraint"). THE CATCH, and
+it is a real one: photos are read only while an agent is RUNNING AND SIGNED IN
+as an operator, somewhere. With none, a batch sits at 'queued'. The page
+should say so ("waiting for an agent"), not spin.
+
+--------------------------------------------------------------------------------
+4. THE WEB'S CONTRACT  (for whoever builds the page)
+--------------------------------------------------------------------------------
+Tables public.gauge_batches and public.gauge_images; private bucket
+gauge-photos. Every signed-in user reads; OPERATORS write (a viewer's upload is
+refused by RLS). Go through web/lib/queries.ts and mutations.ts (CLAUDE.md).
+
+UPLOAD, in this order:
+  1. insert into gauge_batches (name?) returning id          status 'uploading'
+  2. for each photo, with a client-made uuid `imageId`:
+       storage.from('gauge-photos').upload(
+         `${batchId}/original/${imageId}.${ext}`, file)       png jpg jpeg heic;
+       insert into gauge_images (id, batch_id, filename, original_path)
+         values (imageId, batchId, file.name, <that path>)    25 MB each
+  3. update gauge_batches set status = 'queued', image_count = N
+     where id = batchId                                       <- RELEASES it
+Until step 3 the agent leaves the batch alone. If the user closes the tab
+mid-upload the batch stays 'uploading' for ever; the page may delete it
+(operators may delete batches and photos; images cascade).
+
+READ BACK:
+  gauge_batches   status: uploading | queued | processing | done
+                  image_count, done_count, failed_count, finished_at
+                  progress = done_count / image_count
+  gauge_images    status: pending | processing | done | failed
+                  kpa           0-600, one decimal; null when state is 'unreadable'
+                  state         ok (<=200) | warning (>200, <400) | danger (400-600)
+                                | unreadable
+                  error         why, in words, when unreadable or failed
+                  raw_kpa       the needle's value before the 0-600 check
+                                (set when the needle is OFF the scale)
+                  system_value  the SYSTEM STATUS gauge, 0-100
+                  system_state  ok (<=30) | warning (>30, <70) | danger (70-100)
+                                | unreadable
+                  system_error, system_raw_value, system_reader,
+                  system_dial_diameter_px — the same, under these names.
+                  The two gauges are independent: one can be unreadable while
+                  the other reads.
+                  annotated_path  ONE picture of both gauges, each circled in its
+                                band's colour with its needle, and both results
+                                in its top right corner; null until read. Show
+                                it, not the original. (The page can also show
+                                the numbers itself from the columns above.)
+                  original_path   the upload
+                  dial_diameter_px, width_px, height_px, reader, detail (jsonb:
+                  {pressure: {circle, tip, tail}, system: {...}} in photo pixels, if
+                  the page draws its own)
+  Show a photo from the bucket with createSignedUrl(path, 3600).
+  Live: subscribe to postgres_changes on gauge_images (filter batch_id=eq.<id>)
+  and gauge_batches; both tables are in the realtime publication.
+
+'unreadable' is a RESULT: the photo opened but no gauge/needle was found (or
+the needle is off the scale). 'failed' is the FILE: not an image, or the
+reader crashed or timed out. Both end the photo; the batch carries on.
+
+--------------------------------------------------------------------------------
+5. HOW A PHOTO IS READ
+--------------------------------------------------------------------------------
+read_photo(bytes) decodes at full resolution with EXIF rotation (PNG, JPG,
+HEIC), then reads BOTH gauges from it, each independently by the same rules:
+  • a SENSOR FRAME — greyscale, at most 1600 px on the long side, the drone
+    camera's own PNG — has its crosshair removed and goes to dial.read_gauge;
+    if that finds nothing the multiscale reader tries.
+  • anything else (a phone's colour photo) goes to color.read_gauge_color.
+Both find the dial (a Hough circle with a dark bezel all round), cut it out at
+256 px, find the dark arrow-shaped needle, extend it through its tip to the
+tick ring, and turn that angle into a value: 0 at -120 degrees from straight up,
+full scale at +120. The pressure bands are dial.py's FAULT/WARN constants (danger
+400-600 inclusive, warning above 200 and below 400); the system status gauge is
+0-100 with status.py's OK_MAX / DANGER_MIN (ok to 30 inclusive, warning above 30
+and below 70, danger 70-100 inclusive).
+The system status dial is a circle with its BOTTOM CUT OFF, so its bezel is
+checked over the upper arc only, and it is looked for in the place below the
+pressure dial (2.45 radii down, 0.85 of its radius) when that one is in view.
+
+NO NUMBER HERE WAS RETUNED in the merge: the thresholds, scales and the hub
+prior are the scripts' own, measured by their author on their photos
+(HUB_PRIOR: median of 92 detections). Known limit, seen while testing: the
+circle search can lock onto a bezel's OUTER edge instead of the face (the
+colour reader's docstring says so); that reads wrong, not "unreadable".
+
+--------------------------------------------------------------------------------
+6. THE WORKER  (gauge_worker.py)
+--------------------------------------------------------------------------------
+• Runs in the agent beside the syncer: started in the lifespan, every 15 s,
+  idle while no one is signed in. DRONEDECK_RESUME=0 (the tests) keeps it off.
+• CLAIM is an atomic update that only matches while the photo is 'pending', so
+  two laptops never read the same one. A claim older than 15 minutes (the app
+  closed mid-read) goes back to 'pending' on the next pass.
+• Each photo is read in a CHILD PROCESS — `dronedeck gauge FILE --json` — at a
+  lower priority, 120 s at most, one at a time: the same rule as the flight
+  pipeline (processing.py), for the same reason (never beside the 50 Hz loop,
+  never able to take the radio with it).
+• Losing the network mid-photo puts it back to 'pending'; if even that fails
+  it waits for the 15-minute requeue.
+• Re-reading: set a photo's status back to 'pending' and its batch to 'queued'.
+  The annotated picture is replaced.
+
+--------------------------------------------------------------------------------
+7. BY HAND
+--------------------------------------------------------------------------------
+    dronedeck gauge photo.heic                       # one photo, both gauges
+    dronedeck gauge pressurePhotos --out readings    # a folder: <name>_read.png each (one
+                                                     #   picture, both results), results.csv
+The old contact sheets (--sheet) were dropped: the web shows each photo itself.
+
+--------------------------------------------------------------------------------
+8. OWED
+--------------------------------------------------------------------------------
+• Apply migration 20261123000022 to the local stack and the hosted database,
+  then a checks/gauge_check.py in the style of results_check.py (viewer
+  refused, anon refused, operator round trip, storage policies).
+• Run the reader over the real photo set; record the numbers in an ml/ folder
+  like the other stages' MEASUREMENTS.txt.
+• Build the sidecar (`pnpm app`): pillow-heif is a new native dependency; the
+  selftest now imports it, so a bad bundle fails the build rather than a batch.

@@ -19,6 +19,10 @@ dependencies = [
     # no-camera work) and the photo classifier that replaces it (story 4.4).
     # Headless — the agent opens no window.
     "opencv-python-headless>=4.10,<6",
+    # The pressure-gauge pipeline (pipeline/gauge/photo.py): decodes the photos
+    # users upload — JPG/PNG, and HEIC from iPhones — with their EXIF rotation.
+    "pillow>=10.4",
+    "pillow-heif>=0.18",
     # Setting a base station's channel over its micro-USB port (flight/
     # basestation.py) — what Bitcraze's client does in "Set BS channel".
     "pyserial>=3.5",

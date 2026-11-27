@@ -24,6 +24,7 @@ THIS IS THE INDEX. One doc per stage, plus the results on the web:
   session.txt     the session around its flights, processed too (ground@1)
   calibrate.txt   the hand-warmer flights, measured (`dronedeck calibrate`)
   results.txt     the result uploaded, shown on the web, notified
+  gauge.txt       a SECOND pipeline: uploaded gauge photos → a kPa reading each
 
 REMOVED 2026-11-15 (contract v3 — the drone carries no camera,
 ../architecture.txt DECISIONS): enhance (clahe@1), scene (scene@1), the live
